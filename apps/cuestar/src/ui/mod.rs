@@ -9,6 +9,7 @@ mod media_editor;
 mod monitor_view;
 mod notes;
 mod remote_view;
+mod log_view;
 mod output_view;
 mod presentation;
 
@@ -69,6 +70,8 @@ pub struct CueStarApp {
     alert: Option<String>,
     missing: usize,
     status: Option<String>,
+    /// Derniers message d'état et erreur de sortie inscrits au journal (onglet Log des Préférences).
+    logged: (Option<String>, Option<String>),
     window_title: String,
     /// Anti-veille en cours (option des Préférences) ; dernier échec, pour ne pas réessayer à chaque image.
     keep_awake: Option<keepawake::KeepAwake>,
@@ -117,6 +120,7 @@ impl CueStarApp {
             alert: None,
             missing: 0,
             status: None,
+            logged: (None, None),
             keep_awake: None,
             keep_awake_failed: None,
             window_title: String::new(),
@@ -665,6 +669,20 @@ impl CueStarApp {
         }
     }
 
+    /// Inscrit au journal chaque nouveau message de la barre d'état : coupée faute de place,
+    /// elle ne montre pas tout, et le message suivant l'efface.
+    fn log_messages(&mut self) {
+        if self.status.is_some() && self.status != self.logged.0 {
+            self.logged.0 = self.status.clone();
+            star_core::log::write(self.status.as_deref().unwrap_or_default());
+        }
+        let err = &self.out.state.last_error;
+        if err.is_some() && *err != self.logged.1 {
+            self.logged.1 = err.clone();
+            star_core::log::write(&format!("Sortie : {}", err.as_deref().unwrap_or_default()));
+        }
+    }
+
     fn status_bar(&mut self, ui: &mut egui::Ui) {
         let s = &self.out.state;
         let mut reset = false;
@@ -755,6 +773,7 @@ impl eframe::App for CueStarApp {
         }
 
         self.poll_osc();
+        self.log_messages();
         if let Some((pick, files)) = self.dialogs.take() {
             self.on_picked(pick, files);
         }
