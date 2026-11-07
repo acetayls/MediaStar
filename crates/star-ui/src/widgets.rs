@@ -794,69 +794,54 @@ pub fn peaks_background(peaks: impl Fn(f64, f64, usize) -> Vec<f32>) -> impl FnO
     }
 }
 
-/// Le logo des applis Star : la grille de pads seule.
+/// Logo de JingleStar dans la barre du haut : la petite variante de l'icône
+/// (`jinglestar-icone-petite.svg`), un pad orange plein cadre avec un casque.
 pub fn logo_mark(ui: &mut Ui, height: f32) -> Response {
     let (rect, resp) = ui.allocate_exact_size(vec2(height, height), Sense::hover());
-    logo_grid(ui.painter(), rect, false);
+    logo_small(ui.painter(), rect, false);
     resp
 }
 
-/// Variante CueStar : un triangle « lecture » à la place de l'étoile.
+/// Logo de CueStar dans la barre du haut : la petite variante de l'icône
+/// (`cuestar-icone-petite.svg`), un pad orange plein cadre avec un triangle « lecture ».
 pub fn logo_mark_play(ui: &mut Ui, height: f32) -> Response {
     let (rect, resp) = ui.allocate_exact_size(vec2(height, height), Sense::hover());
-    logo_grid(ui.painter(), rect, true);
+    logo_small(ui.painter(), rect, true);
     resp
 }
 
-fn logo_grid(p: &egui::Painter, rect: Rect, play: bool) {
-    const STRIPS: [Color32; 8] = [
-        Color32::from_rgb(0x4a, 0x8f, 0xdb),
-        Color32::from_rgb(0x4f, 0xae, 0x58),
-        Color32::from_rgb(0xe2, 0xb2, 0x32),
-        Color32::from_rgb(0xe2, 0x7a, 0x30),
-        Color32::from_rgb(0x9b, 0x6b, 0xd3),
-        Color32::from_rgb(0x3f, 0xb8, 0xaf),
-        Color32::from_rgb(0xd9, 0x53, 0x4f),
-        Color32::from_rgb(0x8a, 0x8a, 0x90),
-    ];
-    // Grille 3×3 dessinée dans un carré de 100 unités, comme le fichier SVG.
-    let u = rect.height() / 100.0;
-    let at = |x: f32, y: f32| rect.min + vec2(x * u, y * u);
-    let mut k = 0;
-    for row in 0..3 {
-        for col in 0..3 {
-            let pad = Rect::from_min_size(at(4.0 + col as f32 * 32.0, 4.0 + row as f32 * 32.0), vec2(28.0 * u, 28.0 * u));
-            let r = CornerRadius::same((4.5 * u).round().max(1.0) as u8);
-            if row == 1 && col == 1 {
-                p.rect_filled(pad, r, ACCENT);
-                if play {
-                    let c = pad.center();
-                    let tri = vec![c + vec2(-4.5 * u, -7.0 * u), c + vec2(7.5 * u, 0.0), c + vec2(-4.5 * u, 7.0 * u)];
-                    p.add(Shape::convex_polygon(tri, BG, Stroke::NONE));
-                } else {
-                    star(p, pad.center() + vec2(0.0, 0.6 * u), 11.5 * u, BG);
-                }
-            } else {
-                // À cette taille, des pads pleins se lisent mieux que les bandeaux du grand logo.
-                p.rect_filled(pad, r, STRIPS[k]);
-                k += 1;
-            }
+/// Reproduit `*-icone-petite.svg` (carré de 1024 unités, symbole dans un repère de 100
+/// unités placé en 162,162 à l'échelle 7) : même dessin que l'icône de 64 px et moins.
+fn logo_small(p: &egui::Painter, rect: Rect, play: bool) {
+    const FOND: Color32 = Color32::from_rgb(0x1c, 0x1c, 0x20);
+    const PAD: Color32 = Color32::from_rgb(0xed, 0xa8, 0x3a);
+    const ENCRE: Color32 = Color32::from_rgb(0x20, 0x20, 0x26);
+    let u = rect.height() / 1024.0;
+    let radius = |r: f32| CornerRadius::same((r * u).round().clamp(1.0, 255.0) as u8);
+    p.rect_filled(rect, radius(200.0), FOND);
+    p.rect_filled(Rect::from_min_max(rect.min + vec2(88.0 * u, 88.0 * u), rect.min + vec2(936.0 * u, 936.0 * u)), radius(150.0), PAD);
+    // Repère du symbole.
+    let s = 7.0 * u;
+    let at = |x: f32, y: f32| rect.min + vec2(162.0 * u + x * s, 162.0 * u + y * s);
+    if play {
+        // Triangle à coins arrondis par un trait de 12 : on l'approche par un triangle plein un peu agrandi.
+        let c = (31.0 + 85.0 + 31.0) / 3.0;
+        let grow = |x: f32, y: f32| at(c + (x - c) * 1.17, 50.0 + (y - 50.0) * 1.17);
+        p.add(Shape::convex_polygon(vec![grow(31.0, 19.0), grow(85.0, 50.0), grow(31.0, 81.0)], ENCRE, Stroke::NONE));
+    } else {
+        // Arceau : demi-cercle de rayon 33,5 centré en (50, 52), prolongé jusqu'à y = 62, trait de 13.
+        let w = 13.0 * s;
+        let mut pts = vec![at(16.5, 62.0)];
+        for i in 0..=24 {
+            let a = std::f32::consts::PI * (1.0 + i as f32 / 24.0);
+            pts.push(at(50.0 + 33.5 * a.cos(), 52.0 + 33.5 * a.sin()));
         }
-    }
-}
-
-/// Étoile à cinq branches pleine (égui ne remplit que les formes convexes :
-/// on la compose d'un pentagone central et de cinq triangles).
-fn star(p: &egui::Painter, c: Pos2, r: f32, color: Color32) {
-    let pt = |i: usize, rad: f32| {
-        let a = (-90.0 + 36.0 * i as f32).to_radians();
-        c + vec2(a.cos(), a.sin()) * rad
-    };
-    let inner: Vec<Pos2> = (0..5).map(|i| pt(2 * i + 1, r * 0.45)).collect();
-    p.add(Shape::convex_polygon(inner.clone(), color, Stroke::NONE));
-    for i in 0..5 {
-        let tip = pt(2 * i, r);
-        p.add(Shape::convex_polygon(vec![inner[(i + 4) % 5], tip, inner[i]], color, Stroke::NONE));
+        pts.push(at(83.5, 62.0));
+        p.add(Shape::line(pts, Stroke::new(w, ENCRE)));
+        // Écouteurs.
+        for x in [10.0, 65.0] {
+            p.rect_filled(Rect::from_min_max(at(x, 50.0), at(x + 25.0, 88.0)), radius(9.0 * 7.0), ENCRE);
+        }
     }
 }
 
