@@ -78,6 +78,8 @@ pub struct LecteurData {
 #[serde(default)]
 pub struct DiaporamaData {
     pub folder: Option<PathBuf>,
+    /// Dossiers et fichiers glissés-déposés en plus du dossier principal (dossiers relus à chaque fois).
+    pub extra: Vec<PathBuf>,
     pub recursive: bool,
     pub shuffle: bool,
     pub looping: bool,
@@ -88,7 +90,7 @@ pub struct DiaporamaData {
 
 impl Default for DiaporamaData {
     fn default() -> Self {
-        Self { folder: None, recursive: true, shuffle: false, looping: true, photo_seconds: 5.0, fit: Fit::Auto, video_sound: false }
+        Self { folder: None, extra: Vec::new(), recursive: true, shuffle: false, looping: true, photo_seconds: 5.0, fit: Fit::Auto, video_sound: false }
     }
 }
 
