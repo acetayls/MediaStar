@@ -90,7 +90,8 @@ pub enum Cadence {
     Resample,
 }
 
-/// Unité d'affichage du délai de sortie audio (il est toujours enregistré en millisecondes).
+/// Unité du délai de sortie audio (il est toujours enregistré en millisecondes ; les trois
+/// unités sont affichées côte à côte, la dernière modifiée est retenue).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum DelayUnit {
     #[default]
@@ -106,13 +107,6 @@ pub const SOUND_SPEED: f64 = 343.0;
 
 impl DelayUnit {
     pub const ALL: [DelayUnit; 3] = [DelayUnit::Ms, DelayUnit::Frames, DelayUnit::Meters];
-    pub fn label(self) -> &'static str {
-        match self {
-            DelayUnit::Ms => "ms",
-            DelayUnit::Frames => "images",
-            DelayUnit::Meters => "mètres",
-        }
-    }
     /// Millisecondes → valeur dans cette unité.
     pub fn from_ms(self, ms: f64, fps: f64) -> f64 {
         match self {

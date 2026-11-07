@@ -302,28 +302,25 @@ impl OutputView {
                 ui.end_row();
                 ui.label("Délai de sortie");
                 ui.horizontal(|ui| {
-                    let fps = prefs.fps.unwrap_or(25.0);
-                    let unit = prefs.audio_delay_unit;
-                    let mut v = unit.from_ms(prefs.audio_delay_ms, fps);
-                    let (max, speed, decimals) = match unit {
-                        DelayUnit::Ms => (2000.0, 1.0, 0),
-                        DelayUnit::Frames => (2.0 * fps, 0.1, 1),
-                        DelayUnit::Meters => (2.0 * crate::prefs::SOUND_SPEED, 0.1, 1),
-                    };
-                    if ui.add(egui::DragValue::new(&mut v).range(0.0..=max).speed(speed).max_decimals(decimals)).changed() {
-                        prefs.audio_delay_ms = unit.to_ms(v, fps);
-                    }
-                    egui::ComboBox::from_id_salt("delay-unit").selected_text(unit.label()).width(90.0).show_ui(ui, |ui| {
-                        for u in DelayUnit::ALL {
-                            ui.selectable_value(&mut prefs.audio_delay_unit, u, u.label());
+                    // Les trois unités côte à côte : celle qu'on modifie recalcule les deux autres.
+                    let fps = prefs.fps.or_else(|| out.state.monitor.as_ref().map(|m| m.refresh_hz.round()).filter(|hz| *hz > 0.0)).unwrap_or(25.0);
+                    for unit in DelayUnit::ALL {
+                        let mut v = unit.from_ms(prefs.audio_delay_ms, fps);
+                        let (max, speed, decimals) = match unit {
+                            DelayUnit::Ms => (2000.0, 1.0, 0),
+                            DelayUnit::Frames => (2.0 * fps, 0.1, 1),
+                            DelayUnit::Meters => (2.0 * crate::prefs::SOUND_SPEED, 0.1, 1),
+                        };
+                        let suffix = match unit {
+                            DelayUnit::Ms => " ms".to_string(),
+                            DelayUnit::Frames => format!(" images (à {fps:.0} i/s)"),
+                            DelayUnit::Meters => " m".to_string(),
+                        };
+                        if ui.add(egui::DragValue::new(&mut v).range(0.0..=max).speed(speed).max_decimals(decimals).suffix(suffix)).changed() {
+                            prefs.audio_delay_ms = unit.to_ms(v, fps);
+                            prefs.audio_delay_unit = unit;
                         }
-                    });
-                    let detail = match prefs.audio_delay_unit {
-                        DelayUnit::Ms => String::new(),
-                        DelayUnit::Frames => format!("à {fps:.0} i/s, {:.0} ms", prefs.audio_delay_ms),
-                        DelayUnit::Meters => format!("{:.0} ms", prefs.audio_delay_ms),
-                    };
-                    ui.label(RichText::new(detail).color(TEXT_DIM));
+                    }
                 })
                 .response
                 .on_hover_text("Retarde le son par rapport à l'image : pour caler un vidéoprojecteur lent, ou des enceintes loin de la scène (343 m/s)");
