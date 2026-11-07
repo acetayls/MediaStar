@@ -22,12 +22,24 @@ type Settings = crate::project::DiaporamaData;
 pub struct Diaporama {
     s: Settings,
     files: Vec<PathBuf>,
+    /// Dernier dépôt : message affiché au-dessus de la liste (médias ajoutés, fichiers ignorés).
+    drop_note: Option<String>,
 }
 
 impl Default for Diaporama {
     fn default() -> Self {
-        Self { s: Settings::default(), files: Vec::new() }
+        Self { s: Settings::default(), files: Vec::new(), drop_note: None }
     }
+}
+
+fn is_media(p: &Path) -> bool {
+    p.extension().map(|e| MEDIA_EXT.contains(&e.to_string_lossy().to_lowercase().as_str())).unwrap_or(false)
+}
+
+/// « 1 média ajouté », « 3 médias ajoutés ».
+fn plural(n: usize, word: &str, tail: &str) -> String {
+    let s = if n > 1 { "s" } else { "" };
+    format!("{n} {word}{s}{}", if tail.is_empty() { String::new() } else { format!(" {tail}{s}") })
 }
 
 fn scan(dir: &Path, recursive: bool, out: &mut Vec<PathBuf>) {
@@ -39,7 +51,7 @@ fn scan(dir: &Path, recursive: bool, out: &mut Vec<PathBuf>) {
             if recursive {
                 scan(&p, true, out);
             }
-        } else if p.extension().map(|e| MEDIA_EXT.contains(&e.to_string_lossy().to_lowercase().as_str())).unwrap_or(false) {
+        } else if is_media(&p) {
             out.push(p);
         }
     }
@@ -127,11 +139,58 @@ impl Diaporama {
         }
     }
 
+    /// Relit le dossier principal puis les dossiers et fichiers déposés, sans doublon.
     fn rescan(&mut self) {
         self.files.clear();
         if let Some(f) = self.s.folder.clone() {
             scan(&f, self.s.recursive, &mut self.files);
         }
+        for p in &self.s.extra {
+            if p.is_dir() {
+                scan(p, self.s.recursive, &mut self.files);
+            } else if p.is_file() && is_media(p) {
+                self.files.push(p.clone());
+            }
+        }
+        let mut seen = std::collections::HashSet::new();
+        self.files.retain(|p| seen.insert(p.to_string_lossy().to_lowercase()));
+    }
+
+    /// Fichiers ou dossiers glissés depuis l'Explorateur : ajoutés à la liste.
+    /// Un dossier déposé alors qu'aucun n'est choisi devient le dossier du diaporama.
+    fn handle_drops(&mut self, ctx: &egui::Context) {
+        let dropped: Vec<PathBuf> = ctx.input(|i| i.raw.dropped_files.iter().map(|f| f.path().to_path_buf()).filter(|p| !p.as_os_str().is_empty()).collect());
+        if dropped.is_empty() {
+            return;
+        }
+        let (mut kept, mut decks, mut ignored) = (0, 0, 0);
+        for p in dropped {
+            if p.is_dir() || is_media(&p) {
+                kept += 1;
+                if p.is_dir() && self.s.folder.is_none() {
+                    self.s.folder = Some(p);
+                } else if self.s.folder.as_ref() != Some(&p) && !self.s.extra.contains(&p) {
+                    self.s.extra.push(p);
+                }
+            } else if p.extension().map(|e| matches!(e.to_string_lossy().to_lowercase().as_str(), "pptx" | "ppsx" | "pdf")).unwrap_or(false) {
+                decks += 1;
+            } else {
+                ignored += 1;
+            }
+        }
+        let before = self.files.len();
+        self.rescan();
+        let mut parts = Vec::new();
+        if kept > 0 {
+            parts.push(plural(self.files.len().saturating_sub(before), "média", "ajouté"));
+        }
+        if decks > 0 {
+            parts.push("PowerPoint et PDF : à déposer dans l'onglet Présentation".into());
+        }
+        if ignored > 0 {
+            parts.push(format!("{} (format non pris en charge)", plural(ignored, "fichier", "ignoré")));
+        }
+        self.drop_note = (!parts.is_empty()).then(|| parts.join(" · "));
     }
 
     fn start(&self, out: &mut OutputLink) {
@@ -146,6 +205,9 @@ impl Diaporama {
     }
 
     pub fn ui(&mut self, ui: &mut egui::Ui, out: &mut OutputLink, typing: bool) {
+        let ctx = ui.ctx().clone();
+        self.handle_drops(&ctx);
+        let hovering = ctx.input(|i| !i.raw.hovered_files.is_empty());
         let running = out.state.slide.is_some();
         if !typing {
             if ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, Key::Space)) {
@@ -263,11 +325,34 @@ impl Diaporama {
                             self.rescan();
                         }
                     }
-                    if ui.button("Relire").on_hover_text("Relit le dossier (fichiers ajoutés ou retirés)").clicked() {
+                    if ui.button("Relire").on_hover_text("Relit les dossiers (fichiers ajoutés ou retirés)").clicked() {
                         self.rescan();
                     }
                 });
                 ui.end_row();
+
+                if !self.s.extra.is_empty() {
+                    ui.label("Ajoutés");
+                    ui.horizontal(|ui| {
+                        let dirs = self.s.extra.iter().filter(|p| p.is_dir()).count();
+                        let files = self.s.extra.len() - dirs;
+                        let mut parts = Vec::new();
+                        if dirs > 0 {
+                            parts.push(plural(dirs, "dossier", ""));
+                        }
+                        if files > 0 {
+                            parts.push(plural(files, "fichier", ""));
+                        }
+                        let list = self.s.extra.iter().map(|p| p.display().to_string()).collect::<Vec<_>>().join("\n");
+                        ui.label(parts.join(", ")).on_hover_text(list);
+                        if ui.button("Retirer").on_hover_text("Retire les dossiers et fichiers glissés (le dossier principal reste)").clicked() {
+                            self.s.extra.clear();
+                            self.drop_note = None;
+                            self.rescan();
+                        }
+                    });
+                    ui.end_row();
+                }
 
                 ui.label("Lecture");
                 ui.horizontal(|ui| {
@@ -311,24 +396,41 @@ impl Diaporama {
         }
 
         ui.add_space(10.0);
-        ui.label(RichText::new(format!("Médias ({})", self.files.len())).strong());
-        egui::Frame::new().fill(SLOT_EMPTY).corner_radius(4).inner_margin(6).show(ui, |ui| {
+        ui.horizontal(|ui| {
+            ui.label(RichText::new(format!("Médias ({})", self.files.len())).strong());
+            if let Some(n) = &self.drop_note {
+                ui.label(RichText::new(n).small().color(TEXT_DIM));
+            }
+        });
+        let list = egui::Frame::new().fill(SLOT_EMPTY).corner_radius(4).inner_margin(6).show(ui, |ui| {
             ui.set_min_size(ui.available_size());
             if self.files.is_empty() {
                 ui.centered_and_justified(|ui| {
-                    ui.label(RichText::new("Choisis un dossier de photos et de vidéos").color(TEXT_DIM));
+                    ui.label(RichText::new("Choisis un dossier, ou glisse ici des photos, des vidéos ou des dossiers").color(TEXT_DIM));
                 });
                 return;
             }
             let current = out.state.slide.as_ref().map(|s| s.2.clone());
             let row_h = 22.0;
+            let font = egui::FontId::proportional(14.0);
+            let mono = egui::FontId::monospace(12.0);
             egui::ScrollArea::vertical().auto_shrink(false).show_rows(ui, row_h, self.files.len(), |ui, range| {
                 for i in range {
                     let p = &self.files[i];
                     let live = current.as_deref() == Some(&*p.to_string_lossy());
                     let name = p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
-                    let txt = RichText::new(format!("{:>4}  {}{name}", i + 1, if live { "▶ " } else { "" }));
-                    let resp = ui.selectable_label(live, if live { txt.color(GO) } else { txt });
+                    let (r, resp) = ui.allocate_exact_size(vec2(ui.available_width(), row_h), Sense::click());
+                    let painter = ui.painter_at(r);
+                    // Média à l'antenne : fond teinté et filet vert à gauche, sans pictogramme sur le nom.
+                    if live {
+                        painter.rect_filled(r, 3.0, GO.gamma_multiply(0.14));
+                        painter.rect_filled(Rect::from_min_size(r.min, vec2(3.0, r.height())), 1.5, GO);
+                    } else if resp.hovered() {
+                        painter.rect_filled(r, 3.0, PANEL_HI);
+                    }
+                    let mid = r.center().y;
+                    painter.text(egui::pos2(r.left() + 40.0, mid), egui::Align2::RIGHT_CENTER, (i + 1).to_string(), mono.clone(), if live { GO } else { TEXT_DIM });
+                    painter.text(egui::pos2(r.left() + 52.0, mid), egui::Align2::LEFT_CENTER, name, font.clone(), if live { GO } else { TEXT });
                     // Hors ordre aléatoire, un double-clic saute directement à ce média.
                     if resp.double_clicked() && running && !self.s.shuffle {
                         out.send(Command::Goto { index: i });
@@ -336,5 +438,13 @@ impl Diaporama {
                 }
             });
         });
+        // Fichiers survolés depuis l'Explorateur : la liste s'encadre pour inviter au dépôt.
+        if hovering {
+            let r = list.response.rect;
+            let painter = ctx.layer_painter(egui::LayerId::new(egui::Order::Foreground, egui::Id::unique("dia-drop")));
+            painter.rect_filled(r, 4.0, Color32::from_black_alpha(170));
+            painter.rect_stroke(r.shrink(2.0), 4.0, egui::Stroke::new(2.0, ACCENT), egui::StrokeKind::Inside);
+            painter.text(r.center(), egui::Align2::CENTER_CENTER, "Déposer pour ajouter au diaporama", egui::FontId::proportional(18.0), ACCENT);
+        }
     }
 }

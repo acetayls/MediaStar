@@ -129,6 +129,8 @@ pub enum PatternKind {
     Moving,
     /// Mire de synchro (timecode, mouvement, images perdues, bip son / image) à 25 i/s.
     Sync25,
+    /// Même mire à 50 i/s (équivalent progressif du 1080i50).
+    Sync50,
     /// Même mire à 60 i/s.
     Sync60,
     Grid,
@@ -141,10 +143,11 @@ pub enum PatternKind {
 }
 
 impl PatternKind {
-    pub const ALL: [PatternKind; 11] = [
+    pub const ALL: [PatternKind; 12] = [
         PatternKind::Bars,
         PatternKind::Moving,
         PatternKind::Sync25,
+        PatternKind::Sync50,
         PatternKind::Sync60,
         PatternKind::Grid,
         PatternKind::White,
@@ -159,6 +162,7 @@ impl PatternKind {
             PatternKind::Bars => "Barres SMPTE",
             PatternKind::Moving => "Mire animée",
             PatternKind::Sync25 => "Synchro 25 i/s",
+            PatternKind::Sync50 => "Synchro 50 i/s",
             PatternKind::Sync60 => "Synchro 60 i/s",
             PatternKind::Grid => "Grille",
             PatternKind::White => "Blanc",
@@ -176,6 +180,7 @@ impl PatternKind {
             PatternKind::Bars => format!("av://lavfi:smptehdbars=size={w}x{h}:rate=25"),
             PatternKind::Moving => format!("av://lavfi:testsrc2=size={w}x{h}:rate=60"),
             PatternKind::Sync25 => format!("av://lavfi:{}", sync_graph(w, h, 25)),
+            PatternKind::Sync50 => format!("av://lavfi:{}", sync_graph(w, h, 50)),
             PatternKind::Sync60 => format!("av://lavfi:{}", sync_graph(w, h, 60)),
             PatternKind::Grid => format!(
                 "av://lavfi:color=c=black:size={w}x{h}:rate=25,drawgrid=w={}:h={}:t=2:c=white,drawbox=x=0:y=0:w={w}:h={h}:t=4:c=white",
@@ -239,20 +244,48 @@ pub fn sync_graph(w: u32, h: u32, fps: u32) -> String {
         g.push(format!("[{last}][c{k}]overlay=x={}:y={y0}:enable='eq(mod(n,{every}),0)'[w{k}]", x0 + k as i64 * (q + gap)));
         last = format!("w{k}");
     }
+    let font = mire_font();
     let mut txt = format!(
-        "[{last}]drawtext=timecode='00\\:00\\:00\\:00':rate={fps}:fontsize={}:fontcolor=white:x=(w-tw)/2:y={}",
+        "[{last}]drawtext={font}timecode='00\\:00\\:00\\:00':rate={fps}:fontsize={}:fontcolor=white:x=(w-tw)/2:y={}",
         px(64.0),
         rect_y + rh + px(10.0)
     );
     for (k, label) in ["1/2", "1/3", "1/4", "1/5", "bip"].iter().enumerate() {
-        txt += &format!(",drawtext=text='{label}':fontsize={fs}:fontcolor=white:x={}+({q}-tw)/2:y={}", x0 + k as i64 * (q + gap), y0 - fs - px(6.0));
+        txt += &format!(",drawtext={font}text='{label}':fontsize={fs}:fontcolor=white:x={}+({q}-tw)/2:y={}", x0 + k as i64 * (q + gap), y0 - fs - px(6.0));
     }
-    txt += &format!(",drawtext=text='CueStar  {fps} i/s':fontsize={fs}:fontcolor=white:x=(w-tw)/2:y={}[out0]", band_y + px(10.0));
+    txt += &format!(",drawtext={font}text='CueStar  {fps} i/s':fontsize={fs}:fontcolor=white:x=(w-tw)/2:y={}[out0]", band_y + px(10.0));
     g.push(txt);
     g.push(format!(
         "aevalsrc='if(lt(mod(t\\,1)\\,1/{fps})\\,0.126*sin(2*PI*1000*t)\\,0.1*sin(2*PI*440*t))':s=48000:c=stereo[out1]"
     ));
     g.join(";")
+}
+
+/// Option `fontfile` des textes de la mire, à placer devant les autres options de drawtext.
+/// Sans elle, ffmpeg cherche la police « Sans » par fontconfig, absent de la libmpv Windows :
+/// tout le graphe est alors refusé et la mire ne s'affiche pas. On donne donc à drawtext une
+/// police embarquée (Hack, à chasse fixe pour que le timecode ne bouge pas), écrite une fois dans
+/// le dossier temporaire. Vide si le fichier ne peut pas être écrit (fontconfig prend le relais).
+fn mire_font() -> &'static str {
+    static FONT: std::sync::OnceLock<String> = std::sync::OnceLock::new();
+    FONT.get_or_init(|| {
+        let defs = egui::FontDefinitions::default();
+        let bytes: &[u8] = match defs.font_data.get("Hack") {
+            Some(f) => (*f.font).as_ref(),
+            None => include_bytes!("../../../crates/star-ui/assets/fonts/BarlowCondensed-SemiBold.ttf"),
+        };
+        let path = std::env::temp_dir().join("cuestar-mire.ttf");
+        let fresh = std::fs::read(&path).map(|b| b == bytes).unwrap_or(false);
+        if !fresh && std::fs::write(&path, bytes).is_err() {
+            return String::new();
+        }
+        // Chemin entre apostrophes, deux-points échappés (« C\:/… ») : forme admise par le graphe lavfi.
+        let p = path.to_string_lossy().replace('\\', "/");
+        if p.contains('\'') {
+            return String::new();
+        }
+        format!("fontfile='{}':", p.replace(':', "\\:"))
+    })
 }
 
 /// Ajustement d'une image à l'écran.
@@ -336,7 +369,7 @@ mod tests_mire {
     /// Le graphe de la mire de synchro passe dans ffmpeg (test sauté sans ffmpeg).
     #[test]
     fn sync_graph_runs() {
-        for (w, h, fps) in [(1920, 1080, 25), (1280, 720, 60)] {
+        for (w, h, fps) in [(1920, 1080, 25), (1920, 1080, 50), (1280, 720, 60)] {
             let g = super::sync_graph(w, h, fps);
             let Ok(out) = std::process::Command::new("ffmpeg")
                 .args(["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", &g, "-map", "0:v", "-map", "0:a", "-t", "0.2", "-f", "null", "-"])

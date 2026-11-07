@@ -1,4 +1,4 @@
-//! Fenêtre Préférences, en onglets : écran et moteur de la sortie, audio, mires de test, mapping 4 coins.
+//! Fenêtre Préférences, en onglets : écran et moteur de la sortie, audio, mires de test, mapping 4 coins, journal.
 
 use crate::link::OutputLink;
 use crate::output::warp::map_point;
@@ -18,13 +18,15 @@ enum Tab {
     Audio,
     Patterns,
     Mapping,
+    Log,
 }
 
-const TABS: [(Tab, &str); 4] = [
+const TABS: [(Tab, &str); 5] = [
     (Tab::Engine, "Vidéo"),
     (Tab::Audio, "Audio"),
     (Tab::Patterns, "Mires de test"),
     (Tab::Mapping, "Mapping 4 coins"),
+    (Tab::Log, "Log"),
 ];
 
 pub struct OutputView {
@@ -36,11 +38,12 @@ pub struct OutputView {
     selected: usize,
     last_warp_send: Instant,
     warp_dirty: bool,
+    log: super::log_view::LogView,
 }
 
 impl Default for OutputView {
     fn default() -> Self {
-        Self { open: false, draft: None, tab: Tab::Engine, selected: 0, last_warp_send: Instant::now(), warp_dirty: false }
+        Self { open: false, draft: None, tab: Tab::Engine, selected: 0, last_warp_send: Instant::now(), warp_dirty: false, log: Default::default() }
     }
 }
 
@@ -117,16 +120,22 @@ impl OutputView {
             }
         });
         ui.separator();
-        egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| match self.tab {
-            Tab::Engine => {
-                if self.engine(ui, prefs, out) {
-                    action = Action::Restart;
+        if self.tab == Tab::Log {
+            // Défilement propre au journal (collé en bas), pas celui des autres onglets.
+            self.log.ui(ui);
+        } else {
+            egui::ScrollArea::vertical().auto_shrink(false).show(ui, |ui| match self.tab {
+                Tab::Engine => {
+                    if self.engine(ui, prefs, out) {
+                        action = Action::Restart;
+                    }
                 }
-            }
-            Tab::Audio => self.audio(ui, prefs, out),
-            Tab::Patterns => self.patterns(ui, out, pattern),
-            Tab::Mapping => self.mapping(ui, prefs, out, pattern, typing),
-        });
+                Tab::Audio => self.audio(ui, prefs, out),
+                Tab::Patterns => self.patterns(ui, out, pattern),
+                Tab::Mapping => self.mapping(ui, prefs, out, pattern, typing),
+                Tab::Log => {}
+            });
+        }
         // Envoi du mapping limité pendant un glisser : mpv recompile le shader à chaque envoi.
         if self.warp_dirty && self.last_warp_send.elapsed() >= Duration::from_millis(40) {
             out.send(Command::Warp { corners: prefs.warp.active() });
