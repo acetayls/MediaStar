@@ -134,21 +134,26 @@ impl DelayUnit {
 /// Fréquences proposées dans le choix « FPS » des Préférences (Hz, entières comme sous Windows).
 pub const FPS_CHOICES: [f64; 9] = [24.0, 25.0, 30.0, 48.0, 50.0, 60.0, 100.0, 120.0, 144.0];
 
-/// Libellé d'un choix « FPS » : None = automatique.
-pub fn fps_label(fps: Option<f64>) -> String {
-    match fps {
-        None => "Automatique (selon la vidéo)".into(),
-        Some(f) => format!("{f:.0} i/s (écran forcé à {f:.0} Hz)"),
-    }
+/// Libellé d'un choix « FPS » : le nombre seul.
+pub fn fps_label(fps: f64) -> String {
+    format!("{fps:.0}")
 }
 
 impl Cadence {
     pub const ALL: [Cadence; 3] = [Cadence::Auto, Cadence::Audio, Cadence::Resample];
     pub fn label(self) -> &'static str {
         match self {
-            Cadence::Auto => "Automatique (selon la vidéo et l'écran)",
-            Cadence::Audio => "Synchro audio",
-            Cadence::Resample => "Recalage de vitesse",
+            Cadence::Auto => "Automatique (conseillé)",
+            Cadence::Audio => "Sur le son",
+            Cadence::Resample => "Sur l'écran (vitesse ajustée)",
+        }
+    }
+    /// Explication affichée sous le choix.
+    pub fn help(self) -> &'static str {
+        match self {
+            Cadence::Auto => "Automatique : CueStar choisit pour chaque vidéo entre « Sur le son » et « Sur l'écran », selon sa cadence et la fréquence de l'écran.",
+            Cadence::Audio => "Sur le son : la vidéo suit l'horloge du son, à sa vitesse exacte. Si la cadence ne tombe pas juste sur l'écran (24 i/s sur 60 Hz), une image reste de temps en temps un peu plus longtemps.",
+            Cadence::Resample => "Sur l'écran : la vidéo est très légèrement accélérée ou ralentie (moins de 1 %) pour que chaque image tombe juste sur un rafraîchissement de l'écran. Mouvements plus réguliers, son recalé.",
         }
     }
 }
@@ -162,16 +167,17 @@ pub struct MachinePrefs {
     pub light: bool,
     /// Écran de sortie, par nom de moniteur. None = premier écran secondaire.
     pub screen: Option<String>,
-    /// Avec un seul écran : sortie dans une fenêtre plutôt qu'en plein écran sur la régie.
+    /// Quand l'ordinateur n'a qu'un écran : sortie dans une fenêtre plutôt qu'en plein écran sur la régie.
     pub windowed_if_single: bool,
     /// Calage des images sur l'écran.
     pub cadence: Cadence,
-    /// FPS choisi : l'écran de sortie est forcé sur cette fréquence à l'ouverture de la sortie
-    /// (rétablie en quittant). None = automatique.
+    /// FPS de sortie : l'écran de sortie est forcé sur cette fréquence à l'ouverture de la sortie
+    /// (rétablie en quittant). None = pas encore choisi : l'écran garde sa fréquence.
     pub fps: Option<f64>,
     /// Interpolation : fond deux images voisines pour lisser un rythme irrégulier (24 i/s sur 60 Hz…).
     pub interpolation: bool,
-    /// Passe l'écran de sortie sur une fréquence qui tombe juste pour la vidéo, rétablie en quittant.
+    /// Ancienne option « Adapter la fréquence de l'écran à la vidéo », retirée : le FPS de sortie
+    /// la remplace. Gardée pour relire et réécrire machine.json à l'identique.
     pub adapt_refresh: bool,
     /// Mapping 4 coins de l'image sur l'écran de sortie.
     pub warp: Warp,

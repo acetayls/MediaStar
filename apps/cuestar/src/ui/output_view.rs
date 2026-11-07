@@ -153,26 +153,41 @@ impl OutputView {
             let s = &out.state;
             if let Some(m) = &s.monitor {
                 let mode = if s.fullscreen { "plein écran" } else { "dans une fenêtre" };
-                ui.label(RichText::new(format!("Actuellement : {} — {}×{} @ {:.2} Hz, {mode}", m.name, m.width, m.height, m.refresh_hz)).color(TEXT_DIM));
+                ui.label(RichText::new(format!("Actuellement : {} — {}×{} @ {:.2} Hz, {mode}", crate::display_names::label(&m.name), m.width, m.height, m.refresh_hz)).color(TEXT_DIM));
             }
             egui::Grid::new("engine").num_columns(2).spacing([16.0, 10.0]).show(ui, |ui| {
                 ui.label("Écran de sortie");
                 let auto = "Auto (premier écran secondaire)";
-                egui::ComboBox::from_id_salt("screen").selected_text(d.screen.clone().unwrap_or_else(|| auto.into())).width(280.0).show_ui(ui, |ui| {
+                let current = d.screen.as_deref().map(crate::display_names::label).unwrap_or_else(|| auto.into());
+                egui::ComboBox::from_id_salt("screen").selected_text(current).width(320.0).show_ui(ui, |ui| {
                     ui.selectable_value(&mut d.screen, None, auto);
                     for m in &s.monitors {
-                        let txt = format!("{}  {}×{} @ {:.2} Hz{}", m.name, m.width, m.height, m.refresh_hz, if m.primary { " (principal)" } else { "" });
-                        ui.selectable_value(&mut d.screen, Some(m.name.clone()), txt);
+                        let txt = format!("{}  {}×{} @ {:.2} Hz{}", crate::display_names::label(&m.name), m.width, m.height, m.refresh_hz, if m.primary { " (principal)" } else { "" });
+                        ui.selectable_value(&mut d.screen, Some(m.name.clone()), txt).on_hover_text(&m.name);
                     }
                 });
                 ui.end_row();
 
-                ui.label("Un seul écran");
-                ui.checkbox(&mut d.windowed_if_single, "Sortie dans une fenêtre");
+                ui.label("FPS de sortie");
+                // Sans choix enregistré, l'écran garde sa fréquence : c'est elle qui est affichée.
+                let shown = d.fps.or_else(|| s.monitor.as_ref().map(|m| m.refresh_hz.round()).filter(|hz| *hz > 0.0));
+                let text = shown.map(fps_label).unwrap_or_else(|| "—".into());
+                egui::ComboBox::from_id_salt("fps").selected_text(text).width(80.0).show_ui(ui, |ui| {
+                    for f in FPS_CHOICES {
+                        ui.selectable_value(&mut d.fps, Some(f), fps_label(f));
+                    }
+                })
+                .response
+                .on_hover_text("Images par seconde de la sortie : l'écran de sortie est passé sur cette fréquence (en Hz) à l'ouverture de la sortie, et la retrouve en quittant CueStar. Windows, macOS, Linux X11 (pas sous Wayland). Noir un instant au changement.");
+                ui.end_row();
+
+                ui.label("Avec un seul écran");
+                ui.checkbox(&mut d.windowed_if_single, "Sortie dans une fenêtre")
+                    .on_hover_text("Quand l'ordinateur n'a qu'un écran (pas de vidéoprojecteur branché) : la sortie s'ouvre dans une fenêtre au lieu de recouvrir la régie en plein écran.");
                 ui.end_row();
 
                 ui.label("Décodage");
-                egui::ComboBox::from_id_salt("decode").selected_text(d.decode.label()).width(280.0).show_ui(ui, |ui| {
+                egui::ComboBox::from_id_salt("decode").selected_text(d.decode.label()).width(320.0).show_ui(ui, |ui| {
                     for v in Decode::ALL {
                         ui.selectable_value(&mut d.decode, v, v.label());
                     }
@@ -180,7 +195,7 @@ impl OutputView {
                 ui.end_row();
 
                 ui.label("Rendu de secours");
-                egui::ComboBox::from_id_salt("render").selected_text(d.render.label()).width(280.0).show_ui(ui, |ui| {
+                egui::ComboBox::from_id_salt("render").selected_text(d.render.label()).width(320.0).show_ui(ui, |ui| {
                     for v in RenderApi::available() {
                         ui.selectable_value(&mut d.render, *v, v.label());
                     }
@@ -191,38 +206,22 @@ impl OutputView {
                 ui.checkbox(&mut d.light, "Rendu léger");
                 ui.end_row();
 
-                ui.label("FPS");
-                egui::ComboBox::from_id_salt("fps").selected_text(fps_label(d.fps)).width(280.0).show_ui(ui, |ui| {
-                    ui.selectable_value(&mut d.fps, None, fps_label(None));
-                    for f in FPS_CHOICES {
-                        ui.selectable_value(&mut d.fps, Some(f), fps_label(Some(f)));
-                    }
-                })
-                .response
-                .on_hover_text("Choisir une valeur essaie de passer l'écran de sortie sur cette fréquence (Windows, macOS, Linux X11 ; pas sous Wayland), rétablie en quittant. Noir un instant au changement.");
-                ui.end_row();
-
-                ui.label("Calage des images");
-                egui::ComboBox::from_id_salt("cadence").selected_text(d.cadence.label()).width(280.0).show_ui(ui, |ui| {
+                ui.label("Synchro de l'image");
+                egui::ComboBox::from_id_salt("cadence").selected_text(d.cadence.label()).width(320.0).show_ui(ui, |ui| {
                     for v in Cadence::ALL {
-                        ui.selectable_value(&mut d.cadence, v, v.label());
+                        ui.selectable_value(&mut d.cadence, v, v.label()).on_hover_text(v.help());
                     }
                 })
                 .response
-                .on_hover_text("Automatique : recalage de vitesse (moins de 1 %) quand l'écran tombe presque juste pour la vidéo, synchro audio sinon");
+                .on_hover_text(d.cadence.help());
                 ui.end_row();
 
                 ui.label("");
                 ui.checkbox(&mut d.interpolation, "Interpolation (lisse le rythme, ex. 24 i/s sur 60 Hz)")
                     .on_hover_text("Fond deux images voisines quand la cadence ne tombe pas juste. Demande un peu de GPU.");
                 ui.end_row();
-
-                ui.label("");
-                ui.add_enabled(d.fps.is_none(), egui::Checkbox::new(&mut d.adapt_refresh, "Adapter la fréquence de l'écran à la vidéo"))
-                    .on_disabled_hover_text("Sans effet quand un FPS est choisi : l'écran reste sur cette fréquence")
-                    .on_hover_text("Passe l'écran de sortie en 50, 60… Hz selon la vidéo (Windows, macOS, Linux X11), et rétablit sa fréquence en quittant. Noir un instant au changement.");
-                ui.end_row();
             });
+            ui.label(RichText::new(d.cadence.help()).small().color(TEXT_DIM));
             let dec = if s.hwdec.is_empty() || s.hwdec == "no" { "CPU".to_string() } else { format!("GPU ({})", s.hwdec) };
             ui.label(RichText::new(format!("Décodeur en cours : {dec}")).color(TEXT_DIM));
             if ui

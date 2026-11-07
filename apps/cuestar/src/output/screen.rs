@@ -218,11 +218,6 @@ impl Screen {
         self.with(|s| s.warp = m);
     }
 
-    /// Fréquence de l'écran de sortie (après un changement de mode, par exemple).
-    pub fn set_refresh(&self, hz: f64) {
-        self.with(|s| s.vsync_us = vsync_us(hz));
-    }
-
     pub fn resize(&self, w: u32, h: u32) {
         if w > 0 && h > 0 {
             self.with(|s| s.size = (w, h));

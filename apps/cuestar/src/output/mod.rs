@@ -1140,26 +1140,6 @@ impl OutputApp {
         let Some(out) = &self.out else { return };
         let m = out.deck(deck);
         let fps = m.get_property("container-fps").and_then(|s| s.parse::<f64>().ok()).unwrap_or(0.0);
-        // Fréquence de l'écran adaptée à la vidéo (si demandé et possible).
-        if self.prefs.fps.is_none() && self.prefs.adapt_refresh && fps > 1.0 && deck == self.active {
-            if let (Some(dev), Some(hz)) = (self.device.clone(), refresh::best(fps, &self.modes)) {
-                if (hz - self.refresh_hz).abs() > 0.5 && !refresh::fits(fps, self.refresh_hz) {
-                    match refresh::set(&dev, hz) {
-                        Ok(()) => {
-                            self.refresh_changed = true;
-                            self.refresh_hz = refresh::current(&dev).unwrap_or(hz);
-                            if let Some(Out::Composite(s)) = &self.out {
-                                s.set_refresh(self.refresh_hz);
-                                for i in 0..s.deck_count() {
-                                    let _ = s.deck(i).set_property("display-fps-override", &format!("{:.3}", self.refresh_hz));
-                                }
-                            }
-                        }
-                        Err(e) => emit(&Event::Error { message: e }),
-                    }
-                }
-            }
-        }
         let Some(out) = &self.out else { return };
         let m = out.deck(deck);
         let interp = self.prefs.interpolation;

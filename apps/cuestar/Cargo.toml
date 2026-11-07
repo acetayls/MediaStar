@@ -49,6 +49,7 @@ category = "public.app-category.video"
 windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_System_Performance"] }
 # Sortie : compositeur Direct3D 11, changement de fréquence d'écran.
 windows = { version = "0.62", features = [
+    "Win32_Devices_Display",
     "Win32_Foundation",
     "Win32_Graphics_Direct3D",
     "Win32_Graphics_Direct3D_Fxc",
