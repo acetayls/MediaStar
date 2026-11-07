@@ -683,79 +683,73 @@ impl CueStarApp {
         }
     }
 
+    /// Barre d'état, du plus utile au moins utile : quand la fenêtre est étroite, la fin est
+    /// coupée (texte complet au survol, messages repris dans l'onglet Log) au lieu de se chevaucher.
     fn status_bar(&mut self, ui: &mut egui::Ui) {
         let s = &self.out.state;
         let mut reset = false;
-        ui.horizontal_centered(|ui| {
-            match (&s.mpv, &s.mpv_missing) {
-                (Some(v), _) => {
-                    ui.label(RichText::new(v).color(TEXT_DIM));
-                }
-                (None, Some(d)) => {
-                    ui.label(RichText::new("libmpv absent : la sortie affiche la mire, la lecture est indisponible").color(METER_MID))
-                        .on_hover_text(d);
-                }
-                _ => {}
+        let col = if s.dropped > 0 { METER_HIGH } else { TEXT_DIM };
+        let (media_dropped, media_delayed) = (s.media_dropped, s.media_delayed);
+        let resp = ui
+            .add(egui::Label::new(RichText::new(format!("{} {}  {} {}", tr("Images perdues :", "Dropped frames:"), s.dropped, tr("retardées :", "delayed:"), s.delayed)).color(col)).sense(egui::Sense::click()))
+            .on_hover_text(format!(
+                "{}\n{} {media_dropped}, {} {media_delayed}\n{}",
+                tr("Depuis la dernière remise à zéro, tous médias confondus.", "Since the last reset, all media."),
+                tr("Média en cours : perdues", "Current media: dropped"),
+                tr("retardées", "delayed"),
+                tr("Clic droit : remettre à zéro.", "Right-click: reset.")
+            ));
+        resp.context_menu(|ui| {
+            if ui.button(tr("Remettre à zéro", "Reset")).clicked() {
+                reset = true;
+                ui.close();
             }
-            ui.separator();
-            let dec = if s.hwdec.is_empty() || s.hwdec == "no" { "CPU".to_string() } else { format!("GPU ({})", s.hwdec) };
-            ui.label(RichText::new(format!("Décodage : {dec}")).color(TEXT_DIM));
-            ui.separator();
-            if let Some(ms) = s.go_latency_ms {
-                ui.label(RichText::new(format!("{} {ms:.0} ms", tr("GO → image :", "GO → picture:"))).color(TEXT_DIM))
-                    .on_hover_text(tr("Temps entre le dernier GO et sa première image sur l'écran de sortie.", "Time from the last GO to its first picture on the output screen."));
-                ui.separator();
-            }
-            let col = if s.dropped > 0 { METER_HIGH } else { TEXT_DIM };
-            let (media_dropped, media_delayed) = (s.media_dropped, s.media_delayed);
-            ui.horizontal(|ui| {
-                let resp = ui
-                    .add(egui::Label::new(RichText::new(format!("{} {}  {} {}", tr("Images perdues :", "Dropped frames:"), s.dropped, tr("retardées :", "delayed:"), s.delayed)).color(col)).sense(egui::Sense::click()))
-                    .on_hover_text(format!(
-                        "{}\n{} {media_dropped}, {} {media_delayed}\n{}",
-                        tr("Depuis la dernière remise à zéro, tous médias confondus.", "Since the last reset, all media."),
-                        tr("Média en cours : perdues", "Current media: dropped"),
-                        tr("retardées", "delayed"),
-                        tr("Clic droit : remettre à zéro.", "Right-click: reset.")
-                    ));
-                resp.context_menu(|ui| {
-                    if ui.button(tr("Remettre à zéro", "Reset")).clicked() {
-                        reset = true;
-                        ui.close();
-                    }
-                });
-                if (s.dropped > 0 || s.delayed > 0) && ui.small_button("↺").on_hover_text(tr("Remettre le compteur à zéro", "Reset the counter")).clicked() {
-                    reset = true;
-                }
-            });
-
-            ui.separator();
-            let fps = if s.current.is_some() && s.video_fps > 0.0 { format!("{:.2} i/s", s.video_fps) } else { "— i/s".into() };
-            let hz = if s.display_fps > 0.0 { format!(" (écran {:.2} Hz)", s.display_fps) } else { String::new() };
-            ui.label(RichText::new(format!("{fps}{hz}")).color(TEXT_DIM)).on_hover_text("Images par seconde de la vidéo affichée sur la sortie");
-            let load = self.load.lock().map(|l| *l).unwrap_or_default();
-            let pct = |v: Option<f32>| v.map(|v| format!("{v:.0} %")).unwrap_or_else(|| "—".into());
-            let heat = |v: Option<f32>| match v {
-                Some(v) if v >= 90.0 => METER_HIGH,
-                Some(v) if v >= 70.0 => METER_MID,
-                _ => TEXT_DIM,
-            };
-            ui.separator();
-            ui.label(RichText::new(format!("CPU {}", pct(load.cpu))).color(heat(load.cpu))).on_hover_text("Charge processeur de la machine");
-            ui.separator();
-            ui.label(RichText::new(format!("GPU {}", pct(load.gpu))).color(heat(load.gpu))).on_hover_text("Charge 3D de la carte graphique la plus sollicitée");
-            if let Some(m) = &self.status {
-                ui.separator();
-                ui.label(RichText::new(m).color(TEXT_DIM));
-            }
-            if let Some(e) = &s.last_error {
-                ui.separator();
-                ui.label(RichText::new(e).color(STOP));
-            }
-            ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                ui.label(RichText::new(format!("CueStar {}", env!("CARGO_PKG_VERSION"))).color(TEXT_DIM));
-            });
         });
+        if (s.dropped > 0 || s.delayed > 0) && ui.small_button("↺").on_hover_text(tr("Remettre le compteur à zéro", "Reset the counter")).clicked() {
+            reset = true;
+        }
+        ui.separator();
+        let fps = if s.current.is_some() && s.video_fps > 0.0 { format!("{:.2} i/s", s.video_fps) } else { "— i/s".into() };
+        let hz = if s.display_fps > 0.0 { format!(" (écran {:.2} Hz)", s.display_fps) } else { String::new() };
+        ui.label(RichText::new(format!("{fps}{hz}")).color(TEXT_DIM)).on_hover_text("Images par seconde de la vidéo affichée sur la sortie");
+        let load = self.load.lock().map(|l| *l).unwrap_or_default();
+        let pct = |v: Option<f32>| v.map(|v| format!("{v:.0} %")).unwrap_or_else(|| "—".into());
+        let heat = |v: Option<f32>| match v {
+            Some(v) if v >= 90.0 => METER_HIGH,
+            Some(v) if v >= 70.0 => METER_MID,
+            _ => TEXT_DIM,
+        };
+        ui.separator();
+        ui.label(RichText::new(format!("CPU {}", pct(load.cpu))).color(heat(load.cpu))).on_hover_text("Charge processeur de la machine");
+        ui.separator();
+        ui.label(RichText::new(format!("GPU {}", pct(load.gpu))).color(heat(load.gpu))).on_hover_text("Charge 3D de la carte graphique la plus sollicitée");
+        if let Some(ms) = s.go_latency_ms {
+            ui.separator();
+            ui.label(RichText::new(format!("{} {ms:.0} ms", tr("GO → image :", "GO → picture:"))).color(TEXT_DIM))
+                .on_hover_text(tr("Temps entre le dernier GO et sa première image sur l'écran de sortie.", "Time from the last GO to its first picture on the output screen."));
+        }
+        if let Some(e) = &s.last_error {
+            ui.separator();
+            ui.label(RichText::new(e).color(STOP)).on_hover_text(e);
+        }
+        if let Some(m) = &self.status {
+            ui.separator();
+            ui.label(RichText::new(m).color(TEXT_DIM)).on_hover_text(m);
+        }
+        ui.separator();
+        let dec = if s.hwdec.is_empty() || s.hwdec == "no" { "CPU".to_string() } else { format!("GPU ({})", s.hwdec) };
+        ui.label(RichText::new(format!("Décodage : {dec}")).color(TEXT_DIM));
+        match (&s.mpv, &s.mpv_missing) {
+            (Some(v), _) => {
+                ui.separator();
+                ui.label(RichText::new(v).color(TEXT_DIM)).on_hover_text(v);
+            }
+            (None, Some(d)) => {
+                ui.separator();
+                ui.label(RichText::new("libmpv absent : la sortie affiche la mire, la lecture est indisponible").color(METER_MID)).on_hover_text(d);
+            }
+            _ => {}
+        }
         if reset {
             self.out.reset_drops();
         }
@@ -812,13 +806,23 @@ impl eframe::App for CueStarApp {
             .frame(egui::Frame::new().fill(PANEL).inner_margin(egui::Margin::symmetric(12, 6)))
             .show(ui, |ui| self.toolbar(ui));
         egui::Panel::bottom("status")
-            .exact_size(26.0)
+            .exact_size(28.0)
             .frame(egui::Frame::new().fill(PANEL).inner_margin(egui::Margin::symmetric(12, 4)))
             .show(ui, |ui| {
+                // Une seule ligne, jamais repliée : un texte trop long est coupé (« … »).
+                ui.style_mut().wrap_mode = Some(egui::TextWrapMode::Truncate);
                 ui.horizontal_centered(|ui| {
-                    self.output_badge(ui);
-                    ui.separator();
-                    self.status_bar(ui);
+                    // Version à droite d'abord : le reste de la barre s'arrête avant elle.
+                    ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
+                        ui.add(egui::Label::new(RichText::new(format!("CueStar {}", env!("CARGO_PKG_VERSION"))).color(TEXT_DIM)).wrap_mode(egui::TextWrapMode::Extend));
+                        ui.separator();
+                        ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+                            ui.set_clip_rect(ui.max_rect().intersect(ui.clip_rect()));
+                            self.output_badge(ui);
+                            ui.separator();
+                            self.status_bar(ui);
+                        });
+                    });
                 });
             });
         if self.alert.is_some() || self.missing > 0 {
