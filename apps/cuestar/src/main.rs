@@ -59,6 +59,6 @@ fn main() {
         ..Default::default()
     };
     if let Err(e) = eframe::run_native("CueStar", options, Box::new(|cc| Ok(Box::new(ui::CueStarApp::new(cc))))) {
-        star_core::log::write(&format!("Arrêt sur erreur : {e}"));
+        star_core::log::critical(&format!("Arrêt sur erreur : {e}"));
     }
 }

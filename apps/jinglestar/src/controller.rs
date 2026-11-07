@@ -381,7 +381,7 @@ impl Controller {
             }
         }
         while let Ok(err) = self.engine.stream_errors.try_recv() {
-            star_core::log::write(&format!("Erreur du flux audio : {err}"));
+            star_core::log::warn(&format!("Erreur du flux audio : {err}"));
             self.device_error = Some(err);
         }
         // Flux mort : le callback audio n'est plus appelé (carte débranchée, pilote arrêté).
@@ -392,7 +392,7 @@ impl Controller {
             self.device_lost = true;
             self.next_reconnect = Instant::now();
             let name = self.device.as_ref().map(|d| d.name.clone()).unwrap_or_default();
-            star_core::log::write(&format!("Sortie audio perdue : {name}"));
+            star_core::log::warn(&format!("Sortie audio perdue : {name}"));
             self.device_error.get_or_insert_with(|| format!("{} : {name}", tr("Sortie audio perdue", "Audio output lost")));
         }
         if self.opening.is_none() && Instant::now() >= self.next_reconnect {
@@ -432,7 +432,7 @@ impl Controller {
                     }
                     return;
                 }
-                star_core::log::write(&format!("Ouverture de la sortie audio impossible : {e}"));
+                star_core::log::warn(&format!("Ouverture de la sortie audio impossible : {e}"));
                 self.device = None;
                 self.device_lost = false;
                 self.device_error = Some(e);
@@ -2061,7 +2061,7 @@ impl Controller {
     pub fn flush(&mut self) {
         if let Some(p) = self.autosave.clone() {
             if let Err(e) = self.save_session(&p) {
-                star_core::log::write(&format!("Sauvegarde à la fermeture impossible : {e}"));
+                star_core::log::warn(&format!("Sauvegarde à la fermeture impossible : {e}"));
             }
         }
         self.dirty = false;

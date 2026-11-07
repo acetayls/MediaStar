@@ -733,12 +733,19 @@ impl CueStarApp {
     fn log_messages(&mut self) {
         if self.status.is_some() && self.status != self.logged.0 {
             self.logged.0 = self.status.clone();
-            star_core::log::write(self.status.as_deref().unwrap_or_default());
+            let msg = self.status.as_deref().unwrap_or_default();
+            // Les messages d'échec de la barre d'état passent en alerte.
+            let low = msg.to_lowercase();
+            if ["impossible", "introuvable", "indisponible", "erreur", "échec"].iter().any(|w| low.contains(w)) {
+                star_core::log::warn(msg);
+            } else {
+                star_core::log::write(msg);
+            }
         }
         let err = &self.out.state.last_error;
         if err.is_some() && *err != self.logged.1 {
             self.logged.1 = err.clone();
-            star_core::log::write(&format!("Sortie : {}", err.as_deref().unwrap_or_default()));
+            star_core::log::warn(&format!("Sortie : {}", err.as_deref().unwrap_or_default()));
         }
     }
 

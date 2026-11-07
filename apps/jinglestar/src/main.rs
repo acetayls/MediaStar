@@ -29,7 +29,7 @@ fn main() -> eframe::Result {
         Box::new(|cc| Ok(Box::new(ui::JingleStarApp::new(cc)))),
     );
     if let Err(e) = &res {
-        star_core::log::write(&format!("Arrêt sur erreur : {e}"));
+        star_core::log::critical(&format!("Arrêt sur erreur : {e}"));
     }
     res
 }
