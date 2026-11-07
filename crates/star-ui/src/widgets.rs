@@ -423,13 +423,22 @@ pub fn pressed(ui: &Ui, resp: &Response) -> bool {
 /// Ligne de la liste des morceaux : numéro et nom à gauche (tronqué), place réservée au gain à droite
 /// (dessiné ensuite par l'appelant, à la position renvoyée).
 pub fn track_row(ui: &mut Ui, label: &str, color: Color32, selected: bool, gain: Option<&str>) -> (Response, Pos2) {
+    track_row_styled(ui, label, color, selected.then(|| ACCENT.gamma_multiply(0.18)), None, gain)
+}
+
+/// Ligne de playlist avec un fond (`fill`) et un cadre (`outline`) au choix, pour distinguer
+/// l'élément en cours de l'élément sélectionné.
+pub fn track_row_styled(ui: &mut Ui, label: &str, color: Color32, fill: Option<Color32>, outline: Option<Color32>, gain: Option<&str>) -> (Response, Pos2) {
     // Glissable : un morceau peut être déposé sur un bouton de jingle.
     let (rect, resp) = ui.allocate_exact_size(vec2(ui.max_rect().width().min(ui.available_width()), 20.0), Sense::click_and_drag());
     let p = ui.painter_at(rect);
-    if selected {
-        p.rect_filled(rect, CornerRadius::same(3), ACCENT.gamma_multiply(0.18));
+    if let Some(f) = fill {
+        p.rect_filled(rect, CornerRadius::same(3), f);
     } else if resp.hovered() {
         p.rect_filled(rect, CornerRadius::same(3), PANEL_HI);
+    }
+    if let Some(c) = outline {
+        p.rect_stroke(rect.shrink(0.5), CornerRadius::same(3), egui::Stroke::new(1.0, c), egui::StrokeKind::Inside);
     }
     let font = FontId::monospace(12.0);
     let anchor = pos2(rect.right() - 6.0, rect.center().y);

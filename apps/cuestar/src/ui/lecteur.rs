@@ -9,7 +9,7 @@ use crate::thumb::Thumbs;
 use star_core::i18n::tr;
 use egui::{pos2, vec2, Align, Color32, CornerRadius, Key, Layout, Rect, RichText, Sense};
 use star_ui::theme::*;
-use star_ui::widgets::{add_button, fmt_time, loop_icon, mode_chip, pressed, track_row, transport_button, TransportIcon};
+use star_ui::widgets::{add_button, fmt_time, loop_icon, mode_chip, pressed, track_row_styled, transport_button, TransportIcon};
 use std::path::{Path, PathBuf};
 
 const EXTENSIONS: &[&str] = &[
@@ -284,6 +284,10 @@ impl Lecteur {
                 if ui.input(|i| i.key_pressed(Key::ArrowUp)) && s > 0 {
                     self.selected = Some(s - 1);
                 }
+                // Suppr (ou Retour arrière sur Mac) : retire l'élément sélectionné de la playlist.
+                if s < self.items.len() && ui.input_mut(|i| i.consume_key(egui::Modifiers::NONE, Key::Delete) || i.consume_key(egui::Modifiers::NONE, Key::Backspace)) {
+                    self.remove_item(s);
+                }
             }
         }
 
@@ -502,8 +506,10 @@ impl Lecteur {
                     let name = if self.items[i].clip.is_plain() { name } else { format!("{name}  ✎") };
                     let is_cur = playing_now == Some(i);
                     let color = if !is_cur { TEXT } else if !paused { GO } else { ACCENT };
-                    let sel = self.selected == Some(i) || is_cur;
-                    let (resp, anchor) = track_row(ui, &format!("{:>3}  {}", i + 1, name), color, sel, Some("    "));
+                    // En cours : fond vert ; sélectionné (prochain GO) : fond orangé et cadre.
+                    let fill = if is_cur { Some(color.gamma_multiply(0.16)) } else if self.selected == Some(i) { Some(ACCENT.gamma_multiply(0.18)) } else { None };
+                    let outline = (self.selected == Some(i)).then_some(ACCENT);
+                    let (resp, anchor) = track_row_styled(ui, &format!("{:>3}  {}", i + 1, name), color, fill, outline, Some("    "));
                     // Boucle de l'élément : clic sur le symbole à droite.
                     let lr = Rect::from_center_size(anchor - vec2(10.0, 0.0), vec2(20.0, 16.0));
                     let lresp = ui.interact(lr, ui.make_persistent_id(("lec-item-loop", i)), Sense::click());
@@ -548,11 +554,7 @@ impl Lecteur {
                 super::file_info::open_once(&mut self.infos, &p);
             }
             if let Some(i) = remove {
-                self.editing = None;
-                self.items.remove(i);
-                self.selected = self.selected.filter(|s| *s < self.items.len());
-                self.playing = None;
-                self.queued = None;
+                self.remove_item(i);
             }
         });
     }
@@ -609,14 +611,31 @@ impl Lecteur {
             self.play(p, out);
         }
         if remove {
-            self.items.remove(i);
-            self.selected = self.selected.filter(|s| *s < self.items.len());
-            self.playing = None;
-            self.queued = None;
+            self.remove_item(i);
         }
         if !open || done || remove {
             self.editing = None;
         }
+    }
+
+    /// Retire l'élément `i` : les repères (sélection, en cours, suivant) suivent le décalage.
+    /// La sélection passe à l'élément qui prend sa place, pour enchaîner les Suppr.
+    fn remove_item(&mut self, i: usize) {
+        if i >= self.items.len() {
+            return;
+        }
+        self.items.remove(i);
+        if self.editing.is_some_and(|e| e >= i) {
+            self.editing = None;
+        }
+        let shift = |x: Option<usize>| match x {
+            Some(x) if x == i => None,
+            Some(x) if x > i => Some(x - 1),
+            x => x,
+        };
+        self.playing = shift(self.playing);
+        self.selected = if self.items.is_empty() { None } else { self.selected.map(|s| if s > i { s - 1 } else { s.min(self.items.len() - 1) }) };
+        self.queued = self.playing.and_then(|p| self.next_after(p));
     }
 
     /// Les modes ont changé : l'élément suivant est recalculé.
