@@ -271,7 +271,7 @@ fn mire_font() -> &'static str {
     FONT.get_or_init(|| {
         let defs = egui::FontDefinitions::default();
         let bytes: &[u8] = match defs.font_data.get("Hack") {
-            Some(f) => &f.font,
+            Some(f) => (*f.font).as_ref(),
             None => include_bytes!("../../../crates/star-ui/assets/fonts/BarlowCondensed-SemiBold.ttf"),
         };
         let path = std::env::temp_dir().join("cuestar-mire.ttf");
