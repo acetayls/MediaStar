@@ -1422,12 +1422,17 @@ impl JingleStarApp {
         let mut apply = false;
         let mut close = false;
         let mut refresh = false;
-        egui::Window::new(tr("Préférences", "Preferences"))
-            .open(&mut open)
-            .collapsible(false)
-            .resizable(false)
-            .default_width(460.0)
-            .show(ctx, |ui| {
+        // Fenêtre système à part : elle peut sortir de la fenêtre de JingleStar (autre écran…).
+        let vp = egui::ViewportBuilder::default()
+            .with_title(format!("JingleStar — {}", tr("Préférences", "Preferences")))
+            .with_inner_size([520.0, 560.0])
+            .with_min_inner_size([420.0, 300.0]);
+        ctx.show_viewport_immediate(egui::ViewportId::from_hash_of("jinglestar-preferences"), vp, |ui, _| {
+            if ui.ctx().input(|i| i.viewport().close_requested()) {
+                open = false;
+            }
+            egui::CentralPanel::default().frame(egui::Frame::new().fill(BG).inner_margin(12)).show(ui, |ui| {
+              egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| {
                 ui.heading("Audio");
                 egui::Grid::new("audio-settings").num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
                     ui.label(tr("Pilote", "Driver"));
@@ -1555,7 +1560,9 @@ impl JingleStarApp {
                 {
                     ui.ctx().copy_text(v);
                 }
+              });
             });
+        });
         if refresh {
             draft.devices = list_devices(draft.audio.host.as_deref());
             draft.hosts = host_names();
