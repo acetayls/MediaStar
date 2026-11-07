@@ -5,6 +5,8 @@
   "audio_device": "wasapi/Haut-parleurs",
   "cadence": "Resample",
   "decode": "Cpu",
+  "double_go_ms": 450,
+  "escape_black": false,
   "fps": 50.0,
   "interpolation": true,
   "language": "en",

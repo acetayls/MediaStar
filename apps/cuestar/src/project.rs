@@ -287,15 +287,17 @@ mod golden {
             audio_delay_unit: DelayUnit::Frames,
             prevent_sleep: false,
             language: star_core::i18n::Lang::En,
+            escape_black: false,
+            double_go_ms: 450,
         };
         check("machine-0.1.1.json", serde_json::to_value(&m).unwrap());
         assert_eq!(serde_json::from_str::<MachinePrefs>(&fixture("machine-0.1.1.json")).unwrap(), m);
         // Fichier d'avant le choix du FPS : relu à l'identique, FPS automatique.
         let old: MachinePrefs = serde_json::from_str(&fixture("machine-0.0.2.json")).unwrap();
-        assert_eq!(old, MachinePrefs { fps: None, audio_delay_ms: 0.0, audio_delay_unit: DelayUnit::Ms, prevent_sleep: true, ..m.clone() });
+        assert_eq!(old, MachinePrefs { fps: None, audio_delay_ms: 0.0, audio_delay_unit: DelayUnit::Ms, prevent_sleep: true, escape_black: true, double_go_ms: 300, ..m.clone() });
         // Fichier d'avant le choix de la langue : relu à l'identique, en français.
         let old: MachinePrefs = serde_json::from_str(&fixture("machine-0.0.1.json")).unwrap();
-        assert_eq!(old, MachinePrefs { language: star_core::i18n::Lang::Fr, fps: None, audio_delay_ms: 0.0, audio_delay_unit: DelayUnit::Ms, prevent_sleep: true, ..m });
+        assert_eq!(old, MachinePrefs { language: star_core::i18n::Lang::Fr, fps: None, audio_delay_ms: 0.0, audio_delay_unit: DelayUnit::Ms, prevent_sleep: true, escape_black: true, double_go_ms: 300, ..m });
     }
 
     #[test]

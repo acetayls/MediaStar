@@ -153,6 +153,9 @@ impl Cuelist {
 
     /// GO : reprend si en pause, sinon lance le cue en attente et passe au suivant.
     fn go(&mut self, out: &mut OutputLink) {
+        if !super::go_allowed() {
+            return;
+        }
         if out.state.paused && out.state.current.is_some() {
             out.send(Command::Play);
             return;

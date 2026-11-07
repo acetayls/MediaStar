@@ -187,6 +187,10 @@ pub struct MachinePrefs {
     pub prevent_sleep: bool,
     /// Langue de l'interface.
     pub language: star_core::i18n::Lang,
+    /// Échap met la sortie au noir.
+    pub escape_black: bool,
+    /// Anti double-GO : un second GO dans ce délai (ms) est ignoré (0 = désactivé).
+    pub double_go_ms: u32,
 }
 
 /// Mapping 4 coins : position des coins de l'image (haut-gauche, haut-droit, bas-droit,
@@ -214,7 +218,7 @@ impl Default for Warp {
 
 impl Default for MachinePrefs {
     fn default() -> Self {
-        Self { decode: Decode::Auto, render: RenderApi::Auto, light: false, screen: None, windowed_if_single: true, cadence: Cadence::Auto, fps: None, interpolation: false, adapt_refresh: false, warp: Warp::default(), audio_device: None, volume: 100.0, audio_delay_ms: 0.0, audio_delay_unit: DelayUnit::Ms, prevent_sleep: true, language: star_core::i18n::Lang::Fr }
+        Self { decode: Decode::Auto, render: RenderApi::Auto, light: false, screen: None, windowed_if_single: true, cadence: Cadence::Auto, fps: None, interpolation: false, adapt_refresh: false, warp: Warp::default(), audio_device: None, volume: 100.0, audio_delay_ms: 0.0, audio_delay_unit: DelayUnit::Ms, prevent_sleep: true, language: star_core::i18n::Lang::Fr, escape_black: true, double_go_ms: 300 }
     }
 }
 
@@ -232,6 +236,9 @@ impl MachinePrefs {
         a.audio_delay_ms = o.audio_delay_ms;
         a.audio_delay_unit = o.audio_delay_unit;
         a.prevent_sleep = o.prevent_sleep;
+        a.language = o.language;
+        a.escape_black = o.escape_black;
+        a.double_go_ms = o.double_go_ms;
         a == *o
     }
 

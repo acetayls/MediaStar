@@ -26,6 +26,26 @@ use star_ui::theme::{self, *};
 use star_ui::widgets;
 use std::time::Duration;
 
+/// Version de build : version, commit, date (onglet Système des Préférences).
+pub fn build_version() -> String {
+    format!("CueStar {} · {} · {}", env!("CARGO_PKG_VERSION"), env!("STAR_GIT"), env!("STAR_BUILD_DATE"))
+}
+
+/// Anti double-GO (onglet Système) : délai en ms, et heure du dernier GO accepté.
+static DOUBLE_GO_MS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(300);
+static LAST_GO: std::sync::Mutex<Option<Instant>> = std::sync::Mutex::new(None);
+
+/// Vrai si ce GO part ; faux s'il suit le précédent de moins que le délai anti double-GO.
+pub(crate) fn go_allowed() -> bool {
+    let ms = DOUBLE_GO_MS.load(std::sync::atomic::Ordering::Relaxed);
+    let mut last = LAST_GO.lock().unwrap_or_else(|e| e.into_inner());
+    if ms > 0 && last.is_some_and(|t| t.elapsed() < Duration::from_millis(ms as u64)) {
+        return false;
+    }
+    *last = Some(Instant::now());
+    true
+}
+
 const AIDE_FR: &str = include_str!("../../docs/aide.md");
 const HELP_EN: &str = include_str!("../../docs/help.md");
 
@@ -619,7 +639,7 @@ impl CueStarApp {
             }
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 let stop = egui::Button::new(RichText::new("■  NOIR").strong().color(Color32::WHITE)).fill(STOP).min_size(egui::vec2(110.0, 32.0));
-                if ui.add(stop).on_hover_text("Coupe l'image : écran de sortie au noir (Échap)").clicked() {
+                if ui.add(stop).on_hover_text(if self.prefs.escape_black { "Coupe l'image : écran de sortie au noir (Échap)" } else { "Coupe l'image : écran de sortie au noir" }).clicked() {
                     self.out.send(Command::Stop);
                 }
                 ui.add_space(8.0);
@@ -777,7 +797,8 @@ impl eframe::App for CueStarApp {
         if ctx.input(|i| i.key_pressed(Key::F1)) {
             self.help.toggle();
         }
-        if !typing && ctx.input(|i| i.key_pressed(Key::Escape)) {
+        DOUBLE_GO_MS.store(self.prefs.double_go_ms, std::sync::atomic::Ordering::Relaxed);
+        if !typing && self.prefs.escape_black && ctx.input(|i| i.key_pressed(Key::Escape)) {
             self.out.send(Command::Stop);
         }
         // Raccourcis de fichier habituels. Ctrl+Maj+S d'abord : Ctrl+S l'attraperait aussi.

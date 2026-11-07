@@ -18,14 +18,16 @@ enum Tab {
     Audio,
     Patterns,
     Mapping,
+    System,
     Log,
 }
 
-const TABS: [(Tab, &str); 5] = [
+const TABS: [(Tab, &str); 6] = [
     (Tab::Engine, "Vidéo"),
     (Tab::Audio, "Audio"),
     (Tab::Patterns, "Mires de test"),
     (Tab::Mapping, "Mapping 4 coins"),
+    (Tab::System, "Système"),
     (Tab::Log, "Log"),
 ];
 
@@ -83,6 +85,55 @@ fn open_display_settings() -> Result<(), String> {
     Err("réglages d'affichage introuvables".into())
 }
 
+/// Onglet Système, comme celui de JingleStar : appliqué tout de suite, sans relancer la sortie.
+fn system(ui: &mut egui::Ui, prefs: &mut MachinePrefs) {
+    use star_core::i18n::{tr, Lang};
+    section(ui, "Système", |ui| {
+        let before = prefs.clone();
+        egui::Grid::new("system").num_columns(2).spacing([16.0, 10.0]).show(ui, |ui| {
+            ui.label(tr("Langue", "Language"));
+            ui.horizontal(|ui| {
+                ui.selectable_value(&mut prefs.language, Lang::Fr, "Français");
+                ui.selectable_value(&mut prefs.language, Lang::En, "English");
+            });
+            ui.end_row();
+
+            ui.label(tr("Touche Échap", "Esc key"));
+            ui.checkbox(&mut prefs.escape_black, tr("Échap met la sortie au noir", "Esc sends the output to black"))
+                .on_hover_text(tr("Sinon, seul le bouton NOIR coupe l'image", "Otherwise only the BLACK button cuts the picture"));
+            ui.end_row();
+
+            ui.label(tr("Anti double-GO", "Double-GO protection"));
+            ui.add(egui::DragValue::new(&mut prefs.double_go_ms).range(0..=2000).speed(10).suffix(" ms")).on_hover_text(tr(
+                "Un second GO dans ce délai est ignoré (0 = désactivé)",
+                "A second GO within this delay is ignored (0 = off)",
+            ));
+            ui.end_row();
+
+            ui.label(tr("Veille", "Sleep"));
+            ui.checkbox(&mut prefs.prevent_sleep, tr("Empêcher la mise en veille", "Prevent sleep"))
+                .on_hover_text(tr("Ni l'écran ni l'ordinateur ne se mettent en veille tant que CueStar est ouvert", "Neither the screen nor the computer sleeps while CueStar is open"));
+            ui.end_row();
+        });
+        if *prefs != before {
+            if prefs.language != before.language {
+                star_core::i18n::set_lang(prefs.language);
+            }
+            prefs.save();
+        }
+        ui.add_space(6.0);
+        // Version de build, pour savoir quelle mise à jour est installée.
+        let v = super::build_version();
+        if ui
+            .add(egui::Label::new(RichText::new(&v).monospace().size(10.0).color(TEXT_DIM)).sense(Sense::click()))
+            .on_hover_text(tr("Version de build (clic pour copier)", "Build version (click to copy)"))
+            .clicked()
+        {
+            ui.ctx().copy_text(v);
+        }
+    });
+}
+
 pub enum Action {
     None,
     /// Les réglages moteur ont changé : relancer la sortie.
@@ -133,6 +184,7 @@ impl OutputView {
                 Tab::Audio => self.audio(ui, prefs, out),
                 Tab::Patterns => self.patterns(ui, out, pattern),
                 Tab::Mapping => self.mapping(ui, prefs, out, pattern, typing),
+                Tab::System => system(ui, prefs),
                 Tab::Log => {}
             });
         }
@@ -233,21 +285,12 @@ impl OutputView {
                     ui.ctx().debug_text(e);
                 }
             }
-            // Appliqué tout de suite, sans relancer la sortie.
-            if ui
-                .checkbox(&mut prefs.prevent_sleep, "Empêcher la mise en veille")
-                .on_hover_text("Ni l'écran ni l'ordinateur ne se mettent en veille tant que CueStar est ouvert")
-                .changed()
-            {
-                d.prevent_sleep = prefs.prevent_sleep;
-                prefs.save();
-            }
             let changed = !d.same_engine(prefs);
             ui.add_space(4.0);
             ui.horizontal(|ui| {
                 let b = egui::Button::new(RichText::new("Appliquer").color(if changed { PLAYING_INK } else { TEXT_DIM })).fill(if changed { ACCENT } else { PANEL_HI });
                 if ui.add_enabled(changed, b).clicked() {
-                    // La langue (menu du projet), le mapping et l'audio se règlent ailleurs, à chaud :
+                    // La langue, le mapping, l'audio et l'onglet Système se règlent à chaud :
                     // le brouillon ne les remplace pas.
                     *prefs = MachinePrefs {
                         language: prefs.language,
@@ -257,6 +300,8 @@ impl OutputView {
                         audio_delay_ms: prefs.audio_delay_ms,
                         audio_delay_unit: prefs.audio_delay_unit,
                         prevent_sleep: prefs.prevent_sleep,
+                        escape_black: prefs.escape_black,
+                        double_go_ms: prefs.double_go_ms,
                         ..d.clone()
                     };
                     prefs.save();

@@ -234,6 +234,9 @@ impl Lecteur {
     }
 
     fn go(&mut self, out: &mut OutputLink) {
+        if !super::go_allowed() {
+            return;
+        }
         if out.state.paused && out.state.current.is_some() {
             out.send(Command::Play);
         } else if let Some(i) = self.selected.filter(|i| *i < self.items.len()) {
