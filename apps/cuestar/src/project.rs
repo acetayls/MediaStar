@@ -79,6 +79,7 @@ pub struct LecteurData {
 pub struct DiaporamaData {
     pub folder: Option<PathBuf>,
     /// Dossiers et fichiers glissés-déposés en plus du dossier principal (dossiers relus à chaque fois).
+    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub extra: Vec<PathBuf>,
     pub recursive: bool,
     pub shuffle: bool,
@@ -226,7 +227,7 @@ mod golden {
                 shuffle: true,
                 transition: fade,
             },
-            diaporama: DiaporamaData { folder: Some("/photos".into()), recursive: false, shuffle: true, looping: false, photo_seconds: 7.5, fit: Fit::Cover, video_sound: true },
+            diaporama: DiaporamaData { folder: Some("/photos".into()), extra: Vec::new(), recursive: false, shuffle: true, looping: false, photo_seconds: 7.5, fit: Fit::Cover, video_sound: true },
             cuelist: CuelistData {
                 cues: vec![
                     CueData { name: "Ouverture".into(), path: Some("/v/ouverture.mov".into()), clip: looped(false), transition: fade, follow: CueFollow::Continue },
