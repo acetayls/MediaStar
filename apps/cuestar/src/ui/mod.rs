@@ -597,76 +597,115 @@ impl CueStarApp {
     }
 
     fn toolbar(&mut self, ui: &mut egui::Ui) {
+        // Fenêtre étroite : onglets plus courts, puis Préférences, Monitoring, Télécommandes et
+        // Aide regroupés dans un menu « ☰ ». Le bouton NOIR reste toujours visible à droite.
+        let w = ui.available_width();
+        let tab_w = if w >= 1400.0 { 96.0 } else { 72.0 };
+        let grouped = w < 1160.0;
         ui.horizontal_centered(|ui| {
-            // Le logo seul, discret : le nom du projet passe devant (comme JingleStar).
-            widgets::logo_mark_play(ui, 26.0).on_hover_text("CueStar");
-            ui.add_space(12.0);
-            self.project_title(ui);
-            ui.add_space(10.0);
-            let file = self.project_path.as_ref().and_then(|p| p.file_stem()).map(|n| n.to_string_lossy().into_owned());
-            let label = if self.modified { "● Enregistrer" } else { "Enregistrer" };
-            let tip = match &file {
-                Some(n) if self.modified => format!("Enregistre le projet « {n} » (Ctrl+S) : modifications non enregistrées"),
-                Some(n) => format!("Enregistre le projet « {n} » (Ctrl+S)"),
-                None => "Aucun projet ouvert : choisit où l'enregistrer (Ctrl+S)".to_string(),
-            };
-            if ui.button(label).on_hover_text(tip).clicked() {
-                self.save(ui.ctx());
-            }
-            if self.confirm_new {
-                if ui.add(egui::Button::new(RichText::new("Remplacer le projet ?").color(Color32::WHITE)).fill(STOP)).clicked() {
-                    self.confirm_new = false;
-                    self.new_project();
-                }
-                if ui.button("Annuler").clicked() {
-                    self.confirm_new = false;
-                }
-            }
-            ui.add_space(14.0);
-            for (t, name) in [(Tab::Lecteur, "Lecteur"), (Tab::Diaporama, "Diaporama"), (Tab::Presentation, "Présentation"), (Tab::Cuelist, "Cuelist")] {
-                let sel = self.tab == t;
-                let txt = RichText::new(name).size(15.0).color(if sel { PLAYING_INK } else { TEXT });
-                let b = egui::Button::new(txt).fill(if sel { ACCENT } else { PANEL_HI }).min_size(egui::vec2(96.0, 30.0));
-                if ui.add(b).clicked() {
-                    self.tab = t;
-                }
-            }
-            // Texte : panneau latéral, affiché en plus de l'onglet en cours.
-            let txt = RichText::new("Texte").size(15.0).color(if self.show_notes { PLAYING_INK } else { TEXT });
-            let b = egui::Button::new(txt).fill(if self.show_notes { ACCENT } else { PANEL_HI }).min_size(egui::vec2(96.0, 30.0));
-            if ui.add(b).on_hover_text("Module Texte : la conduite écrite, sur le côté (clic : afficher / masquer)").clicked() {
-                self.show_notes = !self.show_notes;
-            }
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 let stop = egui::Button::new(RichText::new("■  NOIR").strong().color(Color32::WHITE)).fill(STOP).min_size(egui::vec2(110.0, 32.0));
                 if ui.add(stop).on_hover_text(if self.prefs.escape_black { "Coupe l'image : écran de sortie au noir (Échap)" } else { "Coupe l'image : écran de sortie au noir" }).clicked() {
                     self.out.send(Command::Stop);
                 }
                 ui.add_space(8.0);
-                if ui.selectable_label(self.help.open, tr("? Aide", "? Help")).on_hover_text("F1").clicked() {
-                    self.help.toggle();
+                if grouped {
+                    ui.menu_button(RichText::new("☰").size(18.0), |ui| {
+                        if ui.selectable_label(self.output_view.open, "Préférences").clicked() {
+                            self.output_view.open = !self.output_view.open;
+                            ui.close();
+                        }
+                        if ui.selectable_label(self.monitor.open, "Monitoring").clicked() {
+                            self.monitor.toggle(&mut self.out);
+                            ui.close();
+                        }
+                        if ui.selectable_label(self.osc_open, "Télécommandes").clicked() {
+                            self.osc_open = !self.osc_open;
+                            ui.close();
+                        }
+                        if ui.selectable_label(self.help.open, tr("Aide (F1)", "Help (F1)")).clicked() {
+                            self.help.toggle();
+                            ui.close();
+                        }
+                    })
+                    .response
+                    .on_hover_text("Préférences, Monitoring, Télécommandes, Aide");
+                } else {
+                    if ui.selectable_label(self.help.open, tr("? Aide", "? Help")).on_hover_text("F1").clicked() {
+                        self.help.toggle();
+                    }
+                    if ui
+                        .selectable_label(self.osc_open, "Télécommandes")
+                        .on_hover_text("OSC, MIDI, consoles Yamaha et Midas, correspondances, raccourcis")
+                        .clicked()
+                    {
+                        self.osc_open = !self.osc_open;
+                    }
+                    if ui
+                        .selectable_label(self.monitor.open, "Monitoring")
+                        .on_hover_text("Fenêtre flottante : retour de l'image envoyée sur la sortie")
+                        .clicked()
+                    {
+                        self.monitor.toggle(&mut self.out);
+                    }
+                    if ui
+                        .selectable_label(self.output_view.open, "Préférences")
+                        .on_hover_text("Fenêtre flottante en onglets : écran et moteur de sortie, audio, mires de test, mapping 4 coins, système")
+                        .clicked()
+                    {
+                        self.output_view.open = !self.output_view.open;
+                    }
                 }
-                if ui
-                    .selectable_label(self.osc_open, "Télécommandes")
-                    .on_hover_text("OSC, MIDI, consoles Yamaha et Midas, correspondances, raccourcis")
-                    .clicked()
-                {
-                    self.osc_open = !self.osc_open;
-                }
-                if ui
-                    .selectable_label(self.monitor.open, "Monitoring")
-                    .on_hover_text("Fenêtre flottante : retour de l'image envoyée sur la sortie")
-                    .clicked()
-                {
-                    self.monitor.toggle(&mut self.out);
-                }
-                if ui
-                    .selectable_label(self.output_view.open, "Préférences")
-                    .on_hover_text("Fenêtre flottante en onglets : écran et moteur de sortie, audio, mires de test, mapping 4 coins")
-                    .clicked()
-                {
-                    self.output_view.open = !self.output_view.open;
-                }
+                ui.add_space(12.0);
+                // Partie gauche dans la place restante, coupée plutôt que de passer sous la droite.
+                ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+                    ui.set_clip_rect(ui.max_rect().intersect(ui.clip_rect()));
+                    // Le logo seul, discret : le nom du projet passe devant (comme JingleStar).
+                    widgets::logo_mark_play(ui, 26.0).on_hover_text("CueStar");
+                    ui.add_space(12.0);
+                    ui.scope(|ui| {
+                        ui.set_max_width(if grouped { 150.0 } else { 240.0 });
+                        self.project_title(ui);
+                    });
+                    ui.add_space(6.0);
+                    let file = self.project_path.as_ref().and_then(|p| p.file_stem()).map(|n| n.to_string_lossy().into_owned());
+                    let tip = match &file {
+                        Some(n) if self.modified => format!("Enregistrer le projet « {n} » (Ctrl+S) : modifications non enregistrées"),
+                        Some(n) => format!("Enregistrer le projet « {n} » (Ctrl+S)"),
+                        None => "Enregistrer : aucun projet ouvert, choisir où l'enregistrer (Ctrl+S)".to_string(),
+                    };
+                    // Bouton compact : l'icône seule, en couleur quand il y a des modifications.
+                    let save = egui::Button::new(RichText::new("💾").size(16.0).color(if self.modified { PLAYING_INK } else { TEXT }))
+                        .fill(if self.modified { ACCENT } else { PANEL_HI })
+                        .min_size(egui::vec2(32.0, 30.0));
+                    if ui.add(save).on_hover_text(tip).clicked() {
+                        self.save(ui.ctx());
+                    }
+                    if self.confirm_new {
+                        if ui.add(egui::Button::new(RichText::new("Remplacer le projet ?").color(Color32::WHITE)).fill(STOP)).clicked() {
+                            self.confirm_new = false;
+                            self.new_project();
+                        }
+                        if ui.button("Annuler").clicked() {
+                            self.confirm_new = false;
+                        }
+                    }
+                    ui.add_space(12.0);
+                    for (t, name) in [(Tab::Lecteur, "Lecteur"), (Tab::Diaporama, "Diaporama"), (Tab::Presentation, "Présentation"), (Tab::Cuelist, "Cuelist")] {
+                        let sel = self.tab == t;
+                        let txt = RichText::new(name).size(15.0).color(if sel { PLAYING_INK } else { TEXT });
+                        let b = egui::Button::new(txt).fill(if sel { ACCENT } else { PANEL_HI }).min_size(egui::vec2(tab_w, 30.0));
+                        if ui.add(b).clicked() {
+                            self.tab = t;
+                        }
+                    }
+                    // Texte : panneau latéral, affiché en plus de l'onglet en cours.
+                    let txt = RichText::new("Texte").size(15.0).color(if self.show_notes { PLAYING_INK } else { TEXT });
+                    let b = egui::Button::new(txt).fill(if self.show_notes { ACCENT } else { PANEL_HI }).min_size(egui::vec2(tab_w, 30.0));
+                    if ui.add(b).on_hover_text("Module Texte : la conduite écrite, sur le côté (clic : afficher / masquer)").clicked() {
+                        self.show_notes = !self.show_notes;
+                    }
+                });
             });
         });
     }
