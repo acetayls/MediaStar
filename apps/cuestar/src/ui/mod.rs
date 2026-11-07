@@ -598,7 +598,7 @@ impl CueStarApp {
 
     fn toolbar(&mut self, ui: &mut egui::Ui) {
         // Fenêtre étroite : onglets plus courts, puis Préférences, Monitoring, Télécommandes et
-        // Aide regroupés dans un menu « ☰ ». Le bouton NOIR reste toujours visible à droite.
+        // Aide regroupés dans un menu. Le bouton NOIR reste toujours visible à droite.
         let w = ui.available_width();
         let tab_w = if w >= 1400.0 { 96.0 } else { 72.0 };
         let grouped = w < 1160.0;
@@ -610,7 +610,7 @@ impl CueStarApp {
                 }
                 ui.add_space(8.0);
                 if grouped {
-                    ui.menu_button(RichText::new("☰").size(18.0), |ui| {
+                    ui.menu_button(RichText::new("Menu ▾").size(15.0), |ui| {
                         if ui.selectable_label(self.output_view.open, "Préférences").clicked() {
                             self.output_view.open = !self.output_view.open;
                             ui.close();
