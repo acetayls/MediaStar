@@ -11,6 +11,7 @@ mod notes;
 mod remote_view;
 mod log_view;
 mod output_view;
+mod six25;
 mod presentation;
 
 use crate::link::OutputLink;

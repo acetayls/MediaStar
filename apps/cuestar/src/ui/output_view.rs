@@ -41,11 +41,12 @@ pub struct OutputView {
     last_warp_send: Instant,
     warp_dirty: bool,
     log: super::log_view::LogView,
+    six25: super::six25::Six25,
 }
 
 impl Default for OutputView {
     fn default() -> Self {
-        Self { open: false, draft: None, tab: Tab::Engine, selected: 0, last_warp_send: Instant::now(), warp_dirty: false, log: Default::default() }
+        Self { open: false, draft: None, tab: Tab::Engine, selected: 0, last_warp_send: Instant::now(), warp_dirty: false, log: Default::default(), six25: Default::default() }
     }
 }
 
@@ -394,7 +395,8 @@ impl OutputView {
     }
 
     fn patterns(&mut self, ui: &mut egui::Ui, out: &mut OutputLink, pattern: &mut Option<PatternKind>) {
-        section(ui, "Mires de test", |ui| {
+        section(ui, "Mires six25", |ui| self.six25.ui(ui, out, pattern));
+        section(ui, "Mires générées", |ui| {
             ui.horizontal_wrapped(|ui| {
                 for k in PatternKind::ALL {
                     let sel = *pattern == Some(k);
@@ -408,9 +410,12 @@ impl OutputView {
                 }
             });
             ui.add_space(4.0);
-            if ui.add_enabled(pattern.is_some(), egui::Button::new("Retirer la mire")).clicked() {
-                *pattern = None;
-                out.send(Command::Pattern { kind: None });
+            if ui.add_enabled(pattern.is_some() || self.six25.playing.is_some(), egui::Button::new("Retirer la mire")).clicked() {
+                if pattern.is_some() {
+                    *pattern = None;
+                    out.send(Command::Pattern { kind: None });
+                }
+                self.six25.stop(out);
             }
         });
     }
