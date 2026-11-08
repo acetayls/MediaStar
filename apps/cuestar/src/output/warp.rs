@@ -202,12 +202,19 @@ vec2 winv(vec2 p, vec2 t) {
     return t;
 }
 float wcover(vec2 p, vec2 t, float w) {
-    vec2 fw = max(fwidth(t), 1e-7);
-    vec2 d = min(t, 1.0 - t) / fw;
-    float e = min(d.x, d.y);
+    // Distance au bord de l'image en pixels de l'écran, calculée sur la déformation elle-même
+    // (pas de dérivées d'écran) : signée, négative hors de l'image.
+    vec2 size = wx[12].zw;
+    vec2 f0 = wfwd(t);
+    vec2 ju = (wfwd(t + vec2(0.001, 0.0)) - f0) * 1000.0 * size;
+    vec2 jv = (wfwd(t + vec2(0.0, 0.001)) - f0) * 1000.0 * size;
+    float det = abs(ju.x * jv.y - ju.y * jv.x);
+    vec2 d = min(t, 1.0 - t);
+    float e = min(d.x * det / max(length(jv), 1e-6), d.y * det / max(length(ju), 1e-6));
     if (!(w > 0.0)) return 0.0;
-    if (wx[11].x > 0.5 && length(wfwd(t) - p) > 0.002) return 0.0;
-    if (wx[11].y > 0.0) return clamp(e / wx[11].y, 0.0, 1.0);
+    if (wx[11].x > 0.5 && length(f0 - p) > 0.002) return 0.0;
+    // Bord adouci : rampe centrée sur le bord exact (anticrénelage), large de `feather` pixels.
+    if (wx[11].y > 0.0) return clamp(e / wx[11].y + 0.5, 0.0, 1.0);
     return e >= 0.0 ? 1.0 : 0.0;
 }
 float wdigit(int n, vec2 q) {

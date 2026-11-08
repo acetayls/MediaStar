@@ -471,7 +471,7 @@ impl OutputView {
             });
             ui.horizontal_wrapped(|ui| {
                 ui.label("Bord adouci");
-                ui.add(egui::DragValue::new(&mut prefs.warp.feather).range(0.0..=8.0).speed(0.05).suffix(" px").max_decimals(1))
+                ui.add(egui::DragValue::new(&mut prefs.warp.feather).range(0.0..=16.0).speed(0.05).suffix(" px").max_decimals(1))
                     .on_hover_text("Fondu du contour de l'image déformée sur quelques pixels : plus de crénelage sur les bords en biais (0 : bord net)");
                 ui.separator();
                 ui.checkbox(&mut self.guide_grid, "Grille sur la sortie").on_hover_text("Avec les poignées, une grille 8 × 8 suit la déformation de l'image sur la sortie");

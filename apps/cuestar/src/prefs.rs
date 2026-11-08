@@ -231,7 +231,7 @@ fn default_feather(v: &f32) -> bool {
 
 impl Warp {
     pub const IDENTITY: [[f32; 2]; 4] = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]];
-    pub const FEATHER: f32 = 1.5;
+    pub const FEATHER: f32 = 3.0;
     /// Déformation réglée (même inactive).
     pub fn geom(&self) -> crate::protocol::WarpGeom {
         crate::protocol::WarpGeom { corners: self.corners, mesh: self.mesh.then_some(self.mesh_offsets), feather: self.feather }

@@ -212,7 +212,7 @@ Mapping 4 coins):
   it goes away when you leave the tab. **Points intermédiaires** adds a point in the middle of
   each edge and in the centre (3 × 3 grid) to bend the picture, like Resolume's or MadMapper's
   mesh warp; moving a corner takes its points along. **Bord adouci** (soft edge) feathers the
-  outline over a few pixels (1.5 by default): no more jaggies on slanted edges. The picture can
+  outline over a few pixels (3 by default): no more jaggies on slanted edges. The picture can
   never flip or cross over: a move that would fold it is refused.
 
 Changes that need the output to restart say so: the screen goes black for a moment.

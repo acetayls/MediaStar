@@ -979,7 +979,10 @@ impl OutputApp {
         if self.fade_in_audio {
             let _ = m.set_property("volume", "0");
         }
-        let r = m.command(&["loadfile", &l.path, "replace"]);
+        // L'état de pause est aussi passé au fichier : un média gardé à l'écran en fin de lecture
+        // (keep-open) remettait mpv en pause, et le suivant restait figé sur sa première image.
+        let pause_opt = if l.paused { "pause=yes" } else { "pause=no" };
+        let r = m.command(&["loadfile", &l.path, "replace", "-1", pause_opt]);
         let a = a.min(1);
         self.clips[a] = l.clip;
         self.filters[a] = filters;

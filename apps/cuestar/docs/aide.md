@@ -216,7 +216,7 @@ test, Mapping 4 coins) :
   la déformation ; tout disparaît en quittant l'onglet. **Points intermédiaires** ajoute un point
   au milieu de chaque bord et au centre (grille 3 × 3) pour courber l'image, comme le mesh warp
   de Resolume ou MadMapper ; un coin déplacé emmène ses points. **Bord adouci** fond le contour
-  sur quelques pixels (1,5 par défaut) : plus de crénelage sur les bords en biais. L'image ne
+  sur quelques pixels (3 par défaut) : plus de crénelage sur les bords en biais. L'image ne
   peut jamais se retourner ni se croiser : un déplacement qui la replierait est refusé.
 
 Les changements qui demandent de relancer la sortie l'annoncent : l'écran passe au noir un
