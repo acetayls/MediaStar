@@ -210,7 +210,41 @@ fn apply_clip(m: &Mpv, clip: Option<&Clip>, looping: bool) -> Vec<audio_filter::
     }
     let _ = m.set_property("image-display-duration", &image);
     let _ = m.set_property("af", &audio_filter::af_value(&stages));
+    let _ = m.set_property("video-rotate", &clip.map_or(0, |c| c.rotation()).to_string());
     stages
+}
+
+/// Boucle cochée ou décochée pendant la lecture : posée tout de suite sur le lecteur.
+/// Renvoie la fin à surveiller à la main (point de sortie), mpv ne relisant `end`
+/// qu'au chargement suivant.
+fn apply_looping(m: &Mpv, c: &Clip) -> Option<f64> {
+    let s = &c.sound;
+    let secs = |v: f64| format!("{:.3}", v.max(0.0));
+    let end_opt = s.end.filter(|e| *e > s.start);
+    if s.looping {
+        let ab = (s.loop_start.is_some() || s.loop_end.is_some())
+            .then(|| (s.loop_start.unwrap_or(s.start), s.loop_end.or(end_opt)))
+            .and_then(|(a, b)| b.filter(|b| *b > a).map(|b| (a, b)));
+        match ab {
+            Some((a, b)) => {
+                let _ = m.set_property("loop-file", "no");
+                let _ = m.set_property("ab-loop-a", &secs(a));
+                let _ = m.set_property("ab-loop-b", &secs(b));
+                let _ = m.set_property("ab-loop-count", "inf");
+            }
+            None => {
+                let _ = m.set_property("loop-file", "inf");
+            }
+        }
+        None
+    } else {
+        // Boucle décochée : le passage en cours va jusqu'au bout, puis la suite habituelle
+        // (enchaîner ou s'arrêter), comme un média lu une seule fois.
+        let _ = m.set_property("loop-file", "no");
+        let _ = m.set_property("ab-loop-a", "no");
+        let _ = m.set_property("ab-loop-b", "no");
+        end_opt
+    }
 }
 
 struct OutputApp {
@@ -279,6 +313,8 @@ struct OutputApp {
     /// Le média à l'antenne signale sa fin même s'il garde sa dernière image (et l'a fait).
     signal_end: bool,
     end_signaled: bool,
+    /// Point de sortie surveillé à la main (boucle décochée pendant la lecture).
+    end_at: Option<f64>,
     /// Fenêtre de sortie en plein écran (touche F pour basculer, Échap pour en sortir).
     fullscreen: bool,
     /// Un seul écran branché : pas de premier plan imposé, la régie doit rester accessible.
@@ -762,6 +798,7 @@ impl OutputApp {
             }
             Command::Stop => {
                 self.prepare_after = None;
+                self.end_at = None;
                 self.end_show();
                 self.cancel_transitions();
                 self.set_fade(1.0);
@@ -801,6 +838,16 @@ impl OutputApp {
                     None => Err(String::new()),
                 };
                 let res = if r.is_err() { m.set_property("af", &audio_filter::af_value(&stages)) } else { Ok(()) };
+                // Rotation et boucle suivent tout de suite.
+                if clip.rotation() != self.clips[a].rotation() {
+                    let _ = m.set_property("video-rotate", &clip.rotation().to_string());
+                }
+                if clip.sound.looping != self.clips[a].sound.looping {
+                    let end = apply_looping(m, &clip);
+                    // Fin déjà dépassée (on était dans un passage suivant de la boucle) : on va au bout du fichier.
+                    let t = m.get_property("time-pos").and_then(|v| v.parse::<f64>().ok()).unwrap_or(0.0);
+                    self.end_at = end.filter(|e| *e > t);
+                }
                 self.filters[a] = stages;
                 self.clips[a] = clip;
                 res
@@ -911,6 +958,7 @@ impl OutputApp {
         }
         self.signal_end = l.hold && l.signal_end;
         self.end_signaled = false;
+        self.end_at = None;
         self.stop_warming(a);
         let vol = format!("{:.1}", self.volume);
         let m = self.m();
@@ -1025,6 +1073,7 @@ impl OutputApp {
         self.skip_end[to] = false;
         self.signal_end = l.hold && l.signal_end;
         self.end_signaled = false;
+        self.end_at = None;
         let vol = format!("{:.1}", self.volume);
         {
             let m = self.out().deck(to);
@@ -1191,7 +1240,11 @@ impl OutputApp {
         let fps = m.get_property("container-fps").and_then(|s| s.parse::<f64>().ok()).unwrap_or(0.0);
         let Some(out) = &self.out else { return };
         let m = out.deck(deck);
-        let interp = self.prefs.interpolation;
+        let height = m.get_property("height").and_then(|s| s.parse::<u32>().ok()).unwrap_or(0);
+        // Mélange d'images : seulement quand la cadence ne tombe pas juste, jamais sur une mire
+        // (elle doit montrer les images telles quelles pour mesurer la synchro).
+        let blend = self.prefs.cadence == Cadence::Blend && fps > 1.0 && !refresh::fits(fps, self.refresh_hz);
+        let interp = (self.prefs.interpolation || blend) && !self.pattern_on;
         let resample = match self.prefs.cadence {
             Cadence::Audio => false,
             Cadence::Resample => true,
@@ -1199,8 +1252,7 @@ impl OutputApp {
             // la synchro audio donne la même cadence sans risque ; le recalage ne sert qu'aux
             // cadences presque justes (29,97 sur 60 Hz). Au-delà de la 1440p, il perdait jusqu'à
             // 4 images par seconde en HEVC et en ProRes : synchro audio là aussi.
-            Cadence::Auto => {
-                let height = m.get_property("height").and_then(|s| s.parse::<u32>().ok()).unwrap_or(0);
+            Cadence::Auto | Cadence::Blend => {
                 refresh::fits(fps, self.refresh_hz) && !refresh::exact(fps, self.refresh_hz) && height <= 1440
             }
         };
@@ -1454,6 +1506,21 @@ impl OutputApp {
         self.anim = Some(FadeAnim { from: self.fade_level, to: 0.0, start: Instant::now(), secs: (end - t).max(0.05), audio: true });
     }
 
+    /// Point de sortie atteint après une boucle décochée : la lecture s'arrête sur cette image
+    /// et la fin est signalée comme une fin de fichier.
+    fn check_end_at(&mut self, t: f64) {
+        let Some(e) = self.end_at else { return };
+        if t < e || self.show.is_some() {
+            return;
+        }
+        self.end_at = None;
+        let _ = self.m().set_property("pause", "yes");
+        if self.signal_end && !self.end_signaled {
+            self.end_signaled = true;
+            emit(&Event::Ended);
+        }
+    }
+
     fn property(&mut self, id: u64, p: &mpv::RawProperty) {
         let double = || (p.format == mpv::FORMAT_DOUBLE && !p.data.is_null()).then(|| unsafe { *(p.data as *const f64) });
         let int = || (p.format == mpv::FORMAT_INT64 && !p.data.is_null()).then(|| unsafe { *(p.data as *const i64) });
@@ -1466,6 +1533,7 @@ impl OutputApp {
                         emit(&Event::Position { time: t, duration: self.duration });
                     }
                     self.check_out_fade(t);
+                    self.check_end_at(t);
                 }
             }
             P_DURATION => self.duration = double().unwrap_or(0.0),
@@ -1720,6 +1788,7 @@ pub fn run(prefs: MachinePrefs, monitor_port: Option<u16>) {
         prepare_after: None,
         signal_end: false,
         end_signaled: false,
+        end_at: None,
         fullscreen: false,
         single: false,
         on_top_installed: false,

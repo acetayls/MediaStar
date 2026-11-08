@@ -1,6 +1,7 @@
 //! Module Cuelist : la conduite, le cue en cours, le cue en attente et le gros bouton GO,
 //! repris du module Cuelist de JingleStar. Un cue = un média (ou du noir) envoyé sur la
 //! sortie, avec sa transition, sa boucle et la suite à donner (attendre le GO ou enchaîner).
+//! La conduite peut boucler en entier ; à droite, l'aperçu du cue en attente.
 
 use crate::link::OutputLink;
 use crate::project::{CueData, CueFollow, CuelistData};
@@ -8,7 +9,7 @@ use crate::protocol::{Command, TransitionKind};
 use star_core::i18n::tr;
 use egui::{pos2, vec2, Align2, Color32, CornerRadius, FontId, Id, Key, Rect, RichText, Sense, Stroke, StrokeKind};
 use star_ui::theme::*;
-use star_ui::widgets::{add_button, fmt_time, loop_icon, transport_button, TransportIcon};
+use star_ui::widgets::{add_button, fmt_time, loop_icon, mode_chip, transport_button, TransportIcon};
 use std::path::{Path, PathBuf};
 
 const ROW_H: f32 = 26.0;
@@ -40,6 +41,16 @@ pub struct Cuelist {
     infos: Vec<super::file_info::FileInfo>,
     /// Dernier cue préparé sur la sortie (chemin, boucle, réglages, génération de la sortie).
     prepared: Option<(String, bool, crate::protocol::Clip, u64)>,
+    /// Reprendre au premier cue après le dernier.
+    loop_all: bool,
+    /// Le cue en cours est arrivé au bout (sa dernière image reste) : le GO lance le suivant.
+    at_end: bool,
+    /// Aperçu du cue en attente masqué, et sa largeur en points (0 : par défaut).
+    hide_preview: bool,
+    preview_w: f32,
+    thumbs: crate::thumb::Thumbs,
+    /// Cue dont la boucle vient de changer dans la liste (à transmettre s'il passe).
+    clip_changed: Option<usize>,
 }
 
 fn stem(p: &Path) -> String {
@@ -97,14 +108,62 @@ enum CueAction {
 
 impl Cuelist {
     pub fn to_data(&self) -> CuelistData {
-        CuelistData { cues: self.cues.clone() }
+        CuelistData { cues: self.cues.clone(), loop_all: self.loop_all }
     }
 
     pub fn load_data(&mut self, d: &CuelistData) {
         self.cues = d.cues.clone();
+        self.loop_all = d.loop_all;
         self.standby = 0;
         self.running = None;
+        self.at_end = false;
         self.editor = None;
+    }
+
+    /// Projet d'avant la suppression du Lecteur : sa playlist devient des cues enchaînés,
+    /// avec sa transition, à la suite de la conduite.
+    pub fn import_lecteur(&mut self, d: &crate::project::LecteurData) {
+        if d.items.is_empty() {
+            return;
+        }
+        if self.cues.is_empty() {
+            self.loop_all = d.loop_all;
+        }
+        for it in &d.items {
+            let mut c = CueData::new(it.path.clone());
+            c.clip = it.clip.clone();
+            c.transition = d.transition;
+            c.follow = CueFollow::Continue;
+            self.cues.push(c);
+        }
+    }
+
+    /// Bouclage de la conduite, pour les touches qui le basculent.
+    pub fn looping(&self) -> bool {
+        self.loop_all
+    }
+
+    /// Cue qui suit `i` (None : fin de la conduite).
+    fn next_index(&self, i: usize) -> Option<usize> {
+        let n = self.cues.len();
+        if i + 1 < n {
+            Some(i + 1)
+        } else if self.loop_all && n > 0 {
+            Some(0)
+        } else {
+            None
+        }
+    }
+
+    /// Cue qui précède `i` dans l'ordre de lecture (le dernier avant le premier si la conduite boucle).
+    fn prev_index(&self, i: usize) -> Option<usize> {
+        if i > 0 {
+            Some(i - 1)
+        } else if self.loop_all && !self.cues.is_empty() {
+            Some(self.cues.len() - 1)
+        } else {
+            None
+        }
     }
 
     pub fn add(&mut self, files: impl IntoIterator<Item = PathBuf>, at: Option<usize>) {
@@ -139,15 +198,17 @@ impl Cuelist {
                 paused: false,
                 looping: c.clip.sound.looping,
                 clip: c.clip.clone(),
-                // La dernière image reste jusqu'au cue suivant ; un cue qui enchaîne signale
-                // quand même sa fin, et le suivant part sans passer par le noir.
+                // La dernière image reste jusqu'au cue suivant ; la fin est quand même
+                // signalée : un cue qui enchaîne lance le suivant sans passer par le noir (même
+                // réglé ainsi ou sorti de sa boucle en cours de lecture).
                 hold: true,
-                signal_end: c.follow == CueFollow::Continue,
+                signal_end: true,
                 transition: c.transition,
             }),
             None => out.send(Command::Stop),
         }
         self.running = Some(i);
+        self.at_end = false;
         self.seen_end = out.state.ended;
     }
 
@@ -156,14 +217,19 @@ impl Cuelist {
         if !super::go_allowed() {
             return;
         }
-        if out.state.paused && out.state.current.is_some() {
+        self.advance(out);
+    }
+
+    /// GO sans la protection contre le double appui (enchaînement automatique).
+    fn advance(&mut self, out: &mut OutputLink) {
+        if out.state.paused && out.state.current.is_some() && !self.at_end && self.running.is_some() {
             out.send(Command::Play);
             return;
         }
         if self.standby < self.cues.len() {
             let i = self.standby;
             self.play(i, out);
-            self.standby = i + 1;
+            self.standby = self.next_index(i).unwrap_or(self.cues.len());
         }
     }
 
@@ -189,11 +255,16 @@ impl Cuelist {
     fn stop(&mut self, out: &mut OutputLink) {
         out.send(Command::Stop);
         self.running = None;
+        self.at_end = false;
     }
 
     fn step(&mut self, d: i32) {
         let n = self.cues.len() as i32;
-        self.standby = (self.standby as i32 + d).clamp(0, n) as usize;
+        if self.loop_all && n > 0 {
+            self.standby = (self.standby.min(n as usize - 1) as i32 + d).rem_euclid(n) as usize;
+        } else {
+            self.standby = (self.standby as i32 + d).clamp(0, n) as usize;
+        }
     }
 
     fn toggle_pause(&mut self, out: &mut OutputLink) {
@@ -228,32 +299,69 @@ impl Cuelist {
                     self.standby = (i as usize - 1).min(self.cues.len());
                 }
             }
+            // Lance tout de suite le cue n° i (ancien « lecteur/goto »).
+            "goto" => {
+                if let Some(i) = m.f64().filter(|v| *v >= 1.0).map(|v| v as usize - 1).filter(|i| *i < self.cues.len()) {
+                    self.standby = i;
+                    self.go(out);
+                }
+            }
+            "loop" => self.loop_all = m.flag(),
+            // Transition du cue en attente.
+            "transition" => {
+                let Some(c) = self.cues.get_mut(self.standby) else { return };
+                match m.text().unwrap_or_default().to_lowercase().as_str() {
+                    "cut" | "coupe" => c.transition.kind = TransitionKind::Cut,
+                    "black" | "noir" => c.transition.kind = TransitionKind::Black,
+                    "fade" | "crossfade" | "fondu" => c.transition.kind = TransitionKind::Crossfade,
+                    _ => {}
+                }
+                if let Some(rosc::OscType::Float(s)) = m.args.get(1) {
+                    c.transition.secs = (*s as f64).clamp(0.1, 10.0);
+                }
+            }
             _ => {}
         }
     }
 
     pub fn ui(&mut self, ui: &mut egui::Ui, out: &mut OutputLink, typing: bool) {
-        // Fin du cue en cours : enchaînement s'il est réglé ainsi.
+        let len = self.cues.len();
+        // Conduite en boucle : après le dernier cue, le premier attend.
+        if self.loop_all && len > 0 && self.standby >= len {
+            self.standby = 0;
+        }
+        // Fin du cue en cours : enchaînement s'il est réglé ainsi, sinon sa dernière image
+        // reste et le prochain GO lance le cue en attente.
         if out.state.ended != self.seen_end {
             self.seen_end = out.state.ended;
-            if let Some(i) = self.running {
+            if let Some(i) = self.running.filter(|_| out.state.slide.is_none()) {
                 let chained = self.cues.get(i).is_some_and(|c| c.follow == CueFollow::Continue);
-                if out.state.slide.is_none() && chained && self.standby == i + 1 && self.standby < self.cues.len() {
-                    self.go(out);
-                } else {
-                    // Un cue qui enchaîne garde sa dernière image en attendant le suivant :
-                    // sans suite, la sortie passe au noir comme avant.
-                    if chained && out.state.slide.is_none() {
-                        out.send(Command::Stop);
+                self.at_end = true;
+                if chained {
+                    if self.standby < len && self.next_index(i) == Some(self.standby) {
+                        self.advance(out);
+                    } else {
+                        // Un cue qui enchaîne sans suite : la sortie passe au noir.
+                        self.stop(out);
                     }
-                    self.running = None;
                 }
+            } else {
+                self.running = None;
             }
         }
         if out.state.current.is_none() && out.state.ended == self.seen_end && self.running.is_some() && !out.state.paused {
             // Sortie coupée ailleurs (NOIR, autre module) : plus de cue en cours.
             if out.state.slide.is_some() {
                 self.running = None;
+            }
+        }
+        // Boucle ou réglages changés depuis la liste : le cue à l'antenne suit tout de suite
+        // (boucle décochée : il va au bout, puis enchaîne ou s'arrête).
+        if let Some(i) = self.clip_changed.take() {
+            if self.running == Some(i) && out.state.current.is_some() {
+                if let Some(c) = self.cues.get(i) {
+                    out.send(Command::SetClip { clip: c.clip.clone() });
+                }
             }
         }
         self.sync_prepare(out);
@@ -276,13 +384,45 @@ impl Cuelist {
             }
         }
 
-        let area = ui.available_rect_before_wrap();
+        let full = ui.available_rect_before_wrap();
+        if self.hide_preview || full.width() < 560.0 {
+            ui.scope_builder(egui::UiBuilder::new().max_rect(full), |ui| self.main(ui, out, full));
+        } else {
+            // Aperçu du cue en attente à droite, largeur réglable avec la poignée entre les deux.
+            let gap = 12.0;
+            if self.preview_w <= 0.0 {
+                self.preview_w = 380.0;
+            }
+            let max_w = (full.width() - 380.0 - gap).max(160.0);
+            self.preview_w = self.preview_w.clamp(160.0, max_w);
+            let right = Rect::from_min_max(pos2(full.right() - self.preview_w, full.top()), full.max);
+            let left = Rect::from_min_max(full.min, pos2(right.left() - gap, full.bottom()));
+            let handle = Rect::from_min_max(pos2(left.right(), full.top()), pos2(right.left(), full.bottom()));
+            let h = ui.interact(handle, ui.make_persistent_id("cl-split"), Sense::drag());
+            if h.dragged() {
+                self.preview_w -= h.drag_delta().x;
+            }
+            if h.hovered() || h.dragged() {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::ResizeHorizontal);
+            }
+            let grip = if h.hovered() || h.dragged() { ACCENT } else { BORDER };
+            ui.painter().rect_filled(Rect::from_center_size(handle.center(), vec2(3.0, 40.0)), 2, grip);
+            ui.scope_builder(egui::UiBuilder::new().max_rect(left), |ui| self.main(ui, out, left));
+            ui.scope_builder(egui::UiBuilder::new().max_rect(right), |ui| self.standby_preview(ui, right));
+        }
+        ui.allocate_rect(full, Sense::hover());
+        self.editor_window(ui.ctx(), out);
+    }
+
+    /// La conduite : cue en cours, cue en attente, GO, transport, transition, modes et liste.
+    fn main(&mut self, ui: &mut egui::Ui, out: &mut OutputLink, area: Rect) {
         let len = self.cues.len();
         self.standby = self.standby.min(len);
         let standby = self.standby;
         let s = out.state.clone();
         let running = self.running.filter(|_| s.current.is_some());
-        let paused = s.paused && running.is_some();
+        let at_end = self.at_end && running.is_some();
+        let paused = s.paused && running.is_some() && !at_end;
 
         egui::Frame::new().fill(PANEL).corner_radius(6).inner_margin(8).show(ui, |ui| {
             let width = area.width() - 16.0;
@@ -309,68 +449,128 @@ impl Cuelist {
                         self.cues.push(CueData::black());
                     }
                 });
-                let count = if len == 1 { "1 cue".to_string() } else { format!("{len} cues") };
-                ui.label(RichText::new(count).color(TEXT_DIM));
-            });
-
-            // Cue en cours, façon QLab : temps écoulé, barre et temps restant (ambre en pause).
-            let (run_col, run_fill) = if paused { (ACCENT, Color32::from_rgb(0x24, 0x1e, 0x12)) } else { (GO, Color32::from_rgb(0x14, 0x22, 0x16)) };
-            let run_title = if paused { "EN PAUSE" } else { "EN COURS" };
-            if let Some(c) = running.and_then(|i| self.cues.get(i).map(|c| (i, c))) {
-                let (i, c) = c;
-                egui::Frame::new().fill(run_fill).stroke(Stroke::new(1.0, run_col.gamma_multiply(0.7))).corner_radius(4).inner_margin(6).show(ui, |ui| {
-                    ui.set_width(width - 12.0);
-                    ui.horizontal(|ui| {
-                        ui.label(RichText::new(run_title).small().strong().color(run_col));
-                        if paused {
-                            ui.label(RichText::new("P ou GO pour reprendre").small().color(TEXT_DIM));
-                        }
-                        if c.clip.sound.looping {
-                            let (r, _) = ui.allocate_exact_size(vec2(18.0, 10.0), Sense::hover());
-                            loop_icon(ui.painter(), r, run_col);
-                        }
-                    });
-                    ui.add(egui::Label::new(RichText::new(format!("{}  {}", i + 1, c.name)).strong().size(15.0).color(run_col)).truncate());
-                    let frac = if s.duration > 0.0 { (s.time / s.duration).clamp(0.0, 1.0) as f32 } else { 0.0 };
-                    let (bar, bresp) = ui.allocate_exact_size(vec2(ui.available_width(), 10.0), Sense::click());
-                    let bresp = bresp.on_hover_cursor(egui::CursorIcon::PointingHand).on_hover_text("Cliquer pour aller à cet endroit");
-                    ui.painter().rect_filled(bar, CornerRadius::same(3), Color32::from_black_alpha(120));
-                    ui.painter().rect_filled(Rect::from_min_size(bar.min, vec2(bar.width() * frac, bar.height())), CornerRadius::same(3), run_col);
-                    if let Some(pt) = bresp.interact_pointer_pos().filter(|_| bresp.clicked() && s.duration > 0.0) {
-                        let f = ((pt.x - bar.left()) / bar.width().max(1.0)).clamp(0.0, 1.0) as f64;
-                        out.send(Command::Seek { seconds: f * s.duration });
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui.selectable_label(!self.hide_preview, "Aperçu").on_hover_text("Afficher ou masquer l'aperçu du cue en attente").clicked() {
+                        self.hide_preview = !self.hide_preview;
                     }
-                    ui.horizontal(|ui| {
-                        ui.label(RichText::new(fmt_time(s.time)).monospace().size(15.0).color(TEXT));
-                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            let rest = if s.duration > 0.0 { format!("-{}", fmt_time((s.duration - s.time).max(0.0))) } else { "∞".into() };
-                            ui.label(RichText::new(rest).monospace().size(15.0).strong().color(Color32::WHITE));
-                        });
+                    let count = if len == 1 { "1 cue".to_string() } else { format!("{len} cues") };
+                    ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                        ui.label(RichText::new(count).color(TEXT_DIM));
                     });
                 });
+            });
+
+            // Média en cours, façon QLab : durée, temps écoulé, barre et temps restant (ambre en pause).
+            let idle_fill = Color32::from_rgb(0x1c, 0x1c, 0x20);
+            let (run_col, run_fill) = if paused {
+                (ACCENT, Color32::from_rgb(0x24, 0x1e, 0x12))
+            } else if running.is_some() {
+                (GO, Color32::from_rgb(0x14, 0x22, 0x16))
+            } else {
+                (TEXT_DIM, idle_fill)
+            };
+            let run_title = if paused {
+                "EN PAUSE"
+            } else if at_end {
+                "FIN DU MÉDIA"
+            } else if running.is_some() {
+                "EN COURS"
+            } else {
+                "À L'ANTENNE : RIEN"
+            };
+            let cur = running.and_then(|i| self.cues.get(i).map(|c| (i, c.name.clone(), c.clip.sound.looping)));
+            let (mut t, dur) = if cur.is_some() { (s.time, s.duration) } else { (0.0, 0.0) };
+            let mut seek = None;
+            egui::Frame::new().fill(run_fill).stroke(Stroke::new(1.0, run_col.gamma_multiply(0.7))).corner_radius(4).inner_margin(6).show(ui, |ui| {
+                ui.set_width(width - 12.0);
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new(run_title).small().strong().color(run_col));
+                    if paused {
+                        ui.label(RichText::new("P ou GO pour reprendre").small().color(TEXT_DIM));
+                    } else if at_end {
+                        ui.label(RichText::new("dernière image à l'écran, GO pour la suite").small().color(TEXT_DIM));
+                    }
+                    if cur.as_ref().is_some_and(|c| c.2) {
+                        let (r, _) = ui.allocate_exact_size(vec2(18.0, 10.0), Sense::hover());
+                        loop_icon(ui.painter(), r, run_col);
+                    }
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        if cur.is_some() {
+                            let d = if dur > 0.0 { format!("Durée {}", fmt_time(dur)) } else { "Image fixe".into() };
+                            ui.label(RichText::new(d).small().monospace().color(TEXT_DIM));
+                        }
+                    });
+                });
+                let name = cur.as_ref().map(|(i, n, _)| format!("{}  {}", i + 1, n)).unwrap_or_else(|| "—".into());
+                ui.add(egui::Label::new(RichText::new(name).strong().size(15.0).color(run_col)).truncate());
+                // Barre de lecture : un clic ou un glisser (appliqué au relâché) déplace la lecture.
+                let (hit, bar) = ui.allocate_exact_size(vec2(ui.available_width(), 14.0), Sense::click_and_drag());
+                let r = Rect::from_center_size(hit.center(), vec2(hit.width(), 8.0));
+                let frac_at = |x: f32| ((x - r.left()) / r.width().max(1.0)).clamp(0.0, 1.0) as f64;
+                if dur > 0.0 {
+                    if let Some(p) = bar.interact_pointer_pos() {
+                        if bar.dragged() {
+                            t = frac_at(p.x) * dur;
+                        }
+                        if bar.clicked() || bar.drag_stopped() {
+                            seek = Some(frac_at(p.x) * dur);
+                            t = frac_at(p.x) * dur;
+                        }
+                    }
+                    if bar.hovered() || bar.dragged() {
+                        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+                    }
+                }
+                ui.painter().rect_filled(r, CornerRadius::same(3), Color32::from_black_alpha(120));
+                if dur > 0.0 {
+                    let w = r.width() * (t / dur).clamp(0.0, 1.0) as f32;
+                    ui.painter().rect_filled(Rect::from_min_size(r.min, vec2(w, r.height())), CornerRadius::same(3), run_col);
+                    if bar.hovered() || bar.dragged() {
+                        ui.painter().circle_filled(pos2(r.left() + w, r.center().y), 5.0, Color32::WHITE);
+                    }
+                }
+                ui.horizontal(|ui| {
+                    ui.label(RichText::new(fmt_time(t)).monospace().size(15.0).color(TEXT));
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        let rest = if dur > 0.0 {
+                            format!("-{}", fmt_time((dur - t).max(0.0)))
+                        } else if cur.is_some() {
+                            "∞".into()
+                        } else {
+                            "-0:00".into()
+                        };
+                        ui.label(RichText::new(rest).monospace().size(15.0).strong().color(if cur.is_some() { Color32::WHITE } else { TEXT_DIM }));
+                    });
+                });
+            });
+            if let Some(sec) = seek {
+                out.send(Command::Seek { seconds: sec });
+                self.at_end = false;
             }
 
             // Cue en attente : ce que le prochain GO va lancer.
+            let chained_from = self.prev_index(standby).filter(|_| standby < len).filter(|p| self.cues[*p].follow == CueFollow::Continue);
+            let next_name = self.next_index(standby).filter(|_| standby < len).and_then(|n| self.cues.get(n).map(|c| (n, c.name.clone())));
             egui::Frame::new()
-                .fill(Color32::from_rgb(0x1c, 0x1c, 0x20))
+                .fill(idle_fill)
                 .stroke(Stroke::new(1.0, if standby < len { ACCENT.gamma_multiply(0.7) } else { BORDER }))
                 .corner_radius(4)
                 .inner_margin(6)
                 .show(ui, |ui| {
                     ui.set_width(width - 12.0);
-                    let chained = standby > 0 && standby < len && self.cues[standby - 1].follow == CueFollow::Continue;
-                    let title = if chained { "ENCHAÎNÉ" } else { "SUIVANT" };
+                    let title = if chained_from.is_some() { "ENCHAÎNÉ" } else { "SUIVANT" };
                     ui.horizontal(|ui| {
                         ui.label(RichText::new(title).small().strong().color(if standby < len { ACCENT } else { TEXT_DIM }));
-                        if chained {
-                            ui.label(RichText::new(format!("part seul à la fin du cue {standby}")).small().color(TEXT_DIM));
+                        if let Some(p) = chained_from {
+                            ui.label(RichText::new(format!("part seul à la fin du cue {}", p + 1)).small().color(TEXT_DIM));
                         }
                     });
                     match self.cues.get(standby) {
                         Some(c) => {
                             ui.add(egui::Label::new(RichText::new(format!("{}  {}", standby + 1, c.name)).strong().size(18.0).color(ACCENT)).truncate());
-                            let next = match self.cues.get(standby + 1) {
-                                Some(n) => format!("Ensuite : {}  {}", standby + 2, n.name),
+                            let next = match &next_name {
+                                Some((n, name)) if *n == 0 && standby + 1 == len => format!("Ensuite : retour au début, {}  {}", n + 1, name),
+                                Some((n, name)) => format!("Ensuite : {}  {}", n + 1, name),
                                 None => "Dernier cue de la conduite".into(),
                             };
                             ui.add(egui::Label::new(RichText::new(next).small().color(TEXT_DIM)).truncate());
@@ -383,7 +583,7 @@ impl Cuelist {
                     }
                 });
 
-            let go_h = (ui.available_height() * 0.22).clamp(44.0, 84.0);
+            let go_h = (ui.available_height() * 0.2).clamp(44.0, 84.0);
             let (go_r, _) = ui.allocate_exact_size(vec2(ui.available_width(), go_h), Sense::hover());
             let ready = paused || standby < len;
             let go_tip = if paused { "Reprend le cue en pause" } else { "Lance le cue en attente et passe au suivant (barre d'espace)" };
@@ -424,11 +624,100 @@ impl Cuelist {
             {
                 self.step(1);
             }
+
+            // Bouclage de la conduite.
+            let (row, _) = ui.allocate_exact_size(vec2(ui.available_width(), 26.0), Sense::hover());
+            if mode_chip(ui, row, "cl-loop-all", self.loop_all, "Boucler la conduite").on_hover_text("Après le dernier cue, reprendre au premier").clicked() {
+                self.loop_all = !self.loop_all;
+            }
+
+            // Transition du cue en attente (chaque cue garde la sienne).
+            let mut to_all = None;
+            ui.horizontal_wrapped(|ui| {
+                match self.cues.get_mut(standby) {
+                    Some(c) => {
+                        ui.label(RichText::new(format!("Transition du cue {}", standby + 1)).color(TEXT_DIM));
+                        ui.radio_value(&mut c.transition.kind, TransitionKind::Cut, "Coupe").on_hover_text("Passage direct au média suivant");
+                        ui.radio_value(&mut c.transition.kind, TransitionKind::Black, "Noir").on_hover_text("Fondu au noir, puis fondu d'ouverture");
+                        ui.radio_value(&mut c.transition.kind, TransitionKind::Crossfade, "Fondu enchaîné")
+                            .on_hover_text("Fondu enchaîné : le média suivant apparaît pendant que le précédent disparaît");
+                        if c.transition.kind != TransitionKind::Cut {
+                            ui.add(egui::DragValue::new(&mut c.transition.secs).range(0.1..=10.0).speed(0.05).suffix(" s").max_decimals(1));
+                        }
+                        if ui.small_button("À tous").on_hover_text("Donner cette transition à tous les cues de la conduite").clicked() {
+                            to_all = Some(c.transition);
+                        }
+                    }
+                    None => {
+                        ui.label(RichText::new("Transition : mettez un cue en attente pour la régler").color(TEXT_DIM));
+                    }
+                }
+            });
+            if let Some(tr) = to_all {
+                for c in &mut self.cues {
+                    c.transition = tr;
+                }
+            }
             ui.add_space(2.0);
 
             self.list(ui, running, &s);
         });
-        self.editor_window(ui.ctx(), out);
+    }
+
+    /// Aperçu du cue que le prochain GO (ou le prochain enchaînement) va lancer.
+    fn standby_preview(&mut self, ui: &mut egui::Ui, area: Rect) {
+        let next = self.cues.get(self.standby).map(|c| (c.path.clone(), c.name.clone(), c.clip.clone()));
+        egui::Frame::new().fill(PANEL).corner_radius(6).inner_margin(10).show(ui, |ui| {
+            let w = (area.width() - 20.0).max(80.0);
+            ui.set_width(w);
+            ui.set_min_height(area.height() - 20.0);
+            ui.horizontal(|ui| {
+                ui.label(RichText::new("EN ATTENTE").strong().color(ACCENT));
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if ui.small_button("✕").on_hover_text("Masquer l'aperçu (bouton « Aperçu » pour le réafficher)").clicked() {
+                        self.hide_preview = true;
+                    }
+                });
+            });
+            let (rect, _) = ui.allocate_exact_size(vec2(w, w * 9.0 / 16.0), Sense::hover());
+            ui.painter().rect_filled(rect, 3, Color32::BLACK);
+            match &next {
+                Some((Some(p), name, clip)) => {
+                    let ctx = ui.ctx().clone();
+                    // Aperçu navigable : le cue s'ouvre sur son point d'entrée (pas pendant l'édition).
+                    if self.editor.is_none() {
+                        self.preview.open(&ctx, p, clip.sound.start);
+                    }
+                    let thumb = self.thumbs.get(&ctx, p).cloned();
+                    if self.preview.state.missing.is_none() || thumb.is_some() {
+                        super::media_editor::preview_image(ui, &mut self.preview, p, rect, thumb.as_ref(), clip.rotation());
+                    } else {
+                        let txt = if self.thumbs.failed(p) { tr("pas d'aperçu", "no preview") } else { "…" };
+                        ui.painter().text(rect.center(), Align2::CENTER_CENTER, txt, FontId::proportional(14.0), TEXT_DIM);
+                    }
+                    if self.preview.state.missing.is_none() && !super::media_editor::is_image(p) && self.editor.is_none() {
+                        super::media_editor::scrub_bar(ui, "cl-next-scrub", &mut self.preview, p, clip);
+                    }
+                    ui.horizontal(|ui| {
+                        if clip.sound.looping {
+                            let (r, _) = ui.allocate_exact_size(vec2(18.0, 10.0), Sense::hover());
+                            loop_icon(ui.painter(), r, ACCENT);
+                        }
+                        ui.add(egui::Label::new(RichText::new(format!("{}  {}", self.standby + 1, name)).strong().size(15.0)).truncate());
+                    });
+                    if clip.rotation() != 0 {
+                        ui.label(RichText::new(format!("Rotation {}°", clip.rotation())).small().color(TEXT_DIM));
+                    }
+                }
+                Some((None, name, _)) => {
+                    ui.painter().text(rect.center(), Align2::CENTER_CENTER, "■ Noir", FontId::proportional(16.0), TEXT_DIM);
+                    ui.label(RichText::new(format!("{}  {}", self.standby + 1, name)).strong().size(15.0));
+                }
+                None => {
+                    ui.label(RichText::new("Fin de la conduite").color(TEXT_DIM));
+                }
+            }
+        });
     }
 
     /// La conduite : clic = mettre en attente, double-clic = GO sur ce cue, glisser = changer l'ordre.
@@ -510,7 +799,8 @@ impl Cuelist {
                     right -= g.size().x + 8.0;
                 }
                 let name_r = Rect::from_min_max(pos2(rect.left() + 62.0, rect.top() + 2.0), pos2(right, rect.bottom() - 2.0));
-                let name = if c.path.is_none() { format!("■ {}", c.name) } else { c.name.clone() };
+                // Cue édité (rotation, points, fondus, volume, EQ) : repère après le nom.
+                let name = if c.path.is_none() { format!("■ {}", c.name) } else if c.clip.is_plain() { c.name.clone() } else { format!("{}  ✎", c.name) };
                 let mut job = egui::text::LayoutJob::simple_singleline(name, FontId::proportional(13.5), col);
                 job.wrap = egui::text::TextWrapping::truncate_at_width(name_r.width().max(10.0));
                 let g = p.layout_job(job);
@@ -608,9 +898,13 @@ impl Cuelist {
                     self.standby -= 1;
                 }
                 self.running = self.running.and_then(|r| if r == i { None } else if r > i { Some(r - 1) } else { Some(r) });
+                self.editor = self.editor.filter(|e| *e < i);
             }
             Some((i, CueAction::Follow(f))) => self.cues[i].follow = f,
-            Some((i, CueAction::Loop(l))) => self.cues[i].clip.sound.looping = l,
+            Some((i, CueAction::Loop(l))) => {
+                self.cues[i].clip.sound.looping = l;
+                self.clip_changed = Some(i);
+            }
             Some((i, CueAction::Edit)) => self.editor = Some(i),
             Some((i, CueAction::Info)) => {
                 if let Some(p) = self.cues[i].path.clone() {
@@ -688,7 +982,7 @@ impl Cuelist {
                 });
                 ui.end_row();
             });
-            // Réglages du média, comme un élément du Lecteur ou un jingle de JingleStar.
+            // Réglages du média (rotation, points, boucle, fondus, son), comme un jingle de JingleStar.
             if let Some(path) = c.path.clone() {
                 ui.add_space(6.0);
                 ui.separator();

@@ -84,6 +84,9 @@ pub enum Cadence {
     /// Choix par fichier : recalage de vitesse quand l'écran tombe presque juste, sinon synchro audio.
     #[default]
     Auto,
+    /// Comme Auto, et quand la cadence ne tombe pas juste sur l'écran (24 i/s sur 60 Hz), les
+    /// deux images voisines sont fondues au lieu d'en répéter une (interpolation de mpv).
+    Blend,
     /// Minutage sur l'horloge du son, sans correction.
     Audio,
     /// Vidéo très légèrement accélérée ou ralentie (moins de 1 %) pour tomber juste sur l'écran.
@@ -134,10 +137,11 @@ pub fn fps_label(fps: f64) -> String {
 }
 
 impl Cadence {
-    pub const ALL: [Cadence; 3] = [Cadence::Auto, Cadence::Audio, Cadence::Resample];
+    pub const ALL: [Cadence; 4] = [Cadence::Blend, Cadence::Auto, Cadence::Audio, Cadence::Resample];
     pub fn label(self) -> &'static str {
         match self {
-            Cadence::Auto => "Automatique (conseillé)",
+            Cadence::Blend => "Mélange d'images (conseillé)",
+            Cadence::Auto => "Automatique, sans mélange",
             Cadence::Audio => "Sur le son",
             Cadence::Resample => "Sur l'écran (vitesse ajustée)",
         }
@@ -145,6 +149,7 @@ impl Cadence {
     /// Explication affichée sous le choix.
     pub fn help(self) -> &'static str {
         match self {
+            Cadence::Blend => "Mélange d'images : comme Automatique, et quand la cadence de la vidéo ne tombe pas juste sur l'écran (24 i/s sur 60 Hz), CueStar fond les deux images voisines au lieu d'en répéter une. Sans effet quand les cadences correspondent, et jamais sur les mires de test.",
             Cadence::Auto => "Automatique : CueStar choisit pour chaque vidéo entre « Sur le son » et « Sur l'écran », selon sa cadence et la fréquence de l'écran.",
             Cadence::Audio => "Sur le son : la vidéo suit l'horloge du son, à sa vitesse exacte. Si la cadence ne tombe pas juste sur l'écran (24 i/s sur 60 Hz), une image reste de temps en temps un peu plus longtemps.",
             Cadence::Resample => "Sur l'écran : la vidéo est très légèrement accélérée ou ralentie (moins de 1 %) pour que chaque image tombe juste sur un rafraîchissement de l'écran. Mouvements plus réguliers, son recalé.",
@@ -170,6 +175,10 @@ pub struct MachinePrefs {
     pub fps: Option<f64>,
     /// Interpolation : fond deux images voisines pour lisser un rythme irrégulier (24 i/s sur 60 Hz…).
     pub interpolation: bool,
+    /// Le mélange d'images a déjà été proposé : il remplace une seule fois l'ancien choix
+    /// « Automatique » des réglages existants.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub blend_offered: bool,
     /// Ancienne option « Adapter la fréquence de l'écran à la vidéo », retirée : le FPS de sortie
     /// la remplace. Gardée pour relire et réécrire machine.json à l'identique.
     pub adapt_refresh: bool,
@@ -218,7 +227,7 @@ impl Default for Warp {
 
 impl Default for MachinePrefs {
     fn default() -> Self {
-        Self { decode: Decode::Auto, render: RenderApi::Auto, light: false, screen: None, windowed_if_single: true, cadence: Cadence::Auto, fps: None, interpolation: false, adapt_refresh: false, warp: Warp::default(), audio_device: None, volume: 100.0, audio_delay_ms: 0.0, audio_delay_unit: DelayUnit::Ms, prevent_sleep: true, language: star_core::i18n::Lang::Fr, escape_black: true, double_go_ms: 300 }
+        Self { decode: Decode::Auto, render: RenderApi::Auto, light: false, screen: None, windowed_if_single: true, cadence: Cadence::Blend, fps: None, interpolation: false, blend_offered: false, adapt_refresh: false, warp: Warp::default(), audio_device: None, volume: 100.0, audio_delay_ms: 0.0, audio_delay_unit: DelayUnit::Ms, prevent_sleep: true, language: star_core::i18n::Lang::Fr, escape_black: true, double_go_ms: 300 }
     }
 }
 
@@ -243,7 +252,16 @@ impl MachinePrefs {
     }
 
     pub fn load() -> Self {
-        path().and_then(|p| star_core::prefs::load(&p)).unwrap_or_default()
+        let mut m: Self = path().and_then(|p| star_core::prefs::load(&p)).unwrap_or_default();
+        // Réglages d'avant le mélange d'images : « Automatique » passe au nouveau choix conseillé.
+        if !m.blend_offered {
+            m.blend_offered = true;
+            if m.cadence == Cadence::Auto {
+                m.cadence = Cadence::Blend;
+            }
+            m.save();
+        }
+        m
     }
     pub fn save(&self) {
         if let Some(p) = path() {

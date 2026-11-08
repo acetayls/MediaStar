@@ -14,6 +14,8 @@ pub const EXTENSION: &str = "cuestar";
 pub struct Project {
     /// Nom donné par l'utilisateur (sinon le nom du fichier).
     pub name: String,
+    /// Playlist de l'ancien module Lecteur (supprimé) : relue pour les anciens projets, et
+    /// versée dans la Cuelist à l'ouverture.
     pub lecteur: LecteurData,
     pub diaporama: DiaporamaData,
     pub cuelist: CuelistData,
@@ -48,6 +50,9 @@ pub struct CueData {
 #[serde(default)]
 pub struct CuelistData {
     pub cues: Vec<CueData>,
+    /// Reprendre au premier cue après le dernier.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub loop_all: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -213,7 +218,7 @@ mod golden {
     }
 
     fn looped(on: bool) -> Clip {
-        Clip { sound: star_core::sound::SoundSettings { looping: on, ..Default::default() }, image_secs: None }
+        Clip { sound: star_core::sound::SoundSettings { looping: on, ..Default::default() }, image_secs: None, rotate: 0 }
     }
 
     /// Projet de la 0.0.1, d'avant l'éditeur d'élément.
@@ -233,6 +238,7 @@ mod golden {
                     CueData { name: "Ouverture".into(), path: Some("/v/ouverture.mov".into()), clip: looped(false), transition: fade, follow: CueFollow::Continue },
                     CueData { name: "Noir".into(), path: None, clip: looped(true), transition: Transition { kind: TransitionKind::Black, secs: 1.0 }, follow: CueFollow::Stop },
                 ],
+                loop_all: false,
             },
             notes: "**Acte 1**\nTop vidéo".into(),
         }
@@ -279,6 +285,7 @@ mod golden {
             cadence: Cadence::Resample,
             fps: Some(50.0),
             interpolation: true,
+            blend_offered: false,
             adapt_refresh: true,
             warp: Warp { enabled: true, corners: [[0.1, 0.0], [0.9, 0.05], [1.0, 1.0], [0.0, 0.95]] },
             audio_device: Some("wasapi/Haut-parleurs".into()),
@@ -345,7 +352,9 @@ mod tests {
         let f = dir.join("p.cuestar");
         let mut p = Project::default();
         p.name = "Spectacle".into();
-        p.lecteur.items.push(LecteurItem { path: "/v/a.mp4".into(), clip: Clip { sound: star_core::sound::SoundSettings { looping: true, ..Default::default() }, image_secs: None } });
+        p.lecteur.items.push(LecteurItem { path: "/v/a.mp4".into(), clip: Clip { sound: star_core::sound::SoundSettings { looping: true, ..Default::default() }, image_secs: None, rotate: 0 } });
+        p.cuelist.loop_all = true;
+        p.cuelist.cues.push(CueData { name: "Portrait".into(), path: Some("/v/b.mp4".into()), clip: Clip { rotate: 90, ..Default::default() }, ..Default::default() });
         p.lecteur.shuffle = true;
         p.save_with_backup(&f).unwrap();
         p.save_with_backup(&f).unwrap();

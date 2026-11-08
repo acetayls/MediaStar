@@ -35,15 +35,8 @@ pub enum ActionKind {
 }
 
 impl ActionKind {
-    pub const ALL: [ActionKind; 20] = [
-        ActionKind::LecteurGo,
-        ActionKind::LecteurPause,
-        ActionKind::LecteurStop,
-        ActionKind::LecteurNext,
-        ActionKind::LecteurPrevious,
-        ActionKind::LecteurItem,
-        ActionKind::LecteurShuffle,
-        ActionKind::LecteurLoop,
+    /// Actions proposées (les anciennes du Lecteur restent lues dans les réglages enregistrés).
+    pub const ALL: [ActionKind; 14] = [
         ActionKind::DiaporamaPlay,
         ActionKind::DiaporamaPause,
         ActionKind::DiaporamaStop,
@@ -54,20 +47,22 @@ impl ActionKind {
         ActionKind::CuePrevious,
         ActionKind::CuePause,
         ActionKind::CueStop,
+        ActionKind::LecteurItem,
+        ActionKind::LecteurLoop,
         ActionKind::Black,
         ActionKind::ResetDrops,
     ];
 
     pub fn label(self) -> &'static str {
         match self {
-            ActionKind::LecteurGo => "Lecteur : GO",
-            ActionKind::LecteurPause => "Lecteur : pause / reprise",
-            ActionKind::LecteurStop => "Lecteur : arrêt",
-            ActionKind::LecteurNext => "Lecteur : suivant",
-            ActionKind::LecteurPrevious => "Lecteur : précédent",
-            ActionKind::LecteurItem => "Lecteur : élément n° (valeur)",
-            ActionKind::LecteurShuffle => "Lecteur : aléatoire",
-            ActionKind::LecteurLoop => "Lecteur : tout boucler",
+            ActionKind::LecteurGo => "Cuelist : GO (ancien Lecteur)",
+            ActionKind::LecteurPause => "Cuelist : pause / reprise (ancien Lecteur)",
+            ActionKind::LecteurStop => "Cuelist : arrêt (ancien Lecteur)",
+            ActionKind::LecteurNext => "Cuelist : cue suivant (ancien Lecteur)",
+            ActionKind::LecteurPrevious => "Cuelist : cue précédent (ancien Lecteur)",
+            ActionKind::LecteurItem => "Cuelist : lancer le cue n° (valeur)",
+            ActionKind::LecteurShuffle => "Ancien Lecteur : aléatoire (sans effet)",
+            ActionKind::LecteurLoop => "Cuelist : boucler la conduite",
             ActionKind::DiaporamaPlay => "Diaporama : lancer / reprendre",
             ActionKind::DiaporamaPause => "Diaporama : pause / reprise",
             ActionKind::DiaporamaStop => "Diaporama : arrêt",
@@ -84,7 +79,7 @@ impl ActionKind {
     }
 }
 
-/// Options du Lecteur qu'un appui bascule.
+/// Options qu'un appui bascule (aléatoire : ancien Lecteur, sans effet).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Flag {
     Shuffle,

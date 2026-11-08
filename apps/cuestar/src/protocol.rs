@@ -66,7 +66,7 @@ pub enum Command {
     Quit,
 }
 
-/// Réglages d'édition d'un élément du Lecteur ou d'un cue, comme ceux d'un jingle de
+/// Réglages d'édition d'un cue, comme ceux d'un jingle de
 /// JingleStar : volume, points d'entrée et de sortie, boucle, fondus (au noir pour l'image)
 /// et égaliseur de la bande son. Enregistré tel quel dans le projet.
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -76,6 +76,13 @@ pub struct Clip {
     pub sound: star_core::sound::SoundSettings,
     /// Durée d'affichage d'une image fixe en secondes (None : jusqu'au média suivant).
     pub image_secs: Option<f64>,
+    /// Rotation de l'image en degrés, dans le sens des aiguilles d'une montre (0, 90, 180, 270).
+    #[serde(skip_serializing_if = "is_zero")]
+    pub rotate: u16,
+}
+
+fn is_zero(v: &u16) -> bool {
+    *v == 0
 }
 
 impl Clip {
@@ -89,12 +96,19 @@ impl Clip {
             && s.fade_out <= 0.0
             && s.eq.is_flat()
             && self.image_secs.is_none()
+            && self.rotation() == 0
+    }
+
+    /// Rotation ramenée à 0, 90, 180 ou 270 degrés.
+    pub fn rotation(&self) -> u16 {
+        (self.rotate % 360) / 90 * 90
     }
 
     /// Remet dans leurs bornes les valeurs aberrantes.
     pub fn sanitize(&mut self) {
         self.sound.sanitize(10.0);
         self.image_secs = self.image_secs.filter(|v| v.is_finite() && *v > 0.0).map(|v| v.clamp(0.1, 86_400.0));
+        self.rotate = self.rotation();
     }
 }
 

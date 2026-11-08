@@ -1,4 +1,4 @@
-//! Éditeur d'un élément du Lecteur ou d'un cue de la Cuelist, comme celui d'un jingle de
+//! Éditeur d'un cue de la Cuelist, comme celui d'un jingle de
 //! JingleStar : volume, lecture une fois ou en boucle, fondus au noir, frise de vignettes avec
 //! ses poignées d'entrée et de sortie, égaliseur de la bande son. Et l'aperçu où l'on se
 //! déplace dans le média sans toucher à la sortie.
@@ -63,18 +63,29 @@ fn strip_background(tiles: Vec<Option<egui::TextureHandle>>, duration: f64) -> i
     }
 }
 
-/// Image de l'aperçu, ajustée dans `rect` (16:9), ou la vignette fixe en attendant.
-pub fn preview_image(ui: &mut Ui, preview: &mut Preview, path: &Path, rect: Rect, fallback: Option<&egui::TextureHandle>) {
+/// Image ajustée dans `rect`, tournée de `rot` degrés (sens des aiguilles d'une montre).
+pub fn paint_texture(painter: &egui::Painter, tex: &egui::TextureHandle, rect: Rect, rot: u16) {
+    let ts = tex.size_vec2();
+    let quarter = rot == 90 || rot == 270;
+    let shown = if quarter { vec2(ts.y, ts.x) } else { ts };
+    let k = (rect.width() / shown.x.max(1.0)).min(rect.height() / shown.y.max(1.0));
+    let r = Rect::from_center_size(rect.center(), ts * k);
+    let mut mesh = egui::Mesh::with_texture(tex.id());
+    mesh.add_rect_with_uv(r, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
+    if rot != 0 {
+        mesh.rotate(egui::emath::Rot2::from_angle((rot as f32).to_radians()), rect.center());
+    }
+    painter.add(egui::Shape::mesh(mesh));
+}
+
+/// Image de l'aperçu, ajustée dans `rect` (16:9) et tournée comme sur la sortie, ou la vignette
+/// fixe en attendant.
+pub fn preview_image(ui: &mut Ui, preview: &mut Preview, path: &Path, rect: Rect, fallback: Option<&egui::TextureHandle>, rot: u16) {
     ui.painter().rect_filled(rect, 3, Color32::BLACK);
     let ctx = ui.ctx().clone();
     let live = if preview.state.path.as_deref() == Some(path) { preview.texture(&ctx).cloned() } else { None };
     match live.as_ref().or(fallback) {
-        Some(t) => {
-            let ts = t.size_vec2();
-            let k = (rect.width() / ts.x).min(rect.height() / ts.y);
-            let r = Rect::from_center_size(rect.center(), ts * k);
-            ui.painter().image(t.id(), r, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0)), Color32::WHITE);
-        }
+        Some(t) => paint_texture(&ui.painter_at(rect), t, rect, rot),
         None => {
             let txt = if is_audio(path) { tr("son seul", "audio only") } else { "…" };
             ui.painter().text(rect.center(), egui::Align2::CENTER_CENTER, txt, egui::FontId::proportional(14.0), TEXT_DIM);
@@ -159,6 +170,18 @@ pub fn clip_editor(ui: &mut Ui, id_salt: impl std::hash::Hash + std::fmt::Debug 
     preview.poll();
 
     egui::Grid::new(("clip-fields", id_salt)).num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
+        if !is_audio(path) {
+            ui.label(tr("Rotation", "Rotation"));
+            ui.horizontal(|ui| {
+                let mut r = clip.rotation();
+                for (v, l) in [(0u16, "0°"), (90, "90°"), (180, "180°"), (270, "270°")] {
+                    ui.radio_value(&mut r, v, l);
+                }
+                clip.rotate = r;
+                ui.label(RichText::new(tr("sens des aiguilles d'une montre, sur la sortie", "clockwise, on the output")).small().color(TEXT_DIM));
+            });
+            ui.end_row();
+        }
         if image {
             ui.label(tr("Affichage", "Display"));
             ui.horizontal(|ui| {
@@ -202,7 +225,7 @@ pub fn clip_editor(ui: &mut Ui, id_salt: impl std::hash::Hash + std::fmt::Debug 
     // Aperçu : l'image à la position de la tête de lecture.
     let w = ui.available_width().min(360.0);
     let (rect, _) = ui.allocate_exact_size(vec2(w, w * 9.0 / 16.0), Sense::hover());
-    preview_image(ui, preview, path, rect, None);
+    preview_image(ui, preview, path, rect, None, clip.rotation());
     if !image {
         scrub_bar(ui, ("clip-scrub", id_salt), preview, path, clip);
     }

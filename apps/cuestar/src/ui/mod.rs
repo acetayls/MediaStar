@@ -4,7 +4,6 @@ mod cuelist;
 mod diaporama;
 mod dialogs;
 mod file_info;
-mod lecteur;
 mod media_editor;
 mod monitor_view;
 mod notes;
@@ -52,10 +51,9 @@ const HELP_EN: &str = include_str!("../../docs/help.md");
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Tab {
-    Lecteur,
+    Cuelist,
     Diaporama,
     Presentation,
-    Cuelist,
 }
 
 pub struct CueStarApp {
@@ -64,7 +62,6 @@ pub struct CueStarApp {
     help: star_ui::help::HelpWindow,
     prefs: MachinePrefs,
     out: OutputLink,
-    lecteur: lecteur::Lecteur,
     diaporama: diaporama::Diaporama,
     presentation: presentation::Presentation,
     cuelist: cuelist::Cuelist,
@@ -116,10 +113,9 @@ impl CueStarApp {
         let prefs = MachinePrefs::load();
         star_core::i18n::set_lang(prefs.language);
         let mut app = Self {
-            tab: Tab::Lecteur,
+            tab: Tab::Cuelist,
             prefs,
             out: OutputLink::new(),
-            lecteur: Default::default(),
             diaporama: Default::default(),
             presentation: Default::default(),
             cuelist: Default::default(),
@@ -181,14 +177,15 @@ impl CueStarApp {
     // ------------------------------------------------------------ projet
 
     fn snapshot(&self) -> Project {
-        Project { name: self.project_name.clone(), lecteur: self.lecteur.to_data(), diaporama: self.diaporama.to_data(), cuelist: self.cuelist.to_data(), notes: self.notes.text.clone() }
+        Project { name: self.project_name.clone(), lecteur: Default::default(), diaporama: self.diaporama.to_data(), cuelist: self.cuelist.to_data(), notes: self.notes.text.clone() }
     }
 
     fn apply_project(&mut self, p: &Project) {
         self.project_name = p.name.clone();
-        self.lecteur.load_data(&p.lecteur);
         self.diaporama.load_data(&p.diaporama);
         self.cuelist.load_data(&p.cuelist);
+        // Ancien projet : la playlist du Lecteur passe dans la Cuelist.
+        self.cuelist.import_lecteur(&p.lecteur);
         self.notes.text = p.notes.clone();
         self.missing = p.clone().missing_files().len();
     }
@@ -406,7 +403,7 @@ impl CueStarApp {
     /// Messages OSC reçus depuis la dernière image.
     fn poll_osc(&mut self) {
         // Télécommandes (MIDI, consoles) : mêmes commandes que l'OSC.
-        let (sh, lp) = self.lecteur.flags();
+        let (sh, lp) = (false, self.cuelist.looping());
         let mut msgs: Vec<crate::osc::Msg> = self.remotes.poll(|f| match f {
             crate::remote::Flag::Shuffle => sh,
             crate::remote::Flag::Loop => lp,
@@ -423,9 +420,8 @@ impl CueStarApp {
                 self.out.send(Command::Stop);
             } else if path == "output/drops/reset" {
                 self.out.reset_drops();
-            } else if let Some(cmd) = path.strip_prefix("lecteur/") {
-                self.lecteur.handle_osc(cmd, &m, &mut self.out);
-            } else if let Some(cmd) = path.strip_prefix("cuelist/") {
+            } else if let Some(cmd) = path.strip_prefix("cuelist/").or_else(|| path.strip_prefix("lecteur/")) {
+                // « lecteur/… » : adresses de l'ancien Lecteur, servies par la Cuelist.
                 self.cuelist.handle_osc(cmd, &m, &mut self.out);
             } else if let Some(cmd) = path.strip_prefix("diaporama/") {
                 self.diaporama.handle_osc(cmd, &m, &mut self.out);
@@ -441,7 +437,7 @@ impl CueStarApp {
                 paused: st.paused,
                 time: st.time,
                 duration: st.duration,
-                lecteur: self.lecteur.osc_state(),
+                lecteur: crate::osc::LecteurState { items: self.cuelist.osc_state().cues, playing: 0, shuffle: false, looping: self.cuelist.looping() },
                 cuelist: self.cuelist.osc_state(),
                 slide: st.slide.as_ref().map_or((0, 0), |s| (s.0 + 1, s.1)),
             };
@@ -692,7 +688,7 @@ impl CueStarApp {
                         }
                     }
                     ui.add_space(12.0);
-                    for (t, name) in [(Tab::Lecteur, "Lecteur"), (Tab::Diaporama, "Diaporama"), (Tab::Presentation, "Présentation"), (Tab::Cuelist, "Cuelist")] {
+                    for (t, name) in [(Tab::Cuelist, "Cuelist"), (Tab::Diaporama, "Diaporama"), (Tab::Presentation, "Présentation")] {
                         let sel = self.tab == t;
                         let txt = RichText::new(name).size(15.0).color(if sel { PLAYING_INK } else { TEXT });
                         let b = egui::Button::new(txt).fill(if sel { ACCENT } else { PANEL_HI }).min_size(egui::vec2(tab_w, 30.0));
@@ -923,7 +919,6 @@ impl eframe::App for CueStarApp {
             }
         }
         egui::CentralPanel::default().frame(egui::Frame::new().fill(BG).inner_margin(10)).show(ui, |ui| match self.tab {
-            Tab::Lecteur => self.lecteur.ui(ui, &mut self.out, typing),
             Tab::Diaporama => self.diaporama.ui(ui, &mut self.out, typing),
             Tab::Presentation => self.presentation.ui(ui, &mut self.out, typing),
             Tab::Cuelist => self.cuelist.ui(ui, &mut self.out, typing),
@@ -936,7 +931,6 @@ impl eframe::App for CueStarApp {
             self.restart_output();
         }
         match self.tab {
-            Tab::Lecteur => self.lecteur.handle_drops(&ctx),
             Tab::Cuelist => self.cuelist.handle_drops(&ctx),
             Tab::Diaporama | Tab::Presentation => {}
         }
