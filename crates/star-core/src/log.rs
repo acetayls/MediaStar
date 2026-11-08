@@ -22,6 +22,16 @@ pub fn init(app: App) {
     }
 }
 
+/// Nouvelle session : le journal repart vide. Celui de la session précédente est gardé à part
+/// (`.old.log`, remplacé à chaque lancement), pour retrouver la trace d'un plantage. À appeler
+/// par le programme principal seulement (pas par ses processus annexes).
+pub fn start_fresh() {
+    let Some(path) = PATH.get() else { return };
+    if path.exists() {
+        let _ = std::fs::rename(path, path.with_extension("old.log"));
+    }
+}
+
 /// Fichier du journal, une fois [`init`] appelé.
 pub fn log_path() -> Option<PathBuf> {
     PATH.get().cloned()

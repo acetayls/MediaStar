@@ -325,6 +325,8 @@ struct OutputApp {
     on_top_installed: bool,
     /// Écran choisi pour la sortie.
     screen: Option<MonitorHandle>,
+    /// Fenêtre fille de l'affichage composé (Windows, quand la fenêtre de sortie le refuse).
+    child: Option<isize>,
 }
 
 fn describe(m: &MonitorHandle, primary: &Option<MonitorHandle>) -> Monitor {
@@ -536,13 +538,17 @@ impl OutputApp {
         let size = window.inner_size();
         let size = (size.width.max(1), size.height.max(1));
         // 1. Affichage composé par CueStar.
+        let mut child: Option<isize> = None;
         let composite = (|| -> Result<screen::Screen, String> {
-            let mut decks = Vec::new();
-            for _ in 0..screen::DECKS {
-                let m = self.new_deck(true)?;
-                m.initialize()?;
-                decks.push(m);
-            }
+            let decks = || -> Result<Vec<Mpv>, String> {
+                let mut decks = Vec::new();
+                for _ in 0..screen::DECKS {
+                    let m = self.new_deck(true)?;
+                    m.initialize()?;
+                    decks.push(m);
+                }
+                Ok(decks)
+            };
             #[cfg(windows)]
             {
                 let hwnd = match window.window_handle().map_err(|e| e.to_string())?.as_raw() {
@@ -551,7 +557,24 @@ impl OutputApp {
                 };
                 use winit::platform::windows::MonitorHandleExtWindows;
                 let hmon = chosen.map(|m| m.hmonitor()).unwrap_or(0);
-                screen_d3d11::open(hwnd, hmon, size, self.refresh_hz, decks)
+                match screen_d3d11::open(hwnd, hmon, size, self.refresh_hz, decks()?) {
+                    // Fenêtre de sortie refusée : l'image passe par une fenêtre fille.
+                    Err(e) if e.contains("chaîne d'affichage") => {
+                        let c = screen_d3d11::child_window(hwnd, size).ok_or_else(|| e.clone())?;
+                        match screen_d3d11::open(c, hmon, size, self.refresh_hz, decks()?) {
+                            Ok(s) => {
+                                star_core::log::write("Sortie : affichage composé dans une fenêtre fille (la fenêtre de sortie refuse la chaîne d'affichage Direct3D)");
+                                child = Some(c);
+                                Ok(s)
+                            }
+                            Err(e2) => {
+                                screen_d3d11::destroy_child(c);
+                                Err(format!("{e} ; fenêtre fille : {e2}"))
+                            }
+                        }
+                    }
+                    r => r,
+                }
             }
             #[cfg(not(windows))]
             {
@@ -559,6 +582,7 @@ impl OutputApp {
                 screen_gl::open(window, size, self.refresh_hz, decks)
             }
         })();
+        self.child = child;
         let out = match composite {
             Ok(s) => Out::Composite(s),
             Err(e) => {
@@ -1682,6 +1706,10 @@ impl ApplicationHandler<UserEv> for OutputApp {
                 }
             }
             WindowEvent::Resized(s) => {
+                #[cfg(windows)]
+                if let Some(c) = self.child {
+                    screen_d3d11::resize_child(c, s.width, s.height);
+                }
                 if let Some(Out::Composite(scr)) = &self.out {
                     scr.resize(s.width, s.height);
                 }
@@ -1800,6 +1828,7 @@ pub fn run(prefs: MachinePrefs, monitor_port: Option<u16>) {
         single: false,
         on_top_installed: false,
         screen: None,
+        child: None,
     };
     let _ = event_loop.run_app(&mut app);
 }

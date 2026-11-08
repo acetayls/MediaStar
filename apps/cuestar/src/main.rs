@@ -48,6 +48,8 @@ fn main() {
         }
         return;
     }
+    // Régie : journal neuf à chaque lancement (la session précédente reste en cuestar.old.log).
+    star_core::log::start_fresh();
     star_core::log::install_panic_hook(&format!("Démarrage de CueStar {}", env!("CARGO_PKG_VERSION")));
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()

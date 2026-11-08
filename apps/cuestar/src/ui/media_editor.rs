@@ -210,16 +210,10 @@ pub fn clip_editor(ui: &mut Ui, id_salt: impl std::hash::Hash + std::fmt::Debug 
             });
             ui.end_row();
         } else {
-            sound_editor::sound_rows(ui, &mut clip.sound, true);
+            let tip = tr("Les fondus partent du noir et y reviennent, image et son ensemble.", "Fades go from and to black, picture and sound together.");
+            sound_editor::sound_rows_tip(ui, &mut clip.sound, true, Some(tip));
         }
     });
-    if !image {
-        ui.label(
-            RichText::new(tr("Les fondus partent du noir et y reviennent, image et son ensemble.", "Fades go from and to black, picture and sound together."))
-                .small()
-                .color(TEXT_DIM),
-        );
-    }
     ui.add_space(6.0);
 
     // Aperçu : l'image à la position de la tête de lecture.

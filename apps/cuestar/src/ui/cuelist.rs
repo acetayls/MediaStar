@@ -488,7 +488,9 @@ impl Cuelist {
                 "À L'ANTENNE : RIEN"
             };
             let cur = running.and_then(|i| self.cues.get(i).map(|c| (i, c.name.clone(), c.clip.sound.looping)));
-            let (mut t, dur) = if cur.is_some() { (s.time, s.duration) } else { (0.0, 0.0) };
+            // Cue coupé : temps et barre comptés entre ses points d'entrée et de sortie.
+            let span = running.and_then(|i| self.cues.get(i)).map(|c| cue_span(c, s.duration)).unwrap_or((0.0, 0.0));
+            let (mut t, dur) = if cur.is_some() && s.duration > 0.0 { ((s.time - span.0).clamp(0.0, span.1 - span.0), span.1 - span.0) } else { (0.0, 0.0) };
             let mut seek = None;
             egui::Frame::new().fill(run_fill).stroke(Stroke::new(1.0, run_col.gamma_multiply(0.7))).corner_radius(4).inner_margin(6).show(ui, |ui| {
                 ui.set_width(width - 12.0);
@@ -553,7 +555,7 @@ impl Cuelist {
                 });
             });
             if let Some(sec) = seek {
-                out.send(Command::Seek { seconds: sec });
+                out.send(Command::Seek { seconds: span.0 + sec });
                 self.at_end = false;
             }
 
@@ -758,8 +760,9 @@ impl Cuelist {
                 } else if resp.hovered() {
                     p.rect_filled(rect, CornerRadius::same(3), PANEL_HI);
                 }
-                if is_running && s.duration > 0.0 {
-                    let frac = (s.time / s.duration).clamp(0.0, 1.0) as f32;
+                let (a, b) = cue_span(c, s.duration);
+                if is_running && b > a {
+                    let frac = ((s.time - a) / (b - a)).clamp(0.0, 1.0) as f32;
                     p.rect_filled(Rect::from_min_size(rect.min, vec2(rect.width() * frac, rect.height())), CornerRadius::same(3), GO.gamma_multiply(0.22));
                 }
                 let col = if is_running { GO } else if is_standby { ACCENT } else { TEXT };
@@ -802,8 +805,8 @@ impl Cuelist {
                     p.galley(pos2(right - g.size().x, rect.center().y - g.size().y / 2.0), g.clone(), TEXT_DIM);
                     right -= g.size().x + 8.0;
                 }
-                if is_running && s.duration > 0.0 {
-                    let g = p.layout_no_wrap(format!("-{}", fmt_time((s.duration - s.time).max(0.0))), FontId::monospace(11.0), GO);
+                if is_running && b > a {
+                    let g = p.layout_no_wrap(format!("-{}", fmt_time((b - s.time.max(a)).max(0.0))), FontId::monospace(11.0), GO);
                     p.galley(pos2(right - g.size().x, rect.center().y - g.size().y / 2.0), g.clone(), GO);
                     right -= g.size().x + 8.0;
                 }
@@ -1013,6 +1016,12 @@ impl Cuelist {
             self.editor = None;
         }
     }
+}
+
+/// Partie lue d'un cue dans son média (point d'entrée, point de sortie), en secondes.
+fn cue_span(c: &CueData, duration: f64) -> (f64, f64) {
+    let (a, _, _, b) = c.clip.sound.markers(duration.max(0.0));
+    (a, b)
 }
 
 fn is_media(p: &Path) -> bool {

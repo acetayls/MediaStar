@@ -36,6 +36,11 @@ pub fn listen_button(ui: &mut Ui, id: impl std::hash::Hash + Debug, playing: boo
 /// Rangées Volume, Lecture et Fondus, à placer dans une grille à deux colonnes.
 /// Sans `allow_loop` (cues de la Cuelist), le choix une fois / en boucle n'est pas proposé.
 pub fn sound_rows(ui: &mut Ui, s: &mut SoundSettings, allow_loop: bool) {
+    sound_rows_tip(ui, s, allow_loop, None);
+}
+
+/// Comme [`sound_rows`], avec une infobulle sur la rangée Fondus.
+pub fn sound_rows_tip(ui: &mut Ui, s: &mut SoundSettings, allow_loop: bool, fade_tip: Option<&str>) {
     ui.label("Volume");
     ui.add(egui::Slider::new(&mut s.volume_db, -40.0..=10.0).suffix(" dB").step_by(0.5));
     ui.end_row();
@@ -49,12 +54,16 @@ pub fn sound_rows(ui: &mut Ui, s: &mut SoundSettings, allow_loop: bool) {
         ui.end_row();
     }
 
-    ui.label(tr("Fondus", "Fades"));
+    let tip = |r: egui::Response| match fade_tip {
+        Some(t) => r.on_hover_text(t),
+        None => r,
+    };
+    tip(ui.label(tr("Fondus", "Fades")));
     ui.horizontal(|ui| {
-        ui.label(tr("entrée", "in"));
-        ui.add(egui::DragValue::new(&mut s.fade_in).range(0.0..=30.0).speed(0.05).suffix(" s").max_decimals(2));
-        ui.label(tr("sortie", "out"));
-        ui.add(egui::DragValue::new(&mut s.fade_out).range(0.0..=30.0).speed(0.05).suffix(" s").max_decimals(2));
+        tip(ui.label(tr("entrée", "in")));
+        tip(ui.add(egui::DragValue::new(&mut s.fade_in).range(0.0..=30.0).speed(0.05).suffix(" s").max_decimals(2)));
+        tip(ui.label(tr("sortie", "out")));
+        tip(ui.add(egui::DragValue::new(&mut s.fade_out).range(0.0..=30.0).speed(0.05).suffix(" s").max_decimals(2)));
     });
     ui.end_row();
 }

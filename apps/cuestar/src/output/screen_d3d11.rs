@@ -16,6 +16,15 @@ use windows::Win32::Graphics::Dxgi::*;
 use windows::Win32::Graphics::Gdi::HMONITOR;
 use windows::Win32::System::Threading::WaitForSingleObjectEx;
 
+/// Réglages de chaîne d'affichage essayés dans l'ordre : effet, nombre d'images, objet d'attente.
+const SWAP_CHOICES: [(DXGI_SWAP_EFFECT, u32, bool); 4] = [
+    (DXGI_SWAP_EFFECT_FLIP_DISCARD, 2, true),
+    (DXGI_SWAP_EFFECT_FLIP_DISCARD, 2, false),
+    (DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL, 2, false),
+    (DXGI_SWAP_EFFECT_DISCARD, 1, false),
+];
+const SWAP_NAMES: [&str; 4] = ["flip, latence réglée", "flip", "flip séquentiel", "copie"];
+
 /// Ouvre l'affichage Direct3D 11 dans la fenêtre `hwnd`, sur la carte reliée à l'écran `hmonitor`.
 pub fn open(hwnd: isize, hmonitor: isize, size: (u32, u32), refresh_hz: f64, decks: Vec<Mpv>) -> Result<Screen, String> {
     let (hw, hm) = (super::screen::SendPtr(hwnd), super::screen::SendPtr(hmonitor));
@@ -155,7 +164,9 @@ struct D3d {
     dev: ID3D11Device,
     ctx: ID3D11DeviceContext,
     swap: IDXGISwapChain1,
+    /// Objet d'attente de la chaîne (nul sans lui : l'attente passe par Present).
     waitable: HANDLE,
+    swap_flags: i32,
     size: (u32, u32),
     targets: Vec<Target>,
     vs: ID3D11VertexShader,
@@ -186,26 +197,53 @@ unsafe fn setup(shared: &Arc<Shared>, hwnd: isize, hmonitor: isize, links: &[(Ha
         let gpu = dxgi_adapter.GetDesc().map(|d| String::from_utf16_lossy(&d.Description).trim_end_matches('\0').to_string()).unwrap_or_default();
         let factory: IDXGIFactory2 = dxgi_adapter.GetParent().map_err(|e| e.to_string())?;
         let size = shared.st.lock().map(|s| s.size).unwrap_or((1, 1));
-        let desc = DXGI_SWAP_CHAIN_DESC1 {
-            Width: size.0,
-            Height: size.1,
-            Format: DXGI_FORMAT_B8G8R8A8_UNORM,
-            Stereo: false.into(),
-            SampleDesc: DXGI_SAMPLE_DESC { Count: 1, Quality: 0 },
-            BufferUsage: DXGI_USAGE_RENDER_TARGET_OUTPUT,
-            BufferCount: 2,
-            Scaling: DXGI_SCALING_STRETCH,
-            SwapEffect: DXGI_SWAP_EFFECT_FLIP_DISCARD,
-            AlphaMode: DXGI_ALPHA_MODE_IGNORE,
-            Flags: DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT.0 as u32,
-        };
         let hw = HWND(hwnd as *mut c_void);
-        let swap = factory.CreateSwapChainForHwnd(&dev, hw, &desc, None, None).map_err(|e| format!("chaîne d'affichage : {e}"))?;
+        // Chaîne d'affichage : « flip » à latence réglée d'abord, puis des réglages plus simples
+        // si le pilote ou la fenêtre les refusent (DXGI_ERROR_INVALID_CALL vu sur certains PC).
+        let mut errors = Vec::new();
+        let mut made = None;
+        for (i, (effect, count, waitable)) in SWAP_CHOICES.iter().enumerate() {
+            let desc = DXGI_SWAP_CHAIN_DESC1 {
+                Width: size.0,
+                Height: size.1,
+                Format: DXGI_FORMAT_B8G8R8A8_UNORM,
+                Stereo: false.into(),
+                SampleDesc: DXGI_SAMPLE_DESC { Count: 1, Quality: 0 },
+                BufferUsage: DXGI_USAGE_RENDER_TARGET_OUTPUT,
+                BufferCount: *count,
+                Scaling: DXGI_SCALING_STRETCH,
+                SwapEffect: *effect,
+                AlphaMode: DXGI_ALPHA_MODE_IGNORE,
+                Flags: if *waitable { DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT.0 as u32 } else { 0 },
+            };
+            match factory.CreateSwapChainForHwnd(&dev, hw, &desc, None, None) {
+                Ok(sw) => {
+                    made = Some((sw, i, *waitable));
+                    break;
+                }
+                Err(e) => errors.push(format!("{} : {e}", SWAP_NAMES[i])),
+            }
+        }
+        let Some((swap, choice, waitable_on)) = made else {
+            return Err(format!("chaîne d'affichage : {}", errors.join(" ; ")));
+        };
+        if choice > 0 {
+            star_core::log::warn(&format!("Sortie : chaîne d'affichage « {} » (refusé avant : {})", SWAP_NAMES[choice], errors.join(" ; ")));
+        }
         // Alt+Entrée de DXGI désactivé : c'est CueStar qui gère le plein écran.
         let _ = factory.MakeWindowAssociation(hw, DXGI_MWA_NO_ALT_ENTER);
-        let swap2: IDXGISwapChain2 = swap.cast().map_err(|e| e.to_string())?;
-        swap2.SetMaximumFrameLatency(1).map_err(|e| e.to_string())?;
-        let waitable = swap2.GetFrameLatencyWaitableObject();
+        let waitable = if waitable_on {
+            let swap2: IDXGISwapChain2 = swap.cast().map_err(|e| e.to_string())?;
+            swap2.SetMaximumFrameLatency(1).map_err(|e| e.to_string())?;
+            swap2.GetFrameLatencyWaitableObject()
+        } else {
+            // Sans objet d'attente : une image d'avance au plus, réglée sur le périphérique.
+            if let Ok(d1) = dev.cast::<IDXGIDevice1>() {
+                let _ = d1.SetMaximumFrameLatency(1);
+            }
+            HANDLE::default()
+        };
+        let swap_flags = if waitable_on { DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT.0 } else { 0 };
 
         // Contextes de rendu mpv sur notre carte.
         let api_type = CString::new("d3d11").unwrap();
@@ -258,6 +296,7 @@ unsafe fn setup(shared: &Arc<Shared>, hwnd: isize, hmonitor: isize, links: &[(Ha
             ctx,
             swap,
             waitable,
+            swap_flags,
             size,
             targets: Vec::new(),
             vs: vs.ok_or("vs")?,
@@ -335,7 +374,7 @@ impl Backend for D3d {
             self.ctx.ClearState();
             self.ctx.Flush();
             self.swap
-                .ResizeBuffers(0, size.0, size.1, DXGI_FORMAT_UNKNOWN, DXGI_SWAP_CHAIN_FLAG(DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT.0))
+                .ResizeBuffers(0, size.0, size.1, DXGI_FORMAT_UNKNOWN, DXGI_SWAP_CHAIN_FLAG(self.swap_flags))
                 .map_err(|e| format!("redimensionnement : {e}"))?;
             self.size = size;
             self.thumb = make_thumb(&self.dev, size)?;
@@ -345,7 +384,9 @@ impl Backend for D3d {
     }
 
     fn wait_ready(&mut self) {
-        unsafe { WaitForSingleObjectEx(self.waitable, 100, true) };
+        if !self.waitable.is_invalid() {
+            unsafe { WaitForSingleObjectEx(self.waitable, 100, true) };
+        }
     }
 
     fn draw_deck(&mut self, i: usize, d: &DeckRc) {
@@ -419,7 +460,9 @@ impl Backend for D3d {
 
 impl Drop for D3d {
     fn drop(&mut self) {
-        let _ = unsafe { CloseHandle(self.waitable) };
+        if !self.waitable.is_invalid() {
+            let _ = unsafe { CloseHandle(self.waitable) };
+        }
     }
 }
 
@@ -433,4 +476,93 @@ mod tests {
             super::compile("ps", "ps_4_0").unwrap();
         }
     }
+}
+
+#[cfg(test)]
+mod swap_tests {
+    use super::*;
+    use windows::core::w;
+    use windows::Win32::UI::WindowsAndMessaging::{CreateWindowExW, DestroyWindow, WINDOW_EX_STYLE, WS_OVERLAPPEDWINDOW, WS_VISIBLE};
+
+    /// `cargo test -- --ignored swapchain_on_plain_window` : la chaîne d'affichage sur une
+    /// fenêtre Win32 simple, sur chaque carte (diagnostic de DXGI_ERROR_INVALID_CALL).
+    #[test]
+    #[ignore]
+    fn swapchain_on_plain_window() {
+        unsafe {
+            let hwnd = CreateWindowExW(WINDOW_EX_STYLE(0), w!("STATIC"), w!("essai"), WS_OVERLAPPEDWINDOW | WS_VISIBLE, 0, 0, 640, 360, None, None, None, None).unwrap();
+            let factory: IDXGIFactory1 = CreateDXGIFactory1().unwrap();
+            let mut i = 0;
+            while let Ok(ad) = factory.EnumAdapters1(i) {
+                let name = ad.GetDesc1().map(|d| String::from_utf16_lossy(&d.Description).trim_end_matches('\0').to_string()).unwrap_or_default();
+                let mut dev: Option<ID3D11Device> = None;
+                let flags = D3D11_CREATE_DEVICE_BGRA_SUPPORT | D3D11_CREATE_DEVICE_VIDEO_SUPPORT;
+                let levels = [D3D_FEATURE_LEVEL_11_1, D3D_FEATURE_LEVEL_11_0];
+                let r = D3D11CreateDevice(&ad, D3D_DRIVER_TYPE_UNKNOWN, HMODULE::default(), flags, Some(&levels), D3D11_SDK_VERSION, Some(&mut dev), None, None);
+                let Some(dev) = dev.filter(|_| r.is_ok()) else {
+                    println!("{name} : pas de périphérique {r:?}");
+                    i += 1;
+                    continue;
+                };
+                let f2: IDXGIFactory2 = dev.cast::<IDXGIDevice>().unwrap().GetAdapter().unwrap().GetParent().unwrap();
+                for (k, (effect, count, waitable)) in SWAP_CHOICES.iter().enumerate() {
+                    let desc = DXGI_SWAP_CHAIN_DESC1 {
+                        Width: 640,
+                        Height: 360,
+                        Format: DXGI_FORMAT_B8G8R8A8_UNORM,
+                        Stereo: false.into(),
+                        SampleDesc: DXGI_SAMPLE_DESC { Count: 1, Quality: 0 },
+                        BufferUsage: DXGI_USAGE_RENDER_TARGET_OUTPUT,
+                        BufferCount: *count,
+                        Scaling: DXGI_SCALING_STRETCH,
+                        SwapEffect: *effect,
+                        AlphaMode: DXGI_ALPHA_MODE_IGNORE,
+                        Flags: if *waitable { DXGI_SWAP_CHAIN_FLAG_FRAME_LATENCY_WAITABLE_OBJECT.0 as u32 } else { 0 },
+                    };
+                    let r = f2.CreateSwapChainForHwnd(&dev, hwnd, &desc, None, None);
+                    println!("{name} / {} : {:?}", SWAP_NAMES[k], r.as_ref().map(|_| "ok"));
+                    drop(r);
+                }
+                i += 1;
+            }
+            let _ = DestroyWindow(hwnd);
+        }
+    }
+}
+
+/// Fenêtre fille sans interaction couvrant toute la fenêtre de sortie : sur certains PC, la
+/// fenêtre de sortie elle-même refuse toute chaîne d'affichage (DXGI_ERROR_INVALID_CALL) alors
+/// qu'une fenêtre Win32 simple l'accepte. Clavier et souris restent à la fenêtre de sortie.
+pub fn child_window(parent: isize, size: (u32, u32)) -> Option<isize> {
+    use windows::core::w;
+    use windows::Win32::UI::WindowsAndMessaging::{CreateWindowExW, WINDOW_EX_STYLE, WS_CHILD, WS_DISABLED, WS_VISIBLE};
+    let h = unsafe {
+        CreateWindowExW(
+            WINDOW_EX_STYLE(0),
+            w!("STATIC"),
+            w!(""),
+            WS_CHILD | WS_VISIBLE | WS_DISABLED,
+            0,
+            0,
+            size.0 as i32,
+            size.1 as i32,
+            Some(HWND(parent as *mut c_void)),
+            None,
+            None,
+            None,
+        )
+    }
+    .ok()?;
+    Some(h.0 as isize)
+}
+
+/// La fenêtre fille suit la taille de la fenêtre de sortie.
+pub fn resize_child(child: isize, w: u32, h: u32) {
+    use windows::Win32::UI::WindowsAndMessaging::{SetWindowPos, SWP_NOACTIVATE, SWP_NOZORDER};
+    let _ = unsafe { SetWindowPos(HWND(child as *mut c_void), None, 0, 0, w as i32, h as i32, SWP_NOACTIVATE | SWP_NOZORDER) };
+}
+
+/// Retire la fenêtre fille (affichage composé abandonné).
+pub fn destroy_child(child: isize) {
+    let _ = unsafe { windows::Win32::UI::WindowsAndMessaging::DestroyWindow(HWND(child as *mut c_void)) };
 }
