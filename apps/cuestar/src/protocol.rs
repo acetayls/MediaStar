@@ -375,6 +375,9 @@ pub enum Event {
     /// La première image du média chargé vient d'être affichée sur l'écran de sortie.
     OnScreen,
     Ended,
+    /// Fin d'un média gardé à l'écran (sa dernière image reste) : compté comme une fin, mais
+    /// le média reste chargé (réglages, rotation et retour en arrière possibles).
+    Held,
     Idle,
     /// Position dans le diaporama (index à partir de 0). `count` = 0 : diaporama terminé.
     Slide { index: usize, count: usize, path: String },

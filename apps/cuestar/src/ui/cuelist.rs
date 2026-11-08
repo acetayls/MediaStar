@@ -49,6 +49,8 @@ pub struct Cuelist {
     hide_preview: bool,
     preview_w: f32,
     thumbs: crate::thumb::Thumbs,
+    /// Cue en cours de renommage : index, nom saisi, premier affichage (pour le focus).
+    renaming: Option<(usize, String, bool)>,
     /// Cue dont la boucle vient de changer dans la liste (à transmettre s'il passe).
     clip_changed: Option<usize>,
 }
@@ -102,6 +104,7 @@ enum CueAction {
     Follow(CueFollow),
     Loop(bool),
     Edit,
+    Rename,
     Info,
     Go,
 }
@@ -361,8 +364,12 @@ impl Cuelist {
             self.seen_end = out.state.ended;
             if let Some(i) = self.running.filter(|_| out.state.slide.is_none()) {
                 let chained = self.cues.get(i).is_some_and(|c| c.follow == CueFollow::Continue);
+                let black = self.cues.get(i).is_some_and(|c| c.end_black);
                 self.at_end = true;
-                if chained {
+                if !chained && black {
+                    // Réglé « passer au noir » : la dernière image ne reste pas.
+                    self.stop(out);
+                } else if chained {
                     if self.standby < len && self.next_index(i) == Some(self.standby) {
                         self.advance(out);
                     } else {
@@ -829,16 +836,16 @@ impl Cuelist {
                         action = Some((i, CueAction::Play));
                         ui.close();
                     }
+                    if ui.button("Renommer…").clicked() {
+                        action = Some((i, CueAction::Rename));
+                        ui.close();
+                    }
                     if ui.button("Réglages…").clicked() {
                         action = Some((i, CueAction::Edit));
                         ui.close();
                     }
                     if c.path.is_some() && ui.button(tr("Informations sur le fichier…", "File information…")).clicked() {
                         action = Some((i, CueAction::Info));
-                        ui.close();
-                    }
-                    if ui.button("Mettre en attente").clicked() {
-                        action = Some((i, CueAction::Standby));
                         ui.close();
                     }
                     if ui.button("Retirer de la conduite").clicked() {
@@ -918,6 +925,7 @@ impl Cuelist {
                 self.clip_changed = Some(i);
             }
             Some((i, CueAction::Edit)) => self.editor = Some(i),
+            Some((i, CueAction::Rename)) => self.renaming = Some((i, self.cues[i].name.clone(), true)),
             Some((i, CueAction::Info)) => {
                 if let Some(p) = self.cues[i].path.clone() {
                     super::file_info::open_once(&mut self.infos, &p);
@@ -928,6 +936,45 @@ impl Cuelist {
                 self.pending_go = true;
             }
             None => {}
+        }
+    }
+
+    /// Petite fenêtre « Renommer » (clic droit sur un cue) : Entrée valide, Échap annule.
+    fn rename_window(&mut self, ctx: &egui::Context) {
+        let Some((i, name, first)) = self.renaming.as_mut() else { return };
+        let i = *i;
+        let (mut ok, mut cancel) = (false, false);
+        egui::Window::new(format!("Renommer le cue {}", i + 1))
+            .id(Id::unique("cl-rename"))
+            .collapsible(false)
+            .resizable(false)
+            .anchor(egui::Align2::CENTER_CENTER, vec2(0.0, 0.0))
+            .show(ctx, |ui| {
+                let r = ui.add(egui::TextEdit::singleline(name).desired_width(320.0));
+                if std::mem::take(first) {
+                    r.request_focus();
+                }
+                if r.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)) {
+                    ok = true;
+                }
+                ui.horizontal(|ui| {
+                    if ui.button("Renommer").clicked() {
+                        ok = true;
+                    }
+                    if ui.button("Annuler").clicked() || ui.input(|i| i.key_pressed(Key::Escape)) {
+                        cancel = true;
+                    }
+                });
+            });
+        if ok {
+            if let Some((i, name, _)) = self.renaming.take() {
+                let name = name.trim().to_string();
+                if let Some(c) = self.cues.get_mut(i).filter(|_| !name.is_empty()) {
+                    c.name = name;
+                }
+            }
+        } else if cancel || i >= self.cues.len() {
+            self.renaming = None;
         }
     }
 
@@ -942,6 +989,7 @@ impl Cuelist {
         self.preview.poll();
         self.preview.settle(ctx);
         self.infos.retain_mut(|w| w.show(ctx));
+        self.rename_window(ctx);
         let Some(i) = self.editor else { return };
         let running = self.running == Some(i) && out.state.current.is_some();
         let Some(c) = self.cues.get_mut(i) else {
@@ -952,15 +1000,16 @@ impl Cuelist {
         let mut open = true;
         let mut done = false;
         let preview = &mut self.preview;
-        egui::Window::new(format!("Cue {}", i + 1))
-            .id(Id::unique("cl-editor"))
-            .open(&mut open)
-            .collapsible(false)
-            .resizable(true)
-            .default_width(660.0)
-            .default_height((ctx.content_rect().height() - 80.0).max(200.0))
-            .max_height((ctx.content_rect().height() - 60.0).max(200.0))
-            .show(ctx, |ui| {
+        // Vraie fenêtre du système : elle peut sortir de la régie (autre écran, par exemple).
+        let vp = egui::ViewportBuilder::default()
+            .with_title(format!("CueStar — Cue {} : {}", i + 1, c.name))
+            .with_inner_size([700.0, 760.0])
+            .with_min_inner_size([420.0, 300.0]);
+        ctx.show_viewport_immediate(egui::ViewportId::from_hash_of("cl-editor"), vp, |ui, _| {
+            if ui.ctx().input(|i| i.viewport().close_requested()) {
+                open = false;
+            }
+            egui::CentralPanel::default().frame(egui::Frame::new().fill(BG).inner_margin(10)).show(ui, |ui| {
             egui::ScrollArea::vertical().id_salt("cl-editor-scroll").auto_shrink([false, true]).show(ui, |ui| {
             egui::Grid::new("cl-fields").num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
                 ui.label("Nom");
@@ -993,6 +1042,14 @@ impl Cuelist {
                     ui.radio_value(&mut c.follow, CueFollow::Continue, "Enchaîner sur le cue suivant");
                 });
                 ui.end_row();
+                if c.follow == CueFollow::Stop {
+                    ui.label("");
+                    ui.horizontal(|ui| {
+                        ui.radio_value(&mut c.end_black, false, "Garder la dernière image").on_hover_text("La dernière image reste à l'écran jusqu'au prochain GO");
+                        ui.radio_value(&mut c.end_black, true, "Passer au noir").on_hover_text("La sortie passe au noir à la fin du cue");
+                    });
+                    ui.end_row();
+                }
             });
             // Réglages du média (rotation, points, boucle, fondus, son), comme un jingle de JingleStar.
             if let Some(path) = c.path.clone() {
@@ -1005,6 +1062,7 @@ impl Cuelist {
                 if ui.button(tr("✓ Terminé", "✓ Done")).clicked() {
                     done = true;
                 }
+            });
             });
             });
         });
@@ -1120,6 +1178,21 @@ mod tests {
         end(&mut out);
         l.tick(&mut out);
         assert_eq!(loaded(&out).as_deref(), Some("b"));
+    }
+
+    #[test]
+    fn stop_cue_set_to_black_cuts_the_output_at_its_end() {
+        let mut out = OutputLink::new();
+        let mut a = cue("a", CueFollow::Stop, false);
+        a.end_black = true;
+        let mut l = list(vec![a, cue("b", CueFollow::Stop, false)], false);
+        l.advance(&mut out);
+        playing(&mut out);
+        end(&mut out);
+        l.tick(&mut out);
+        assert!(matches!(out.sent.last(), Some(Command::Stop)));
+        assert_eq!(l.running, None);
+        assert_eq!(l.standby, 1);
     }
 
     #[test]

@@ -227,6 +227,7 @@ impl OutputLink {
                     s.media_dropped = dropped;
                     s.media_delayed = delayed;
                 }
+                Event::Held => s.ended += 1,
                 Event::Ended | Event::Idle => {
                     if matches!(ev, Event::Ended) {
                         s.ended += 1;

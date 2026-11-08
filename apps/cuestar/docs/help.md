@@ -76,7 +76,8 @@ standby cue.
 ### Chaining, looping
 
 - The orange arrow at the start of a row: at the end of this cue, the next one **plays on its
-  own**. The grey bar: at the end, the last frame stays and we wait for GO.
+  own**. The grey bar: at the end, we wait for GO, with the last frame on screen or black
+  depending on the cue's **À la fin** setting (**Garder la dernière image** / **Passer au noir**).
 - The loop icon at the end of a row **loops** the cue. Unticking it while the cue plays lets the
   current pass run to its end; then the cue chains to the next one or stops on its last frame,
   depending on its arrow.
@@ -101,7 +102,7 @@ between the two sets its width.
 | **Lancer maintenant** | Plays the cue |
 | **Réglages…** | Opens the cue settings (see [Editing an item](#editing-an-item)) |
 | **File information…** | File details, like MediaInfo (see [File information](#file-information)) |
-| **Mettre en attente** | The next GO will play this cue |
+| **Renommer…** | Renames the cue (Enter to confirm) |
 | **Retirer de la conduite** | Removes the cue |
 
 A cue with settings (rotation, points, fades, sound) carries the **✎** mark.

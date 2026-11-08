@@ -44,6 +44,10 @@ pub struct CueData {
     pub clip: Clip,
     pub transition: crate::protocol::Transition,
     pub follow: CueFollow,
+    /// Cue qui s'arrête à la fin (sans enchaîner) : la sortie passe au noir au lieu de garder
+    /// sa dernière image.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub end_black: bool,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -235,8 +239,8 @@ mod golden {
             diaporama: DiaporamaData { folder: Some("/photos".into()), extra: Vec::new(), recursive: false, shuffle: true, looping: false, photo_seconds: 7.5, fit: Fit::Cover, video_sound: true },
             cuelist: CuelistData {
                 cues: vec![
-                    CueData { name: "Ouverture".into(), path: Some("/v/ouverture.mov".into()), clip: looped(false), transition: fade, follow: CueFollow::Continue },
-                    CueData { name: "Noir".into(), path: None, clip: looped(true), transition: Transition { kind: TransitionKind::Black, secs: 1.0 }, follow: CueFollow::Stop },
+                    CueData { name: "Ouverture".into(), path: Some("/v/ouverture.mov".into()), clip: looped(false), transition: fade, follow: CueFollow::Continue, end_black: false },
+                    CueData { name: "Noir".into(), path: None, clip: looped(true), transition: Transition { kind: TransitionKind::Black, secs: 1.0 }, follow: CueFollow::Stop, end_black: false },
                 ],
                 loop_all: false,
             },

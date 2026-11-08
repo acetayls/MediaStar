@@ -76,7 +76,8 @@ image : le GO lance alors le cue en attente.
 ### Enchaîner, boucler
 
 - La flèche orange au début d'une ligne : à la fin de ce cue, le suivant **part tout seul**. La
-  barre grise : à la fin, la dernière image reste et on attend le GO.
+  barre grise : à la fin, on attend le GO, avec la dernière image à l'écran ou le noir selon le
+  réglage **À la fin** du cue (**Garder la dernière image** ou **Passer au noir**).
 - L'icône de boucle au bout d'une ligne fait tourner le cue **en boucle**. Si on la décoche
   pendant qu'il joue, le passage en cours va jusqu'au bout, puis le cue enchaîne sur le suivant
   ou s'arrête sur sa dernière image, selon sa flèche.
@@ -100,7 +101,7 @@ la poignée entre les deux règle sa largeur.
 | **Lancer maintenant** | Lance le cue |
 | **Réglages…** | Ouvre les réglages du cue (voir [Éditer un élément](#éditer-un-élément)) |
 | **Informations sur le fichier…** | Détail du fichier, comme MediaInfo (voir [Informations sur le fichier](#informations-sur-le-fichier)) |
-| **Mettre en attente** | Le prochain GO lancera ce cue |
+| **Renommer…** | Change le nom du cue (Entrée pour valider) |
 | **Retirer de la conduite** | Enlève le cue |
 
 Un cue réglé (rotation, points, fondus, son) porte la marque **✎**.

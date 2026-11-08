@@ -37,14 +37,17 @@ impl FileInfo {
         }
         let name = self.path.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
         let mut open = true;
-        egui::Window::new(format!("{} — {name}", tr("Informations", "Information")))
-            .id(egui::Id::unique(("file-info", &self.path)))
-            .open(&mut open)
-            .default_width(560.0)
-            .default_height((ctx.content_rect().height() - 120.0).clamp(200.0, 640.0))
-            .resizable(true)
-            .collapsible(false)
-            .show(ctx, |ui| self.body(ui));
+        // Vraie fenêtre du système : elle peut sortir de la régie (autre écran, par exemple).
+        let vp = egui::ViewportBuilder::default()
+            .with_title(format!("{} — {name}", tr("Informations", "Information")))
+            .with_inner_size([600.0, 640.0])
+            .with_min_inner_size([320.0, 200.0]);
+        ctx.show_viewport_immediate(egui::ViewportId::from_hash_of(("file-info", &self.path)), vp, |ui, _| {
+            if ui.ctx().input(|i| i.viewport().close_requested()) {
+                open = false;
+            }
+            egui::CentralPanel::default().frame(egui::Frame::new().fill(star_ui::theme::BG).inner_margin(10)).show(ui, |ui| self.body(ui));
+        });
         open
     }
 

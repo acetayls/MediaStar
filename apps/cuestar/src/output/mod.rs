@@ -1547,7 +1547,7 @@ impl OutputApp {
         let _ = self.m().set_property("pause", "yes");
         if self.signal_end && !self.end_signaled {
             self.end_signaled = true;
-            emit(&Event::Ended);
+            emit(&Event::Held);
         }
     }
 
@@ -1572,7 +1572,7 @@ impl OutputApp {
                 let eof = p.format == mpv::FORMAT_FLAG && !p.data.is_null() && unsafe { *(p.data as *const c_int) } != 0;
                 if eof && self.signal_end && !self.end_signaled && self.show.is_none() {
                     self.end_signaled = true;
-                    emit(&Event::Ended);
+                    emit(&Event::Held);
                 }
             }
             P_VFPS | P_DFPS => {
