@@ -43,8 +43,9 @@ pub enum Command {
     Volume { value: f64 },
     /// Affiche une mire de test (None : la retire, écran noir).
     Pattern { kind: Option<PatternKind> },
-    /// Mapping 4 coins (None : image droite).
-    Warp { corners: Option<[[f32; 2]; 4]> },
+    /// Mapping de l'image (None : image droite) et repères affichés sur la sortie pendant le
+    /// réglage (None : rien).
+    Warp { geom: Option<WarpGeom>, guides: Option<WarpGuides> },
     /// Lance un diaporama : le moteur de sortie tient le minutage et l'enchaînement.
     Slideshow { items: Vec<String>, photo_seconds: f64, looping: bool, shuffle: bool, fit: Fit, video_sound: bool },
     /// Réglages du diaporama en cours, appliqués à chaud (sans recharger le média affiché).
@@ -110,6 +111,27 @@ impl Clip {
         self.image_secs = self.image_secs.filter(|v| v.is_finite() && *v > 0.0).map(|v| v.clamp(0.1, 86_400.0));
         self.rotate = self.rotation();
     }
+}
+
+/// Déformation de l'image sur l'écran de sortie : quatre coins (haut-gauche, haut-droit,
+/// bas-droit, bas-gauche, en fraction de l'écran), et en option les points intermédiaires
+/// (milieux des bords haut, droit, bas, gauche, puis centre), donnés comme décalage par rapport
+/// à leur place sur la perspective des quatre coins.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct WarpGeom {
+    pub corners: [[f32; 2]; 4],
+    pub mesh: Option<[[f32; 2]; 5]>,
+    /// Bord adouci, en pixels de l'écran (0 : bord net).
+    pub feather: f32,
+}
+
+/// Repères du réglage sur la sortie : contour, poignées numérotées (9 avec les points
+/// intermédiaires), grille en option.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize)]
+pub struct WarpGuides {
+    /// Poignée choisie (0 à 3 : coins, 4 à 8 : points intermédiaires).
+    pub selected: usize,
+    pub grid: bool,
 }
 
 /// Passage d'un média au suivant.

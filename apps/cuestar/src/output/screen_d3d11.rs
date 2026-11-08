@@ -25,7 +25,12 @@ pub fn open(hwnd: isize, hmonitor: isize, size: (u32, u32), refresh_hz: f64, dec
     })
 }
 
-const SHADER: &str = r#"
+/// Source HLSL : en-tête, calcul commun du mapping (`warp::hlsl_core`), puis les shaders.
+fn shader_src() -> String {
+    format!("{SHADER_HEAD}{}{SHADER}", super::warp::hlsl_core())
+}
+
+const SHADER_HEAD: &str = r#"
 Texture2D tex0 : register(t0);
 Texture2D tex1 : register(t1);
 SamplerState smp : register(s0);
@@ -34,7 +39,11 @@ cbuffer Params : register(b0) {
     float4 h1;      // ligne 2
     float4 h2;      // ligne 3
     float4 misc;    // x = mélange (0 : lecteur 0), y = niveau, z = lecteur 0 visible, w = lecteur 1 visible
+    float4 wx[13];  // grille 3 × 3, bord adouci et repères du réglage (voir warp::params)
 };
+"#;
+
+const SHADER: &str = r#"
 struct VsOut { float4 pos : SV_Position; float2 uv : TEXCOORD0; };
 VsOut vs(uint id : SV_VertexID) {
     VsOut o;
@@ -46,12 +55,14 @@ VsOut vs(uint id : SV_VertexID) {
 float4 ps(VsOut i) : SV_Target {
     float2 p = i.uv;
     float w = h2.x * p.x + h2.y * p.y + h2.z;
-    float2 uv = float2(h0.x * p.x + h0.y * p.y + h0.z, h1.x * p.x + h1.y * p.y + h1.z) / w;
-    if (w <= 0.0 || uv.x < 0.0 || uv.y < 0.0 || uv.x > 1.0 || uv.y > 1.0)
-        return float4(0.0, 0.0, 0.0, 1.0);
+    float2 t = winv(p, float2(h0.x * p.x + h0.y * p.y + h0.z, h1.x * p.x + h1.y * p.y + h1.z) / w);
+    float cov = wcover(p, t, w);
+    float2 uv = clamp(t, 0.0, 1.0);
     float3 a = tex0.Sample(smp, uv).rgb * misc.z;
     float3 b = tex1.Sample(smp, uv).rgb * misc.w;
-    return float4(lerp(a, b, misc.x) * misc.y, 1.0);
+    float3 col = cov > 0.0 ? lerp(a, b, misc.x) * misc.y * cov : float3(0.0, 0.0, 0.0);
+    float4 gd = wguides(p, t, cov);
+    return float4(lerp(col, gd.rgb, gd.a), 1.0);
 }
 "#;
 
@@ -60,10 +71,11 @@ unsafe fn compile(entry: &str, target: &str) -> Result<ID3DBlob, String> {
     let t = CString::new(target).unwrap();
     let mut code = None;
     let mut errs: Option<ID3DBlob> = None;
+    let src = shader_src();
     let r = unsafe {
         D3DCompile(
-            SHADER.as_ptr() as *const c_void,
-            SHADER.len(),
+            src.as_ptr() as *const c_void,
+            src.len(),
             PCSTR::null(),
             None,
             None,
@@ -408,5 +420,17 @@ impl Backend for D3d {
 impl Drop for D3d {
     fn drop(&mut self) {
         let _ = unsafe { CloseHandle(self.waitable) };
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    /// Le shader de composition (mapping, bord adouci, repères) se compile.
+    #[test]
+    fn composition_shader_compiles() {
+        unsafe {
+            super::compile("vs", "vs_4_0").unwrap();
+            super::compile("ps", "ps_4_0").unwrap();
+        }
     }
 }

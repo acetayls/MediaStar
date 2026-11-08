@@ -99,17 +99,21 @@ uniform vec4 h0;
 uniform vec4 h1;
 uniform vec4 h2;
 uniform vec4 misc;
+uniform vec4 wx[13];
+";
+
+const FRAG_MAIN: &str = "
 void main() {
     vec2 p = uv;
     float w = h2.x * p.x + h2.y * p.y + h2.z;
-    vec2 q = vec2(h0.x * p.x + h0.y * p.y + h0.z, h1.x * p.x + h1.y * p.y + h1.z) / w;
-    if (w <= 0.0 || q.x < 0.0 || q.y < 0.0 || q.x > 1.0 || q.y > 1.0) {
-        color = vec4(0.0, 0.0, 0.0, 1.0);
-        return;
-    }
+    vec2 t = winv(p, vec2(h0.x * p.x + h0.y * p.y + h0.z, h1.x * p.x + h1.y * p.y + h1.z) / w);
+    float cov = wcover(p, t, w);
+    vec2 q = clamp(t, 0.0, 1.0);
     vec3 a = texture(tex0, q).rgb * misc.z;
     vec3 b = texture(tex1, q).rgb * misc.w;
-    color = vec4(mix(a, b, misc.x) * misc.y, 1.0);
+    vec3 col = cov > 0.0 ? mix(a, b, misc.x) * misc.y * cov : vec3(0.0, 0.0, 0.0);
+    vec4 gd = wguides(p, t, cov);
+    color = vec4(mix(col, gd.rgb, gd.a), 1.0);
 }
 ";
 
@@ -175,7 +179,7 @@ struct Gl {
     targets: Vec<Fb>,
     program: u32,
     vao: u32,
-    loc: [i32; 6],
+    loc: [i32; 7],
     thumb: (Fb, u32, u32),
     /// Lectures de vignettes en cours : (tampon, attente GPU).
     pbos: Vec<(u32, Option<gl::types::GLsync>)>,
@@ -225,7 +229,7 @@ unsafe fn setup(shared: &Arc<Shared>, parts: GlParts, links: &[(Handle, RenderAp
         }
 
         let vs = shader(gl::VERTEX_SHADER, VERT)?;
-        let fs = shader(gl::FRAGMENT_SHADER, FRAG)?;
+        let fs = shader(gl::FRAGMENT_SHADER, &format!("{FRAG}{}{FRAG_MAIN}", super::warp::glsl_core()))?;
         let program = gl::CreateProgram();
         gl::AttachShader(program, vs);
         gl::AttachShader(program, fs);
@@ -238,7 +242,7 @@ unsafe fn setup(shared: &Arc<Shared>, parts: GlParts, links: &[(Handle, RenderAp
         if ok == 0 {
             return Err("programme OpenGL : édition de liens impossible".into());
         }
-        let loc = ["tex0", "tex1", "h0", "h1", "h2", "misc"].map(|n| {
+        let loc = ["tex0", "tex1", "h0", "h1", "h2", "misc", "wx"].map(|n| {
             let c = CString::new(n).unwrap();
             gl::GetUniformLocation(program, c.as_ptr())
         });
@@ -316,6 +320,7 @@ impl Gl {
                 gl::Uniform4fv(self.loc[2 + r], 1, p.h[r].as_ptr());
             }
             gl::Uniform4fv(self.loc[5], 1, p.misc.as_ptr());
+            gl::Uniform4fv(self.loc[6], 13, p.wx.as_ptr() as *const f32);
             gl::DrawArrays(gl::TRIANGLES, 0, 3);
             gl::BindVertexArray(0);
             gl::ActiveTexture(gl::TEXTURE0);

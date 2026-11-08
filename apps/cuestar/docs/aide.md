@@ -4,20 +4,20 @@ CueStar envoie des vidéos, des images et des sons sur un écran de sortie (vid�
 écran de scène, régie vidéo). La régie, où vous travaillez, et la **sortie**, qui affiche
 l'image, tournent dans deux programmes séparés : une régie qui rame ne retarde aucune image.
 
-Quatre modules se partagent l'écran : le **Lecteur** (une playlist), le **Diaporama** (un
-dossier de photos et de vidéos), la **Présentation** (un fichier PowerPoint) et la **Cuelist**
-(une conduite de cues lancés au GO). Le
+Trois modules se partagent l'écran : la **Cuelist** (une conduite de médias lancés au GO, qui
+peuvent s'enchaîner tout seuls), le **Diaporama** (un dossier de photos et de vidéos) et la
+**Présentation** (un fichier PowerPoint). Le
 panneau **Texte** s'affiche à côté pour garder la conduite écrite sous les yeux.
 
 ## Prise en main
 
 1. Au lancement, la sortie s'ouvre en plein écran sur le deuxième écran (dans une fenêtre s'il
    n'y en a qu'un). La barre du bas indique **Sortie : 1920×1080 @ 60.00 Hz** quand elle est prête.
-2. Dans le **Lecteur**, cliquez sur **Ajouter** ou glissez des fichiers sur la liste.
-3. Double-cliquez sur un élément, ou sélectionnez-le et appuyez sur **Espace** (GO).
+2. Dans la **Cuelist**, cliquez sur **Ajouter des médias** ou glissez des fichiers sur la liste.
+3. Double-cliquez sur un cue, ou mettez-le en attente d'un clic et appuyez sur **Espace** (GO).
 4. **Échap** ou le bouton rouge **NOIR** coupe l'image à tout moment.
-5. Clic droit sur un élément → **Éditer…** pour régler son entrée, sa sortie, ses fondus au
-   noir, son volume et son égaliseur.
+5. Clic droit sur un cue → **Réglages…** pour régler sa rotation, son entrée, sa sortie, ses
+   fondus au noir, son volume et son égaliseur.
 
 Tout est gardé automatiquement : en relançant CueStar, vous retrouvez la session telle que vous
 l'avez laissée. **Enregistrer** écrit le projet dans un fichier `.cuestar`.
@@ -33,7 +33,7 @@ GIF, TIFF, WebP) et sons (MP3, WAV, FLAC, AAC/M4A, OGG). Le décodage passe par 
 |---|---|
 | Nom du projet | Menu : Nouveau, Ouvrir, Enregistrer sous, Renommer |
 | **Enregistrer** | Enregistre le projet (**Ctrl+S**) |
-| **Lecteur**, **Diaporama**, **Présentation**, **Cuelist** | Change de module ; celui qui ne s'affiche plus continue de jouer |
+| **Cuelist**, **Diaporama**, **Présentation** | Change de module ; celui qui ne s'affiche plus continue de jouer |
 | **Texte** | Affiche ou masque le panneau Texte |
 | **? Aide** | Ouvre cette aide (**F1**) |
 | **Préférences** | Fenêtre en onglets : écran et moteur de sortie, audio, mires de test, mapping 4 coins |
@@ -52,65 +52,90 @@ GIF, TIFF, WebP) et sons (MP3, WAV, FLAC, AAC/M4A, OGG). Le décodage passe par 
   l'adresse OSC `output/drops/reset` ou une télécommande.
 - Images par seconde du média, charge du processeur et du GPU.
 
-## Le Lecteur
+## La Cuelist
 
-Une playlist de vidéos, d'images et de sons. **Ajouter** ouvre des fichiers ou un dossier ;
-on peut aussi les glisser sur la liste. **Vider** efface la liste (avec confirmation).
+Une conduite de cues : chacun est un média (vidéo, image, son), ou du **noir**. Le cue **en
+attente** part au GO. Elle remplace l'ancien Lecteur : un projet qui avait une playlist dans le
+Lecteur la retrouve à la suite de la conduite, en cues enchaînés, avec sa transition.
 
-- **GO** (ou **Espace**) lance l'élément sélectionné, ou reprend après une pause.
-- **⏮ / ⏭** : élément précédent / suivant. **■** coupe l'image.
-- **Flèche Haut / Bas** : change l'élément sélectionné sans le lancer.
-- **Aléatoire** enchaîne au hasard, **Tout boucler** reprend au début à la fin de la liste.
-- L'icône de boucle au bout d'une ligne fait tourner cet élément en boucle.
-- **Transition** : **Coupe** (passage direct), **Noir** (fondu au noir puis ouverture) ou
-  **Fondu enchaîné**, avec sa durée.
+- **Ajouter des médias** : des fichiers, un dossier, ou **Un cue Noir** (coupe l'image avec la
+  transition du cue). On peut aussi glisser des fichiers et des dossiers sur la liste.
+- **GO** (ou **Espace**) lance le cue en attente et met le suivant en attente. Si le cue en
+  cours est en pause, le GO le reprend.
+- **⏮ / ⏭** (ou **Flèche Haut / Bas**) changent le cue en attente sans le lancer.
+- **Pause** (ou **P**) suspend et reprend le cue qui joue. **■ Arrêter** coupe l'image.
+- Clic sur un cue : le met en attente. Double-clic : le lance. Glisser un cue change l'ordre.
 
-### Aperçu SUIVANT
+### Le média en cours
 
-À droite, l'aperçu montre l'élément qui partira au prochain GO. On s'y promène sans toucher à
-la sortie : cliquez ou glissez sur la barre sous l'image, **▶** lit l'aperçu (sans le son),
-**⏮ / ⏭** avancent ou reculent d'une image. Les repères d'entrée et de sortie de l'élément sont
-dessinés sur la barre. **Aperçu** (en haut de la liste) l'affiche ou le masque.
+Le cadre du haut montre le cue à l'antenne : son nom, sa **durée**, le temps écoulé, une barre
+de lecture (cliquez ou glissez pour aller ailleurs dans le média) et le temps restant. Il passe
+en ambre en pause, et indique **FIN DU MÉDIA** quand un cue arrêté au bout garde sa dernière
+image : le GO lance alors le cue en attente.
 
-### Clic droit sur un élément
+### Enchaîner, boucler
+
+- La flèche orange au début d'une ligne : à la fin de ce cue, le suivant **part tout seul**. La
+  barre grise : à la fin, la dernière image reste et on attend le GO.
+- L'icône de boucle au bout d'une ligne fait tourner le cue **en boucle**. Si on la décoche
+  pendant qu'il joue, le passage en cours va jusqu'au bout, puis le cue enchaîne sur le suivant
+  ou s'arrête sur sa dernière image, selon sa flèche.
+- **Boucler la conduite** : après le dernier cue, le premier repart (ou attend le GO).
+- **Transition du cue en attente** : **Coupe**, **Noir** (fondu au noir puis ouverture) ou
+  **Fondu enchaîné**, avec sa durée. Chaque cue garde la sienne ; **À tous** la donne à toute la
+  conduite.
+
+### Aperçu du cue en attente
+
+À droite, l'aperçu montre le cue qui partira au prochain GO, tourné comme sur la sortie. On s'y
+promène sans toucher à la sortie : cliquez ou glissez sur la barre sous l'image, **▶** lit
+l'aperçu (sans le son), **⏮ / ⏭** avancent ou reculent d'une image. Les repères d'entrée et de
+sortie sont dessinés sur la barre. **Aperçu** (en haut de la conduite) l'affiche ou le masque ;
+la poignée entre les deux règle sa largeur.
+
+### Clic droit sur un cue
 
 | Commande | Effet |
 |---|---|
-| **Lire** | Lance l'élément |
-| **Éditer…** | Ouvre l'éditeur de l'élément (voir [Éditer un élément](#éditer-un-élément)) |
+| **Lancer maintenant** | Lance le cue |
+| **Réglages…** | Ouvre les réglages du cue (voir [Éditer un élément](#éditer-un-élément)) |
 | **Informations sur le fichier…** | Détail du fichier, comme MediaInfo (voir [Informations sur le fichier](#informations-sur-le-fichier)) |
-| **Lire en boucle** / **Lire une seule fois** | Boucle de l'élément |
-| **Retirer** | Enlève l'élément de la liste |
+| **Mettre en attente** | Le prochain GO lancera ce cue |
+| **Retirer de la conduite** | Enlève le cue |
 
-Un élément réglé dans l'éditeur porte la marque **✎**.
+Un cue réglé (rotation, points, fondus, son) porte la marque **✎**.
 
 ## Éditer un élément
 
-Clic droit → **Éditer…**, sur un élément du Lecteur comme sur un cue de la Cuelist. La fenêtre
-reprend celle d'un jingle de JingleStar. Les réglages sont enregistrés avec le projet.
+Clic droit sur un cue → **Réglages…**. En haut : son nom, son média, sa **transition** et ce
+qui se passe **à la fin** (attendre le GO, ou enchaîner sur le cue suivant). Le reste reprend la
+fenêtre d'un jingle de JingleStar. Les réglages sont enregistrés avec le projet.
 
+- **Rotation** : 0°, 90°, 180° ou 270°, dans le sens des aiguilles d'une montre, pour ce fichier
+  seulement (une vidéo tournée en portrait, un écran posé de côté). L'aperçu tourne aussi.
 - **Volume** du son de l'élément, en dB, et lecture **une fois** ou **en boucle**.
 - **Fondus au noir** : durée du fondu d'entrée (depuis le noir) et du fondu de sortie (vers le
   noir), image et son ensemble.
 - **Frise** : les vignettes du média sur toute sa durée. Les poignées **entrée** et **sortie**
   se glissent pour couper le début et la fin ; les fondus se voient en voile sur la frise.
   Pendant le glissement, l'aperçu montre l'image à cet endroit.
-- **Aperçu** : la même navigation que l'aperçu SUIVANT, pour vérifier un point d'entrée à
-  l'image près.
+- **Aperçu** : la même navigation que l'aperçu du cue en attente, pour vérifier un point
+  d'entrée à l'image près.
 - **Égaliseur** : coupe-bas (12 ou 24 dB/oct), grave, deux bandes en cloche, aigu, comme dans
   JingleStar. La forme d'onde du son s'affiche derrière la courbe.
-- **Lire sur la sortie** lance l'élément pour l'essayer. Si l'élément est déjà à l'antenne,
-  volume, égaliseur et fondus changent tout de suite, sans couper l'image.
+- Si le cue est à l'antenne, volume, égaliseur, fondus, boucle et rotation changent tout de
+  suite, sans couper l'image.
 
 ### Images fixes
 
 Pour une image, l'éditeur propose la **durée d'affichage** : **Jusqu'au média suivant** (l'image
-reste jusqu'au prochain GO) ou **Pendant** un nombre de secondes, après quoi le Lecteur enchaîne.
+reste jusqu'au prochain GO) ou **Pendant** un nombre de secondes, après quoi le cue est fini
+(et enchaîne s'il est réglé ainsi).
 Le fondu de sortie d'une image demande une durée d'affichage.
 
 ## Informations sur le fichier
 
-Clic droit sur un élément du Lecteur ou un cue → **Informations sur le fichier…**. La fenêtre
+Clic droit sur un cue → **Informations sur le fichier…**. La fenêtre
 détaille le conteneur, chaque piste vidéo, audio et de sous-titres : codec, profil, débit,
 résolution, cadence, balayage, espace et plage de couleurs, canaux, échantillonnage, langue,
 métadonnées.
@@ -163,23 +188,6 @@ onglets dès qu'une présentation est à l'écran, et aussi quand la fenêtre de
 Textes, puces, formes, images, tableaux, SmartArt et graphiques simples sont rendus ; les
 animations ne le sont pas : une vidéo intégrée apparaît comme son image d'aperçu.
 
-## La Cuelist
-
-Une conduite de cues : chacun est un média, ou du **noir**. Le cue **en attente** part au GO.
-
-- **Ajouter** : des médias, un dossier, ou **Un cue Noir** (coupe l'image avec la transition du
-  cue).
-- **GO** (ou **Espace**) lance le cue en attente et met le suivant en attente.
-- **⏮ / ⏭** (ou **Flèche Haut / Bas**) changent le cue en attente sans le lancer.
-- **Pause** (ou **P**) suspend et reprend le cue qui joue.
-- Clic sur un cue : le met en attente. Double-clic : le lance. Glisser un cue change l'ordre.
-- Clic droit : **Lancer maintenant**, **Réglages…**, **Informations sur le fichier…**, **Mettre
-  en attente**, **Retirer de la conduite**.
-
-**Réglages…** ouvre l'éditeur du cue : son nom, son média, sa **transition** (Coupe, Noir,
-Fondu enchaîné), ce qui se passe **à la fin** (attendre le GO, ou enchaîner sur le cue
-suivant), puis les mêmes réglages que l'[éditeur d'un élément](#éditer-un-élément).
-
 ## Le panneau Texte
 
 La conduite écrite, à côté du module en cours : gras, italique, souligné, barré, couleurs,
@@ -194,13 +202,22 @@ test, Mapping 4 coins) :
   dans une fenêtre** quand il n'y a qu'un écran.
 - **Décodage** : automatique, GPU ou CPU. **Rendu de secours** et **Rendu léger** pour une
   petite machine.
-- **Cadence** : recalage de vitesse ou synchro audio ; **Interpolation** lisse le rythme quand
-  la cadence de la vidéo ne tombe pas juste sur celle de l'écran ; **Adapter la fréquence de
-  l'écran à la vidéo** (Windows).
+- **Synchro de l'image** : **Mélange d'images** (conseillé, choisi d'office) fait comme
+  Automatique, et quand la cadence de la vidéo ne tombe pas juste sur celle de l'écran (24 i/s
+  sur 60 Hz), il fond les deux images voisines au lieu d'en répéter une : le mouvement reste
+  régulier. Il n'agit pas quand les cadences correspondent, ni sur les mires de test (pour ne
+  pas fausser la mesure). Les autres choix : **Automatique, sans mélange**, **Sur le son**,
+  **Sur l'écran (vitesse ajustée)**. **Interpolation** force le mélange dans tous les cas.
 - **Sortie audio** : carte son, HDMI de l'écran de sortie, interface Dante… et son volume.
 - **Mires de test** : barres SMPTE, mire animée, grille, blanc, gris.
 - **Mapping 4 coins** : déplacez les coins de l'image pour la caler sur une surface ; flèches
-  = 1 pixel, Maj + flèches = 10 pixels.
+  = 1 pixel, Maj + flèches = 10 pixels sur la poignée choisie. Tant que l'onglet est ouvert, la
+  sortie montre les poignées numérotées, le contour de l'image et, en option, une grille qui suit
+  la déformation ; tout disparaît en quittant l'onglet. **Points intermédiaires** ajoute un point
+  au milieu de chaque bord et au centre (grille 3 × 3) pour courber l'image, comme le mesh warp
+  de Resolume ou MadMapper ; un coin déplacé emmène ses points. **Bord adouci** fond le contour
+  sur quelques pixels (1,5 par défaut) : plus de crénelage sur les bords en biais. L'image ne
+  peut jamais se retourner ni se croiser : un déplacement qui la replierait est refusé.
 
 Les changements qui demandent de relancer la sortie l'annoncent : l'écran passe au noir un
 instant.
@@ -240,23 +257,16 @@ port est déjà pris, puis le dernier message reçu.
 ### Adresses
 
 Les numéros commencent à 1. Les adresses sont données avec le préfixe par défaut ; les adresses
-du Diaporama d'origine (`/diaporama/…`) sont aussi acceptées.
+du Diaporama d'origine (`/diaporama/…`) sont aussi acceptées, comme celles de l'ancien Lecteur
+(`/cuestar/lecteur/…`), servies par la Cuelist.
 
 | Adresse | Argument | Effet |
 |---|---|---|
 | `/cuestar/noir` | — | Écran de sortie au noir |
 | `/cuestar/output/drops/reset` | — | Remet à zéro le compteur d'images perdues et retardées |
-| `/cuestar/lecteur/go` | — | Lance l'élément sélectionné (ou reprend) |
-| `/cuestar/lecteur/play` | — | Lecture |
-| `/cuestar/lecteur/pause` | — | Pause |
-| `/cuestar/lecteur/toggle` | — | Pause / reprise |
-| `/cuestar/lecteur/stop` | — | Arrêt (noir) |
-| `/cuestar/lecteur/next` | — | Élément suivant |
-| `/cuestar/lecteur/prev` | — | Élément précédent |
-| `/cuestar/lecteur/goto` | int | Lance l'élément n° |
-| `/cuestar/lecteur/shuffle` | bool | Ordre aléatoire |
-| `/cuestar/lecteur/loop` | bool | Tout boucler |
-| `/cuestar/lecteur/transition` | `cut`, `black` ou `fade`, puis float (s) | Transition et durée |
+| `/cuestar/cuelist/goto` | int | Lance tout de suite le cue n° |
+| `/cuestar/cuelist/loop` | bool | Boucler la conduite |
+| `/cuestar/cuelist/transition` | `cut`, `black` ou `fade`, puis float (s) | Transition du cue en attente et durée |
 | `/cuestar/cuelist/go` | — | Lance le cue en attente (ou reprend) |
 | `/cuestar/cuelist/play`, `pause`, `toggle`, `stop` | — | Transport de la Cuelist |
 | `/cuestar/cuelist/next`, `prev` | — | Cue en attente suivant / précédent |
@@ -293,9 +303,9 @@ d'éléments et de cues, l'élément en cours et le nom du cue en attente.
 ### Exemple
 
 ```
-oscsend localhost 9000 /cuestar/lecteur/goto i 3
+oscsend localhost 9000 /cuestar/cuelist/goto i 3
 oscsend localhost 9000 /cuestar/cuelist/go
-oscsend localhost 9000 /cuestar/lecteur/transition sf black 1.5
+oscsend localhost 9000 /cuestar/cuelist/transition sf black 1.5
 curl http://localhost:9001/cuestar/cuelist/standby_name?VALUE
 ```
 
@@ -308,10 +318,10 @@ X32 aux actions de CueStar, comme dans JingleStar :
 2. Dans **Correspondances**, ajoutez une ligne, choisissez l'action, cliquez sur **Apprendre** puis
    touchez la note, le contrôleur ou la touche de la console.
 
-Actions disponibles : GO, pause, arrêt, suivant, précédent, élément n° (selon la valeur reçue),
-aléatoire et tout boucler pour le Lecteur ; lancer, pause, arrêt, suivant, précédent pour le
-Diaporama ; GO, cue suivant, précédent, pause, arrêt pour la Cuelist ; **Noir** ; remise à zéro
-du compteur d'images perdues.
+Actions disponibles : GO, cue suivant, précédent, pause, arrêt, lancer le cue n° (selon la
+valeur reçue) et boucler la conduite pour la Cuelist ; lancer, pause, arrêt, suivant, précédent
+pour le Diaporama ; **Noir** ; remise à zéro du compteur d'images perdues. Les correspondances
+de l'ancien Lecteur déjà enregistrées agissent sur la Cuelist.
 
 ## Raccourcis clavier et souris
 
@@ -322,16 +332,16 @@ n'agissent pas pendant la saisie d'un texte.
 |---|---|
 | Noir : couper la sortie | **Échap** |
 | Ouvrir ou fermer l'aide | **F1** |
-| GO du Lecteur ou de la Cuelist ; lancer / pause du Diaporama | **Espace** |
+| GO de la Cuelist ; lancer / pause du Diaporama | **Espace** |
 | Pause / reprise de la Cuelist | **P** |
-| Élément ou cue précédent / suivant en attente | **Flèche Haut / Bas** |
+| Cue précédent / suivant en attente | **Flèche Haut / Bas** |
 | Média précédent / suivant du Diaporama | **Flèche Gauche / Droite** |
 | Enregistrer / Enregistrer sous | **Ctrl+S** / **Ctrl+Maj+S** |
 | Ouvrir un projet | **Ctrl+O** |
 | Nouveau projet | **Ctrl+N** |
 | Texte : gras / italique / souligné | **Ctrl+B** / **Ctrl+I** / **Ctrl+U** |
-| Éditer un élément, informations sur le fichier | Clic droit sur l'élément |
-| Lancer un élément ou un cue | Double-clic |
+| Réglages d'un cue, informations sur le fichier | Clic droit sur le cue |
+| Lancer un cue | Double-clic |
 | Se déplacer dans l'aperçu | Clic ou glisser sur la barre sous l'image |
 | Rechercher dans l'aide | Ctrl+F dans la fenêtre d'aide |
 

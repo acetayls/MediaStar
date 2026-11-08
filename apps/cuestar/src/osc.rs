@@ -1,6 +1,6 @@
 //! Commande OSC de CueStar, sur le serveur commun de `star_remote::osc` (repris de
 //! JingleStar) : mêmes adresses que le Diaporama d'origine (préfixe `/diaporama` accepté
-//! aussi), plus le Lecteur, la Cuelist et le noir général. En option : description OSCQuery
+//! aussi), plus la Cuelist (et les adresses de l'ancien Lecteur) et le noir général. En option : description OSCQuery
 //! de l'état courant et annonce mDNS ; « <préfixe>/subscribe » abonne au retour d'état.
 
 use rosc::{OscMessage, OscType};
@@ -172,6 +172,9 @@ pub fn tree(prefix: &str, snap: &Snapshot) -> Value {
     add("cuelist/standby_name", read("s", "Nom du cue en attente", json!(c.standby_name)));
     add("cuelist/running_name", read("s", "Dernier cue lancé", json!(c.running_name)));
     add("cuelist/cues", read("i", "Nombre de cues", json!(c.cues)));
+    add("cuelist/goto", idx("Lance tout de suite le cue n° i", c.cues));
+    add("cuelist/loop", flag("Boucler la conduite", snap.lecteur.looping));
+    add("cuelist/transition", leaf("sf", ACCESS_WRITE, "Transition du cue en attente (cut, black, fade) et durée", None, None));
     for t in ["play", "pause", "toggle", "stop", "next", "prev"] {
         add(&format!("diaporama/{t}"), trigger_leaf(&format!("Diaporama : {t}")));
     }
@@ -248,7 +251,7 @@ pub const HELP: &[(&str, &str)] = &[
     ("noir", "écran de sortie au noir"),
     ("output/drops/reset", "remet à zéro le compteur d'images perdues et retardées"),
     ("lecteur/go", "lance l'élément sélectionné (ou reprend)"),
-    ("lecteur/pause | play | toggle | stop", "transport du Lecteur"),
+    ("lecteur/pause | play | toggle | stop", "ancien Lecteur : transport de la Cuelist"),
     ("lecteur/next | prev", "élément suivant / précédent"),
     ("lecteur/goto <i>", "lance l'élément n° i (1 = premier)"),
     ("lecteur/shuffle <0|1>", "ordre aléatoire"),
@@ -258,6 +261,9 @@ pub const HELP: &[(&str, &str)] = &[
     ("cuelist/pause | play | toggle | stop", "transport de la Cuelist"),
     ("cuelist/next | prev", "cue en attente suivant / précédent"),
     ("cuelist/standby <i>", "met le cue n° i en attente"),
+    ("cuelist/goto <i>", "lance tout de suite le cue n° i"),
+    ("cuelist/loop <0|1>", "boucler la conduite"),
+    ("cuelist/transition <cut|black|fade> [s]", "transition du cue en attente et durée"),
     ("diaporama/play | pause | toggle | stop", "transport du Diaporama"),
     ("diaporama/next | prev", "média suivant / précédent"),
     ("diaporama/goto <i>", "média n° i (1 = premier)"),

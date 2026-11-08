@@ -262,7 +262,9 @@ struct OutputApp {
     surface: Option<softbuffer::Surface<Arc<Window>, Arc<Window>>>,
     pattern_on: bool,
     show: Option<Show>,
-    warp_corners: Option<[[f32; 2]; 4]>,
+    warp: Option<crate::protocol::WarpGeom>,
+    /// Repères du réglage du mapping, affichés sur la sortie.
+    warp_guides: Option<crate::protocol::WarpGuides>,
     /// Lecteur à l'antenne.
     active: usize,
     /// Lecteur qui sort pendant un fondu enchaîné (ses événements sont ignorés).
@@ -594,7 +596,7 @@ impl OutputApp {
         }
         self.warming = vec![0; n];
         self.skip_end = vec![false; n];
-        self.warp_corners = self.prefs.warp.active();
+        self.warp = self.prefs.warp.active();
         self.apply_warp();
         self.prewarm();
         Ok(version)
@@ -690,8 +692,9 @@ impl OutputApp {
             self.set_fullscreen(on.unwrap_or(!self.fullscreen));
             return;
         }
-        if let Command::Warp { corners } = cmd {
-            self.warp_corners = corners;
+        if let Command::Warp { geom, guides } = cmd {
+            self.warp = geom;
+            self.warp_guides = guides;
             self.apply_warp();
             return;
         }
@@ -1175,11 +1178,11 @@ impl OutputApp {
     }
 
     fn apply_warp(&mut self) {
-        let corners = self.warp_corners;
+        let (geom, guides) = (self.warp, self.warp_guides);
         match &mut self.out {
-            Some(Out::Composite(s)) => s.set_warp(corners),
+            Some(Out::Composite(s)) => s.set_warp(geom.as_ref(), guides.as_ref()),
             Some(Out::Embedded(e)) => {
-                if let Err(e) = e.set_warp(corners) {
+                if let Err(e) = e.set_warp(geom.as_ref(), guides.as_ref()) {
                     emit(&Event::Error { message: e });
                 }
             }
@@ -1753,7 +1756,8 @@ pub fn run(prefs: MachinePrefs, monitor_port: Option<u16>) {
         surface: None,
         pattern_on: false,
         show: None,
-        warp_corners: None,
+        warp: None,
+        warp_guides: None,
         active: 0,
         outgoing: None,
         xfade_after: None,

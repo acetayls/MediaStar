@@ -287,7 +287,7 @@ mod golden {
             interpolation: true,
             blend_offered: false,
             adapt_refresh: true,
-            warp: Warp { enabled: true, corners: [[0.1, 0.0], [0.9, 0.05], [1.0, 1.0], [0.0, 0.95]] },
+            warp: Warp { enabled: true, corners: [[0.1, 0.0], [0.9, 0.05], [1.0, 1.0], [0.0, 0.95]], ..Default::default() },
             audio_device: Some("wasapi/Haut-parleurs".into()),
             volume: 80.0,
             audio_delay_ms: 40.0,

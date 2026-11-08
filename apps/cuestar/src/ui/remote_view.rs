@@ -41,7 +41,7 @@ impl Remotes {
     }
 
     /// Messages reçus depuis la dernière image, traduits en commandes. `flag` : état d'une
-    /// option du Lecteur (pour les touches qui la basculent).
+    /// option (pour les touches qui la basculent).
     pub fn poll(&mut self, flag: impl Fn(Flag) -> bool) -> Vec<Msg> {
         let mut out = Vec::new();
         for (source, ev) in self.inputs.poll(&self.settings.midi) {
@@ -191,9 +191,9 @@ impl MappingRows for Remotes {
 pub fn shortcuts(ui: &mut Ui) {
     ui.heading("Raccourcis clavier");
     let rows: &[(&str, &str)] = &[
-        ("Espace", "GO de l'onglet en cours (Lecteur, Cuelist) ; lancer / pause du Diaporama"),
+        ("Espace", "GO de la Cuelist ; lancer / pause du Diaporama"),
         ("P", "Cuelist : pause / reprise"),
-        ("↑ / ↓", "Lecteur, Cuelist : élément ou cue précédent / suivant en attente"),
+        ("↑ / ↓", "Cuelist : cue précédent / suivant en attente"),
         ("← / →", "Diaporama : média précédent / suivant"),
         ("Échap", "Noir : coupe la sortie ; sur la fenêtre de sortie, quitte seulement le plein écran"),
         ("F", "Sortie en plein écran ou dans une fenêtre (la lecture continue)"),

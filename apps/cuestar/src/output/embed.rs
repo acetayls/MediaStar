@@ -10,7 +10,6 @@ use super::warp;
 pub struct Embedded {
     mpv: Mpv,
     shaders: warp::ShaderFiles,
-    corners: Option<[[f32; 2]; 4]>,
     /// Le shader porte le réglage de niveau (fondu au noir possible).
     fade_ok: bool,
     level: f64,
@@ -19,7 +18,7 @@ pub struct Embedded {
 
 impl Embedded {
     pub fn new(mpv: Mpv, light: bool) -> Self {
-        Self { mpv, shaders: warp::ShaderFiles::new(), corners: None, fade_ok: false, level: 1.0, light }
+        Self { mpv, shaders: warp::ShaderFiles::new(), fade_ok: false, level: 1.0, light }
     }
 
     pub fn deck(&self) -> &Mpv {
@@ -38,12 +37,10 @@ impl Embedded {
     }
 
     /// Shader de sortie : mapping 4 coins, et réglage de niveau pour les fondus (vo gpu-next).
-    pub fn set_warp(&mut self, corners: Option<[[f32; 2]; 4]>) -> Result<(), String> {
-        self.corners = corners;
+    pub fn set_warp(&mut self, geom: Option<&crate::protocol::WarpGeom>, guides: Option<&crate::protocol::WarpGuides>) -> Result<(), String> {
         let with_fade = !self.light;
-        let c = if with_fade { Some(corners.unwrap_or(crate::prefs::Warp::IDENTITY)) } else { corners };
         self.fade_ok = false;
-        let res = match c.and_then(|c| warp::shader(c, with_fade)) {
+        let res = match warp::hook_shader(geom, guides, with_fade) {
             Some(src) => match self.shaders.write(&src) {
                 Ok(p) => {
                     let r = self.mpv.set_property("glsl-shaders", &p.to_string_lossy());

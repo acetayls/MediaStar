@@ -1,14 +1,15 @@
 //! Fenêtre Préférences, en onglets : écran et moteur de la sortie, audio, mires de test, mapping 4 coins, journal.
 
 use crate::link::OutputLink;
-use crate::output::warp::map_point;
+use crate::output::warp;
 use crate::prefs::{fps_label, Cadence, Decode, DelayUnit, MachinePrefs, RenderApi, Warp, FPS_CHOICES};
-use crate::protocol::{Command, PatternKind};
+use crate::protocol::{Command, PatternKind, WarpGuides};
 use egui::{pos2, vec2, Color32, Key, Pos2, Rect, RichText, Sense, Stroke};
 use star_ui::theme::*;
 use std::time::{Duration, Instant};
 
 const CORNER_NAMES: [&str; 4] = ["Haut gauche", "Haut droit", "Bas droit", "Bas gauche"];
+const MID_NAMES: [&str; 5] = ["Milieu haut", "Milieu droit", "Milieu bas", "Milieu gauche", "Centre"];
 
 /// Onglets de la fenêtre Préférences.
 #[derive(Default, Clone, Copy, PartialEq)]
@@ -40,13 +41,19 @@ pub struct OutputView {
     selected: usize,
     last_warp_send: Instant,
     warp_dirty: bool,
+    /// Grille 8 × 8 avec les repères de la sortie.
+    guide_grid: bool,
+    /// Repères envoyés à la sortie en dernier.
+    guides_sent: Option<WarpGuides>,
+    /// Dernière modification refusée (image retournée), pour le message.
+    refused: Option<Instant>,
     log: super::log_view::LogView,
     six25: super::six25::Six25,
 }
 
 impl Default for OutputView {
     fn default() -> Self {
-        Self { open: false, draft: None, tab: Tab::Engine, selected: 0, last_warp_send: Instant::now(), warp_dirty: false, log: Default::default(), six25: Default::default() }
+        Self { open: false, draft: None, tab: Tab::Engine, selected: 0, last_warp_send: Instant::now(), warp_dirty: false, guide_grid: false, guides_sent: None, refused: None, log: Default::default(), six25: Default::default() }
     }
 }
 
@@ -145,6 +152,7 @@ impl OutputView {
     /// Fenêtre flottante du système (peut sortir de la régie).
     pub fn show(&mut self, ctx: &egui::Context, prefs: &mut MachinePrefs, out: &mut OutputLink, pattern: &mut Option<PatternKind>) -> Action {
         if !self.open {
+            self.sync_guides(prefs, out, false);
             return Action::None;
         }
         let vp = egui::ViewportBuilder::default().with_title("CueStar — Préférences").with_inner_size([1040.0, 660.0]).with_min_inner_size([600.0, 400.0]);
@@ -161,6 +169,8 @@ impl OutputView {
             self.open = false;
             self.draft = None;
         }
+        let editing = self.open && self.tab == Tab::Mapping;
+        self.sync_guides(prefs, out, editing);
         action
     }
 
@@ -188,12 +198,6 @@ impl OutputView {
                 Tab::System => system(ui, prefs),
                 Tab::Log => {}
             });
-        }
-        // Envoi du mapping limité pendant un glisser : mpv recompile le shader à chaque envoi.
-        if self.warp_dirty && self.last_warp_send.elapsed() >= Duration::from_millis(40) {
-            out.send(Command::Warp { corners: prefs.warp.active() });
-            self.last_warp_send = Instant::now();
-            self.warp_dirty = false;
         }
         action
     }
@@ -420,21 +424,70 @@ impl OutputView {
         });
     }
 
+    /// Position à l'écran (fraction) de la poignée `i` : coins, puis points intermédiaires.
+    fn handle_pos(w: &Warp, i: usize) -> [f32; 2] {
+        if i < 4 {
+            w.corners[i]
+        } else {
+            let n = warp::NODES[i - 4];
+            warp::forward(&w.geom(), n[0], n[1])
+        }
+    }
+
+    /// Déplace la poignée `i` de (dx, dy) en fraction de l'écran, dans les bords de l'écran.
+    /// Un coin déplacé emmène ses points intermédiaires (leur décalage reste le même).
+    fn move_handle(w: &mut Warp, i: usize, dx: f32, dy: f32) {
+        if i < 4 {
+            let c = &mut w.corners[i];
+            c[0] = (c[0] + dx).clamp(0.0, 1.0);
+            c[1] = (c[1] + dy).clamp(0.0, 1.0);
+        } else {
+            let p = Self::handle_pos(w, i);
+            let to = [(p[0] + dx).clamp(0.0, 1.0), (p[1] + dy).clamp(0.0, 1.0)];
+            let o = &mut w.mesh_offsets[i - 4];
+            o[0] += to[0] - p[0];
+            o[1] += to[1] - p[1];
+        }
+    }
+
     fn mapping(&mut self, ui: &mut egui::Ui, prefs: &mut MachinePrefs, out: &mut OutputLink, pattern: &mut Option<PatternKind>, typing: bool) {
         let before = prefs.warp;
+        let handles = if prefs.warp.mesh { 9 } else { 4 };
+        if self.selected >= handles {
+            self.selected = 0;
+        }
         section(ui, "Mapping 4 coins", |ui| {
-            ui.horizontal(|ui| {
+            ui.horizontal_wrapped(|ui| {
                 ui.checkbox(&mut prefs.warp.enabled, "Activer");
-                if ui.button("Réinitialiser").clicked() {
+                if ui.button("Réinitialiser").on_hover_text("Image droite : coins aux coins de l'écran, points intermédiaires à leur place").clicked() {
                     prefs.warp.corners = Warp::IDENTITY;
+                    prefs.warp.mesh_offsets = [[0.0; 2]; 5];
                 }
+                ui.checkbox(&mut prefs.warp.mesh, "Points intermédiaires")
+                    .on_hover_text("Ajoute un point au milieu de chaque bord et au centre (grille 3 × 3) pour courber l'image, comme le mesh warp de Resolume ou MadMapper");
+                if prefs.warp.mesh && prefs.warp.mesh_offsets != [[0.0; 2]; 5] && ui.small_button("Remettre les points au milieu").clicked() {
+                    prefs.warp.mesh_offsets = [[0.0; 2]; 5];
+                }
+            });
+            ui.horizontal_wrapped(|ui| {
+                ui.label("Bord adouci");
+                ui.add(egui::DragValue::new(&mut prefs.warp.feather).range(0.0..=8.0).speed(0.05).suffix(" px").max_decimals(1))
+                    .on_hover_text("Fondu du contour de l'image déformée sur quelques pixels : plus de crénelage sur les bords en biais (0 : bord net)");
+                ui.separator();
+                ui.checkbox(&mut self.guide_grid, "Grille sur la sortie").on_hover_text("Avec les poignées, une grille 8 × 8 suit la déformation de l'image sur la sortie");
                 let grid = *pattern == Some(PatternKind::Grid);
-                if ui.selectable_label(grid, "Grille de réglage").on_hover_text("Affiche la grille sur la sortie pendant le réglage").clicked() {
+                if ui.selectable_label(grid, "Mire grille").on_hover_text("Remplace l'image par la mire grille pendant le réglage").clicked() {
                     *pattern = if grid { None } else { Some(PatternKind::Grid) };
                     out.send(Command::Pattern { kind: *pattern });
                 }
             });
-            ui.label(RichText::new("Fais glisser les coins ; flèches = 1 pixel, Maj + flèches = 10 pixels sur le coin choisi.").color(TEXT_DIM));
+            ui.label(
+                RichText::new("Les poignées numérotées s'affichent sur la sortie tant que cet onglet est ouvert. Glisse-les ; flèches = 1 pixel, Maj + flèches = 10 pixels sur la poignée choisie. L'image ne peut pas se retourner ni se croiser.")
+                    .color(TEXT_DIM),
+            );
+            if self.refused.is_some_and(|t| t.elapsed() < Duration::from_secs(2)) {
+                ui.label(RichText::new("Position refusée : l'image se retournerait ou se croiserait.").color(METER_MID));
+            }
             ui.add_space(6.0);
 
             let (mw, mh) = out.state.monitor.as_ref().map(|m| (m.width.max(1) as f32, m.height.max(1) as f32)).unwrap_or((1920.0, 1080.0));
@@ -442,7 +495,7 @@ impl OutputView {
             let (rect, _) = ui.allocate_exact_size(vec2(width, width * mh / mw), Sense::hover());
             self.editor(ui, rect, &mut prefs.warp);
 
-            // Ajustement fin au clavier du coin choisi.
+            // Ajustement fin au clavier de la poignée choisie.
             if !typing {
                 let (dx, dy, shift) = ui.input(|i| {
                     let mut d = (0.0f32, 0.0f32);
@@ -462,34 +515,37 @@ impl OutputView {
                 });
                 if dx != 0.0 || dy != 0.0 {
                     let k = if shift { 10.0 } else { 1.0 };
-                    let c = &mut prefs.warp.corners[self.selected];
-                    c[0] = (c[0] + dx * k / mw).clamp(0.0, 1.0);
-                    c[1] = (c[1] + dy * k / mh).clamp(0.0, 1.0);
+                    Self::move_handle(&mut prefs.warp, self.selected, dx * k / mw, dy * k / mh);
                 }
             }
 
             ui.add_space(6.0);
             egui::Grid::new("corners").num_columns(3).spacing([12.0, 6.0]).show(ui, |ui| {
-                for (i, name) in CORNER_NAMES.iter().enumerate() {
-                    if ui.selectable_label(self.selected == i, *name).clicked() {
+                for i in 0..handles {
+                    let name = if i < 4 { CORNER_NAMES[i] } else { MID_NAMES[i - 4] };
+                    if ui.selectable_label(self.selected == i, format!("{}  {name}", i + 1)).clicked() {
                         self.selected = i;
                     }
-                    let c = &mut prefs.warp.corners[i];
-                    let mut x = c[0] * mw;
-                    let mut y = c[1] * mh;
-                    if ui.add(egui::DragValue::new(&mut x).range(0.0..=mw).speed(1.0).prefix("x ").suffix(" px")).changed() {
-                        c[0] = x / mw;
-                    }
-                    if ui.add(egui::DragValue::new(&mut y).range(0.0..=mh).speed(1.0).prefix("y ").suffix(" px")).changed() {
-                        c[1] = y / mh;
+                    let p = Self::handle_pos(&prefs.warp, i);
+                    let (mut x, mut y) = (p[0] * mw, p[1] * mh);
+                    let cx = ui.add(egui::DragValue::new(&mut x).range(0.0..=mw).speed(1.0).prefix("x ").suffix(" px")).changed();
+                    let cy = ui.add(egui::DragValue::new(&mut y).range(0.0..=mh).speed(1.0).prefix("y ").suffix(" px")).changed();
+                    if cx || cy {
+                        Self::move_handle(&mut prefs.warp, i, x / mw - p[0], y / mh - p[1]);
                     }
                     ui.end_row();
                 }
             });
         });
         if prefs.warp != before {
-            // Déplacer un coin active le mapping.
-            if prefs.warp.corners != before.corners {
+            // Jamais d'image retournée ou croisée : la modification est refusée.
+            if !warp::valid(&prefs.warp.geom()) {
+                prefs.warp = before;
+                self.refused = Some(Instant::now());
+                return;
+            }
+            // Déplacer une poignée active le mapping.
+            if prefs.warp.corners != before.corners || prefs.warp.mesh_offsets != before.mesh_offsets {
                 prefs.warp.enabled = true;
             }
             prefs.save();
@@ -497,20 +553,21 @@ impl OutputView {
         }
     }
 
-    /// Aperçu de l'écran de sortie : quadrilatère, grille déformée et poignées.
+    /// Aperçu de l'écran de sortie : contour, grille déformée et poignées numérotées.
     fn editor(&mut self, ui: &mut egui::Ui, rect: Rect, warp: &mut Warp) {
         let p = ui.painter_at(rect.expand(8.0));
         p.rect_filled(rect, 2, Color32::from_rgb(0x10, 0x10, 0x12));
         p.rect_stroke(rect, 2, Stroke::new(1.0, BORDER), egui::StrokeKind::Inside);
         let to_screen = |q: [f32; 2]| pos2(rect.left() + q[0] * rect.width(), rect.top() + q[1] * rect.height());
         let col = if warp.enabled { ACCENT } else { TEXT_DIM };
+        let g = warp.geom();
 
-        // Grille 16 × 9 déformée par l'homographie.
+        // Grille 16 × 9 déformée comme l'image.
         let line = |a: (f32, f32), b: (f32, f32)| -> Vec<Pos2> {
-            (0..=24)
+            (0..=32)
                 .map(|t| {
-                    let t = t as f32 / 24.0;
-                    to_screen(map_point(warp.corners, a.0 + (b.0 - a.0) * t, a.1 + (b.1 - a.1) * t))
+                    let t = t as f32 / 32.0;
+                    to_screen(warp::forward(&g, a.0 + (b.0 - a.0) * t, a.1 + (b.1 - a.1) * t))
                 })
                 .collect()
         };
@@ -522,24 +579,47 @@ impl OutputView {
             let v = i as f32 / 9.0;
             p.add(egui::Shape::line(line((0.0, v), (1.0, v)), Stroke::new(1.0, col.gamma_multiply(0.3))));
         }
-        let quad: Vec<Pos2> = warp.corners.iter().map(|c| to_screen(*c)).collect();
-        p.add(egui::Shape::closed_line(quad.clone(), Stroke::new(2.0, col)));
+        let mut outline = line((0.0, 0.0), (1.0, 0.0));
+        outline.extend(line((1.0, 0.0), (1.0, 1.0)));
+        outline.extend(line((1.0, 1.0), (0.0, 1.0)));
+        outline.extend(line((0.0, 1.0), (0.0, 0.0)));
+        p.add(egui::Shape::closed_line(outline, Stroke::new(2.0, col)));
 
-        for (i, pos) in quad.iter().enumerate() {
+        let n = if warp.mesh { 9 } else { 4 };
+        for i in 0..n {
+            let pos = to_screen(Self::handle_pos(warp, i));
             let id = ui.scope_id().with(("corner", i));
-            let resp = ui.interact(Rect::from_center_size(*pos, vec2(22.0, 22.0)), id, Sense::click_and_drag());
+            let resp = ui.interact(Rect::from_center_size(pos, vec2(22.0, 22.0)), id, Sense::click_and_drag());
             if resp.clicked() || resp.drag_started() {
                 self.selected = i;
             }
             if resp.dragged() {
                 let d = resp.drag_delta();
-                let c = &mut warp.corners[i];
-                c[0] = (c[0] + d.x / rect.width()).clamp(0.0, 1.0);
-                c[1] = (c[1] + d.y / rect.height()).clamp(0.0, 1.0);
+                Self::move_handle(warp, i, d.x / rect.width(), d.y / rect.height());
             }
             let hot = resp.hovered() || resp.dragged() || self.selected == i;
-            p.circle_filled(*pos, if hot { 8.0 } else { 6.0 }, if self.selected == i { ACCENT } else { TEXT });
-            p.circle_stroke(*pos, 9.0, Stroke::new(1.0, PLAYING_INK));
+            let r = if i < 4 { 6.0 } else { 5.0 };
+            p.circle_filled(pos, if hot { r + 2.0 } else { r }, if self.selected == i { ACCENT } else { TEXT });
+            p.circle_stroke(pos, r + 3.0, Stroke::new(1.0, PLAYING_INK));
+            // Numéro vers l'intérieur de l'écran, comme sur la sortie.
+            let off = vec2(if pos.x < rect.center().x { 12.0 } else { -12.0 }, if pos.y < rect.center().y { 12.0 } else { -12.0 });
+            p.text(pos + off, egui::Align2::CENTER_CENTER, format!("{}", i + 1), egui::FontId::proportional(11.0), if self.selected == i { ACCENT } else { TEXT_DIM });
+        }
+    }
+
+    /// Repères sur la sortie : affichés tant que l'onglet Mapping est ouvert, retirés sinon.
+    fn sync_guides(&mut self, prefs: &MachinePrefs, out: &mut OutputLink, visible: bool) {
+        let want = visible.then_some(WarpGuides { selected: self.selected, grid: self.guide_grid });
+        if want != self.guides_sent {
+            self.guides_sent = want;
+            self.warp_dirty = true;
+            self.last_warp_send = Instant::now() - Duration::from_secs(1);
+        }
+        // Envoi limité pendant un glisser : mpv recompile le shader à chaque envoi (affichage de secours).
+        if self.warp_dirty && self.last_warp_send.elapsed() >= Duration::from_millis(40) {
+            out.send(Command::Warp { geom: prefs.warp.active(), guides: self.guides_sent });
+            self.last_warp_send = Instant::now();
+            self.warp_dirty = false;
         }
     }
 }

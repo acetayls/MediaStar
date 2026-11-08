@@ -32,6 +32,8 @@ pub(super) struct State {
     mix: f32,
     /// Homographie écran → image (mapping 4 coins).
     warp: [[f32; 3]; 3],
+    /// Grille 3 × 3, bord adouci et repères du réglage (voir `warp::params`).
+    wx: [[f32; 4]; 13],
     pub(super) size: (u32, u32),
     /// Durée d'un rafraîchissement de l'écran (µs).
     vsync_us: i64,
@@ -72,6 +74,8 @@ pub(super) struct Params {
     pub h: [[f32; 4]; 3],
     /// x = mélange (0 : lecteur 0), y = niveau, z = lecteur 0 visible, w = lecteur 1 visible.
     pub misc: [f32; 4],
+    /// Grille 3 × 3, bord adouci et repères du réglage ; `wx[12].zw` = taille de l'écran.
+    pub wx: [[f32; 4]; 13],
 }
 
 /// Contexte de rendu mpv d'un lecteur, tel que le voit le fil d'affichage.
@@ -144,6 +148,7 @@ impl Screen {
                 level: 1.0,
                 mix: 0.0,
                 warp: super::warp::inverse(None),
+                wx: super::warp::params(None, None),
                 size: (size.0.max(1), size.1.max(1)),
                 vsync_us: vsync_us(refresh_hz),
                 shown: [false; DECKS],
@@ -213,9 +218,13 @@ impl Screen {
         self.with(|s| s.mix = v.clamp(0.0, 1.0) as f32);
     }
 
-    pub fn set_warp(&self, corners: Option<[[f32; 2]; 4]>) {
-        let m = super::warp::inverse(corners);
-        self.with(|s| s.warp = m);
+    pub fn set_warp(&self, geom: Option<&crate::protocol::WarpGeom>, guides: Option<&crate::protocol::WarpGuides>) {
+        let m = super::warp::inverse(geom.map(|g| g.corners));
+        let wx = super::warp::params(geom, guides);
+        self.with(|s| {
+            s.warp = m;
+            s.wx = wx;
+        });
     }
 
     pub fn resize(&self, w: u32, h: u32) {
@@ -277,6 +286,12 @@ fn run<B: Backend>(shared: Arc<Shared>, mut g: B, mut decks: Vec<DeckRc>) {
             let p = Params {
                 h: [[w[0][0], w[0][1], w[0][2], 0.0], [w[1][0], w[1][1], w[1][2], 0.0], [w[2][0], w[2][1], w[2][2], 0.0]],
                 misc: [s.mix, s.level, s.shown[0] as u8 as f32, s.shown[1] as u8 as f32],
+                wx: {
+                    let mut wx = s.wx;
+                    wx[12][2] = s.size.0 as f32;
+                    wx[12][3] = s.size.1 as f32;
+                    wx
+                },
             };
             let r = (p, s.size, s.reveal, s.stop, s.monitor.take(), s.dirty, s.vsync_us);
             s.dirty = false;
@@ -367,7 +382,10 @@ fn run<B: Backend>(shared: Arc<Shared>, mut g: B, mut decks: Vec<DeckRc>) {
         g.compose(&params);
         if let Some((_, every)) = &monitor {
             if Instant::now() >= next_thumb {
-                g.compose_thumb(&params);
+                // Les repères du réglage ne vont pas dans le retour image.
+                let mut p = params;
+                p.wx[11][2] = 0.0;
+                g.compose_thumb(&p);
                 next_thumb = Instant::now() + *every;
             }
         }

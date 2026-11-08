@@ -325,6 +325,31 @@ impl Cuelist {
     }
 
     pub fn ui(&mut self, ui: &mut egui::Ui, out: &mut OutputLink, typing: bool) {
+        self.tick(out);
+        if !typing {
+            let none = egui::Modifiers::NONE;
+            let (go, pause, up, down) = ui.input_mut(|i| {
+                (i.consume_key(none, Key::Space), i.consume_key(none, Key::P), i.consume_key(none, Key::ArrowUp), i.consume_key(none, Key::ArrowDown))
+            });
+            if go {
+                self.go(out);
+            }
+            if pause {
+                self.toggle_pause(out);
+            }
+            if up {
+                self.step(-1);
+            }
+            if down {
+                self.step(1);
+            }
+        }
+        self.layout(ui, out);
+    }
+
+    /// Suivi de la sortie à chaque image : fin du cue en cours (enchaîner ou garder la dernière
+    /// image), sortie coupée ailleurs, boucle changée pendant la lecture, cue suivant préparé.
+    fn tick(&mut self, out: &mut OutputLink) {
         let len = self.cues.len();
         // Conduite en boucle : après le dernier cue, le premier attend.
         if self.loop_all && len > 0 && self.standby >= len {
@@ -365,25 +390,9 @@ impl Cuelist {
             }
         }
         self.sync_prepare(out);
-        if !typing {
-            let none = egui::Modifiers::NONE;
-            let (go, pause, up, down) = ui.input_mut(|i| {
-                (i.consume_key(none, Key::Space), i.consume_key(none, Key::P), i.consume_key(none, Key::ArrowUp), i.consume_key(none, Key::ArrowDown))
-            });
-            if go {
-                self.go(out);
-            }
-            if pause {
-                self.toggle_pause(out);
-            }
-            if up {
-                self.step(-1);
-            }
-            if down {
-                self.step(1);
-            }
-        }
+    }
 
+    fn layout(&mut self, ui: &mut egui::Ui, out: &mut OutputLink) {
         let full = ui.available_rect_before_wrap();
         if self.hide_preview || full.width() < 560.0 {
             ui.scope_builder(egui::UiBuilder::new().max_rect(full), |ui| self.main(ui, out, full));
@@ -1016,5 +1025,158 @@ impl CueData {
     }
     pub fn black() -> Self {
         Self { name: "Noir".into(), path: None, ..Default::default() }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    //! L'enchaînement de la conduite, sans sortie : on regarde les commandes envoyées et on
+    //! simule les fins de média.
+    use super::*;
+
+    fn cue(name: &str, follow: CueFollow, looping: bool) -> CueData {
+        let mut c = CueData::new(PathBuf::from(format!("/v/{name}.mp4")));
+        c.follow = follow;
+        c.clip.sound.looping = looping;
+        c
+    }
+
+    fn list(cues: Vec<CueData>, loop_all: bool) -> Cuelist {
+        let mut l = Cuelist::default();
+        l.load_data(&CuelistData { cues, loop_all });
+        l
+    }
+
+    /// Dernier média chargé (nom de fichier sans extension).
+    fn loaded(out: &OutputLink) -> Option<String> {
+        out.sent.iter().rev().find_map(|c| match c {
+            Command::Load { path, .. } => Some(Path::new(path).file_stem().unwrap().to_string_lossy().into_owned()),
+            _ => None,
+        })
+    }
+
+    /// La sortie joue le dernier média chargé.
+    fn playing(out: &mut OutputLink) {
+        out.state.current = loaded(out);
+        out.state.paused = false;
+    }
+
+    /// Fin du média en cours (la dernière image reste, mpv se met en pause).
+    fn end(out: &mut OutputLink) {
+        out.state.ended += 1;
+        out.state.paused = true;
+    }
+
+    fn no_load_or_stop(cmds: &[Command]) -> bool {
+        cmds.iter().all(|c| !matches!(c, Command::Load { .. } | Command::Stop))
+    }
+
+    #[test]
+    fn chained_cue_starts_the_next_one_and_a_stop_cue_waits() {
+        let mut out = OutputLink::new();
+        let mut l = list(vec![cue("a", CueFollow::Continue, false), cue("b", CueFollow::Stop, false), cue("c", CueFollow::Stop, false)], false);
+        l.advance(&mut out);
+        playing(&mut out);
+        assert_eq!(loaded(&out).as_deref(), Some("a"));
+        // Chaque chargement signale sa fin (pour enchaîner même si le réglage change en route).
+        assert!(out.sent.iter().any(|c| matches!(c, Command::Load { signal_end: true, hold: true, .. })));
+        end(&mut out);
+        l.tick(&mut out);
+        assert_eq!(loaded(&out).as_deref(), Some("b"));
+        playing(&mut out);
+        // b s'arrête à la fin : il reste à l'écran, rien d'autre ne part.
+        let n = out.sent.len();
+        end(&mut out);
+        l.tick(&mut out);
+        assert!(no_load_or_stop(&out.sent[n..]));
+        assert_eq!(l.running, Some(1));
+        // La sortie est en pause sur la dernière image : le GO lance c (pas « reprendre »).
+        l.advance(&mut out);
+        assert_eq!(loaded(&out).as_deref(), Some("c"));
+    }
+
+    #[test]
+    fn unchecking_the_loop_while_playing_lets_the_cue_finish_then_chain() {
+        let mut out = OutputLink::new();
+        let mut l = list(vec![cue("a", CueFollow::Continue, true), cue("b", CueFollow::Stop, false)], false);
+        l.advance(&mut out);
+        playing(&mut out);
+        assert!(out.sent.iter().any(|c| matches!(c, Command::Load { looping: true, .. })));
+        // Boucle décochée dans la liste : la sortie la reçoit tout de suite.
+        l.cues[0].clip.sound.looping = false;
+        l.clip_changed = Some(0);
+        l.tick(&mut out);
+        assert!(out.sent.iter().any(|c| matches!(c, Command::SetClip { clip } if !clip.sound.looping)));
+        // Fin du passage en cours : on enchaîne sur b.
+        end(&mut out);
+        l.tick(&mut out);
+        assert_eq!(loaded(&out).as_deref(), Some("b"));
+    }
+
+    #[test]
+    fn unchecking_the_loop_of_a_stop_cue_ends_on_its_last_image() {
+        let mut out = OutputLink::new();
+        let mut l = list(vec![cue("a", CueFollow::Stop, true), cue("b", CueFollow::Stop, false)], false);
+        l.advance(&mut out);
+        playing(&mut out);
+        l.cues[0].clip.sound.looping = false;
+        l.clip_changed = Some(0);
+        l.tick(&mut out);
+        let n = out.sent.len();
+        end(&mut out);
+        l.tick(&mut out);
+        assert!(no_load_or_stop(&out.sent[n..]));
+        assert!(l.at_end && l.standby == 1);
+    }
+
+    #[test]
+    fn chained_last_cue_goes_to_black_or_loops_the_list() {
+        // Sans boucle : le dernier cue enchaîné sans suite passe au noir.
+        let mut out = OutputLink::new();
+        let mut l = list(vec![cue("a", CueFollow::Continue, false), cue("b", CueFollow::Continue, false)], false);
+        l.advance(&mut out);
+        playing(&mut out);
+        end(&mut out);
+        l.tick(&mut out);
+        playing(&mut out);
+        end(&mut out);
+        l.tick(&mut out);
+        assert!(out.sent.iter().rev().find(|c| matches!(c, Command::Load { .. } | Command::Stop)).is_some_and(|c| matches!(c, Command::Stop)));
+        assert_eq!(l.running, None);
+
+        // Conduite en boucle : après b, a repart tout seul.
+        let mut out = OutputLink::new();
+        let mut l = list(vec![cue("a", CueFollow::Continue, false), cue("b", CueFollow::Continue, false)], true);
+        l.advance(&mut out);
+        playing(&mut out);
+        end(&mut out);
+        l.tick(&mut out);
+        playing(&mut out);
+        assert_eq!(l.standby, 0);
+        end(&mut out);
+        l.tick(&mut out);
+        assert_eq!(loaded(&out).as_deref(), Some("a"));
+        assert_eq!(l.running, Some(0));
+    }
+
+    #[test]
+    fn pause_resumes_and_old_lecteur_becomes_chained_cues() {
+        let mut out = OutputLink::new();
+        let mut l = list(vec![cue("a", CueFollow::Stop, false), cue("b", CueFollow::Stop, false)], false);
+        l.advance(&mut out);
+        playing(&mut out);
+        out.state.paused = true;
+        l.advance(&mut out);
+        assert!(matches!(out.sent.last(), Some(Command::Play)));
+
+        let mut l = Cuelist::default();
+        let d = crate::project::LecteurData {
+            items: vec![crate::project::LecteurItem { path: "/v/x.mp4".into(), clip: Default::default() }],
+            loop_all: true,
+            shuffle: false,
+            transition: crate::protocol::Transition { kind: TransitionKind::Crossfade, secs: 2.0 },
+        };
+        l.import_lecteur(&d);
+        assert!(l.loop_all && l.cues.len() == 1 && l.cues[0].follow == CueFollow::Continue && l.cues[0].transition.kind == TransitionKind::Crossfade);
     }
 }

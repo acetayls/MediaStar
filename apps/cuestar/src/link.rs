@@ -66,11 +66,17 @@ pub struct OutputLink {
     pub state: OutputState,
     /// Dernière vignette reçue de la sortie.
     pub monitor: Arc<Mutex<MonitorFrame>>,
+    /// Essais : commandes envoyées.
+    #[cfg(test)]
+    pub sent: Vec<Command>,
 }
 
 impl OutputLink {
     pub fn new() -> Self {
-        Self { child: None, stdin: None, rx: None, load_sent: None, generation: 0, state: OutputState::default(), monitor: Arc::new(Mutex::new(MonitorFrame::default())) }
+        Self { child: None, stdin: None, rx: None, load_sent: None, generation: 0, state: OutputState::default(), monitor: Arc::new(Mutex::new(MonitorFrame::default())),
+            #[cfg(test)]
+            sent: Vec::new(),
+        }
     }
 
     /// (Re)lance le moteur de sortie avec les préférences de la machine.
@@ -162,6 +168,8 @@ impl OutputLink {
     }
 
     pub fn send(&mut self, cmd: Command) {
+        #[cfg(test)]
+        self.sent.push(cmd.clone());
         let Some(stdin) = self.stdin.as_mut() else { return };
         if matches!(cmd, Command::Load { .. }) {
             self.load_sent = Some(Instant::now());

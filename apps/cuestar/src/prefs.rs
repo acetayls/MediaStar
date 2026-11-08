@@ -209,19 +209,43 @@ pub struct MachinePrefs {
 pub struct Warp {
     pub enabled: bool,
     pub corners: [[f32; 2]; 4],
+    /// Points intermédiaires (milieux des bords et centre) en service.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub mesh: bool,
+    /// Décalage des points intermédiaires par rapport à leur place sur la perspective des
+    /// coins (haut, droite, bas, gauche, centre), en fraction de l'écran : ils suivent les coins.
+    #[serde(skip_serializing_if = "no_offset")]
+    pub mesh_offsets: [[f32; 2]; 5],
+    /// Bord adouci de l'image déformée, en pixels (contre le crénelage).
+    #[serde(skip_serializing_if = "default_feather")]
+    pub feather: f32,
+}
+
+fn no_offset(v: &[[f32; 2]; 5]) -> bool {
+    v.iter().all(|p| p[0] == 0.0 && p[1] == 0.0)
+}
+
+fn default_feather(v: &f32) -> bool {
+    *v == Warp::FEATHER
 }
 
 impl Warp {
     pub const IDENTITY: [[f32; 2]; 4] = [[0.0, 0.0], [1.0, 0.0], [1.0, 1.0], [0.0, 1.0]];
-    /// Coins à appliquer, ou None si le mapping est inactif ou neutre.
-    pub fn active(&self) -> Option<[[f32; 2]; 4]> {
-        (self.enabled && self.corners != Self::IDENTITY).then_some(self.corners)
+    pub const FEATHER: f32 = 1.5;
+    /// Déformation réglée (même inactive).
+    pub fn geom(&self) -> crate::protocol::WarpGeom {
+        crate::protocol::WarpGeom { corners: self.corners, mesh: self.mesh.then_some(self.mesh_offsets), feather: self.feather }
+    }
+    /// Déformation à appliquer, ou None si le mapping est inactif ou neutre.
+    pub fn active(&self) -> Option<crate::protocol::WarpGeom> {
+        let bent = self.mesh && !no_offset(&self.mesh_offsets);
+        (self.enabled && (self.corners != Self::IDENTITY || bent)).then(|| self.geom())
     }
 }
 
 impl Default for Warp {
     fn default() -> Self {
-        Self { enabled: false, corners: Self::IDENTITY }
+        Self { enabled: false, corners: Self::IDENTITY, mesh: false, mesh_offsets: [[0.0; 2]; 5], feather: Self::FEATHER }
     }
 }
 

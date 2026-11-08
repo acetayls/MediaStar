@@ -4,19 +4,19 @@ CueStar sends videos, images and sounds to an output screen (projector, stage sc
 desk). The control screen, where you work, and the **output**, which shows the picture, run as
 two separate programs: a busy control screen never delays a frame.
 
-Four modules share the screen: the **Player** (Lecteur, a playlist), the **Slideshow**
-(Diaporama, a folder of photos and videos), the **Presentation** (Présentation, a PowerPoint
-file) and the **Cuelist** (a running order of cues fired with GO). The **Text** panel sits alongside to keep the written running order in view.
+Three modules share the screen: the **Cuelist** (a running order of media fired with GO, which
+can chain on their own), the **Slideshow** (Diaporama, a folder of photos and videos) and the
+**Presentation** (Présentation, a PowerPoint file). The **Text** panel sits alongside to keep the written running order in view.
 
 ## Getting started
 
 1. At startup the output opens full screen on the second display (in a window if there is only
    one). The bottom bar reads **Sortie : 1920×1080 @ 60.00 Hz** once it is ready.
-2. In the **Lecteur**, click **Ajouter** (Add) or drop files on the list.
-3. Double-click an item, or select it and press **Space** (GO).
+2. In the **Cuelist**, click **Ajouter des médias** (Add media) or drop files on the list.
+3. Double-click a cue, or click it to put it on standby and press **Space** (GO).
 4. **Esc** or the red **NOIR** button cuts the picture at any time.
-5. Right-click an item → **Edit…** to set its in and out points, fades to black, volume and
-   equalizer.
+5. Right-click a cue → **Réglages…** (settings) to set its rotation, in and out points, fades
+   to black, volume and equalizer.
 
 Everything is kept automatically: when CueStar starts again, the session is as you left it.
 **Enregistrer** (Save) writes the project to a `.cuestar` file.
@@ -32,7 +32,7 @@ TIFF, WebP) and sounds (MP3, WAV, FLAC, AAC/M4A, OGG). Decoding goes through lib
 |---|---|
 | Project name | Menu: New, Open, Save as, Rename |
 | **Enregistrer** | Saves the project (**Ctrl+S**) |
-| **Lecteur**, **Diaporama**, **Présentation**, **Cuelist** | Switches module; a hidden module keeps playing |
+| **Cuelist**, **Diaporama**, **Présentation** | Switches module; a hidden module keeps playing |
 | **Texte** | Shows or hides the Text panel |
 | **? Help** | Opens this help (**F1**) |
 | **Préférences** | Tabbed window: output screen and engine, audio, test patterns, 4-corner mapping |
@@ -51,65 +51,91 @@ TIFF, WebP) and sounds (MP3, WAV, FLAC, AAC/M4A, OGG). Decoding goes through lib
   right-click on the counter → **Reset**, the OSC address `output/drops/reset` or a remote.
 - Media frame rate, CPU and GPU load.
 
-## The Player
+## The Cuelist
 
-A playlist of videos, images and sounds. **Ajouter** opens files or a folder; you can also drop
-them on the list. **Vider** clears the list (after confirmation).
+A running order of cues: each one is a media (video, image, sound), or **black**. The
+**standby** cue plays on GO. It replaces the former Player (Lecteur): a project that had a
+playlist in the Player finds it at the end of the running order, as chained cues with its
+transition.
 
-- **GO** (or **Space**) plays the selected item, or resumes after a pause.
-- **⏮ / ⏭**: previous / next item. **■** cuts the picture.
-- **Up / Down arrow**: changes the selected item without playing it.
-- **Aléatoire** (shuffle) plays in random order, **Tout boucler** (loop all) starts over at the
-  end of the list.
-- The loop icon at the end of a row loops that item.
-- **Transition**: **Coupe** (cut), **Noir** (fade to black then up) or **Fondu enchaîné**
-  (crossfade), with its duration.
+- **Ajouter des médias** (add media): files, a folder, or **Un cue Noir** (a black cue, cut
+  with the cue's transition). You can also drop files and folders on the list.
+- **GO** (or **Space**) plays the standby cue and puts the next one on standby. If the current
+  cue is paused, GO resumes it.
+- **⏮ / ⏭** (or **Up / Down arrow**) change the standby cue without playing it.
+- **Pause** (or **P**) pauses and resumes the playing cue. **■ Arrêter** cuts the picture.
+- Click a cue: puts it on standby. Double-click: plays it. Drag a cue to reorder.
 
-### NEXT preview
+### The media on air
 
-On the right, the preview shows the item the next GO will play. You can move around in it
-without touching the output: click or drag on the bar under the picture, **▶** plays the
-preview (silently), **⏮ / ⏭** step one frame back or forward. The item's in and out marks are
-drawn on the bar. **Aperçu** (above the list) shows or hides it.
+The top box shows the cue on air: its name, its **duration**, the elapsed time, a playback bar
+(click or drag to move in the media) and the time left. It turns amber when paused and reads
+**FIN DU MÉDIA** when a cue that stops at its end keeps its last frame: GO then plays the
+standby cue.
 
-### Right-click on an item
+### Chaining, looping
+
+- The orange arrow at the start of a row: at the end of this cue, the next one **plays on its
+  own**. The grey bar: at the end, the last frame stays and we wait for GO.
+- The loop icon at the end of a row **loops** the cue. Unticking it while the cue plays lets the
+  current pass run to its end; then the cue chains to the next one or stops on its last frame,
+  depending on its arrow.
+- **Boucler la conduite** (loop the running order): after the last cue, the first one plays
+  again (or waits for GO).
+- **Standby cue transition**: **Coupe** (cut), **Noir** (fade to black then up) or **Fondu
+  enchaîné** (crossfade), with its duration. Each cue keeps its own; **À tous** gives it to the
+  whole running order.
+
+### Standby preview
+
+On the right, the preview shows the cue the next GO will play, rotated as on the output. You can
+move around in it without touching the output: click or drag on the bar under the picture,
+**▶** plays the preview (silently), **⏮ / ⏭** step one frame back or forward. The in and out
+marks are drawn on the bar. **Aperçu** (above the running order) shows or hides it; the handle
+between the two sets its width.
+
+### Right-click on a cue
 
 | Command | Effect |
 |---|---|
-| **Lire** | Plays the item |
-| **Edit…** | Opens the item editor (see [Editing an item](#editing-an-item)) |
+| **Lancer maintenant** | Plays the cue |
+| **Réglages…** | Opens the cue settings (see [Editing an item](#editing-an-item)) |
 | **File information…** | File details, like MediaInfo (see [File information](#file-information)) |
-| **Lire en boucle** / **Lire une seule fois** | Loops the item, or plays it once |
-| **Retirer** | Removes the item from the list |
+| **Mettre en attente** | The next GO will play this cue |
+| **Retirer de la conduite** | Removes the cue |
 
-An item set in the editor carries the **✎** mark.
+A cue with settings (rotation, points, fades, sound) carries the **✎** mark.
 
 ## Editing an item
 
-Right-click → **Edit…**, on a Player item or on a Cuelist cue. The window follows JingleStar's
+Right-click a cue → **Réglages…**. At the top: its name, its media, its **transition** and what
+happens **at the end** (wait for GO, or go on to the next cue). The rest follows JingleStar's
 jingle editor. Settings are saved with the project.
 
+- **Rotation**: 0°, 90°, 180° or 270° clockwise, for this file only (a portrait video, a screen
+  on its side). The preview rotates too.
 - **Volume** of the item's sound, in dB, and play **once** or **looped**.
 - **Fades to black**: length of the fade in (from black) and of the fade out (to black),
   picture and sound together.
 - **Strip**: thumbnails of the media over its whole length. Drag the **in** and **out** handles
   to trim the start and the end; fades show as a veil on the strip. While dragging, the preview
   shows the picture at that point.
-- **Preview**: the same navigation as the NEXT preview, to check an in point to the frame.
+- **Preview**: the same navigation as the standby preview, to check an in point to the frame.
 - **Equalizer**: low cut (12 or 24 dB/oct), low shelf, two bell bands, high shelf, as in
   JingleStar. The sound's waveform shows behind the curve.
-- **Play on the output** plays the item to try it. If the item is already on air, volume,
-  equalizer and fades change at once, without cutting the picture.
+- If the cue is on air, volume, equalizer, fades, loop and rotation change at once, without
+  cutting the picture.
 
 ### Still images
 
 For an image, the editor offers the **display time**: **Until the next media** (the image stays
-until the next GO) or **For** a number of seconds, after which the Player moves on. A fade out
+until the next GO) or **For** a number of seconds, after which the cue is over (and chains if
+set to). A fade out
 on an image needs a display time.
 
 ## File information
 
-Right-click a Player item or a cue → **File information…**. The window details the container
+Right-click a cue → **File information…**. The window details the container
 and every video, audio and subtitle track: codec, profile, bit rate, resolution, frame rate,
 scan type, colour space and range, channels, sample rate, language, metadata.
 
@@ -158,22 +184,6 @@ the output window has focus.
 Text, bullets, shapes, pictures, tables, SmartArt and simple charts are drawn; animations are not:
 an embedded video shows as its preview picture.
 
-## The Cuelist
-
-A running order of cues: each one is a media, or **black**. The **standby** cue plays on GO.
-
-- **Add**: media, a folder, or **Un cue Noir** (a black cue, cut with the cue's transition).
-- **GO** (or **Space**) plays the standby cue and puts the next one on standby.
-- **⏮ / ⏭** (or **Up / Down arrow**) change the standby cue without playing it.
-- **Pause** (or **P**) pauses and resumes the playing cue.
-- Click a cue: puts it on standby. Double-click: plays it. Drag a cue to reorder.
-- Right-click: **Lancer maintenant** (play now), **Réglages…** (settings), **File
-  information…**, **Mettre en attente** (standby), **Retirer de la conduite** (remove).
-
-**Réglages…** opens the cue editor: its name, its media, its **transition** (cut, black,
-crossfade), what happens **at the end** (wait for GO, or go on to the next cue), then the same
-settings as the [item editor](#editing-an-item).
-
 ## The Text panel
 
 The written running order, next to the current module: bold, italic, underline, strikethrough,
@@ -188,12 +198,22 @@ Mapping 4 coins):
   window** when there is only one screen.
 - **Decoding**: automatic, GPU or CPU. **Fallback renderer** and **light rendering** for a small
   machine.
-- **Cadence**: speed resync or audio sync; **Interpolation** smooths motion when the video frame
-  rate does not fit the screen's; **Match the screen refresh rate to the video** (Windows).
+- **Picture sync**: **Mélange d'images** (frame blending, recommended and chosen by default)
+  works like Automatic, and when the video frame rate does not fit the screen's (24 fps on
+  60 Hz) it blends the two neighbouring frames instead of repeating one: motion stays even. It
+  does nothing when the rates match, nor on test patterns (so as not to skew the measurement).
+  The other choices: **Automatic, no blending**, **On the sound**, **On the screen (speed
+  adjusted)**. **Interpolation** forces blending in every case.
 - **Audio output**: sound card, HDMI of the output screen, Dante interface… and its volume.
 - **Test patterns**: SMPTE bars, moving pattern, grid, white, grey.
 - **4-corner mapping**: move the picture's corners to fit a surface; arrows = 1 pixel,
-  Shift + arrows = 10 pixels.
+  Shift + arrows = 10 pixels on the chosen handle. While the tab is open, the output shows the
+  numbered handles, the picture outline and, as an option, a grid that follows the warp; all of
+  it goes away when you leave the tab. **Points intermédiaires** adds a point in the middle of
+  each edge and in the centre (3 × 3 grid) to bend the picture, like Resolume's or MadMapper's
+  mesh warp; moving a corner takes its points along. **Bord adouci** (soft edge) feathers the
+  outline over a few pixels (1.5 by default): no more jaggies on slanted edges. The picture can
+  never flip or cross over: a move that would fold it is refused.
 
 Changes that need the output to restart say so: the screen goes black for a moment.
 
@@ -229,23 +249,16 @@ taken, then the last message received.
 ### Addresses
 
 Numbers start at 1. Addresses are given with the default prefix; the original Diaporama
-addresses (`/diaporama/…`) are accepted too.
+addresses (`/diaporama/…`) are accepted too, and so are the former Player's
+(`/cuestar/lecteur/…`), served by the Cuelist.
 
 | Address | Argument | Effect |
 |---|---|---|
 | `/cuestar/noir` | — | Output to black |
 | `/cuestar/output/drops/reset` | — | Resets the dropped and delayed frame counter |
-| `/cuestar/lecteur/go` | — | Plays the selected item (or resumes) |
-| `/cuestar/lecteur/play` | — | Play |
-| `/cuestar/lecteur/pause` | — | Pause |
-| `/cuestar/lecteur/toggle` | — | Pause / resume |
-| `/cuestar/lecteur/stop` | — | Stop (black) |
-| `/cuestar/lecteur/next` | — | Next item |
-| `/cuestar/lecteur/prev` | — | Previous item |
-| `/cuestar/lecteur/goto` | int | Plays item number n |
-| `/cuestar/lecteur/shuffle` | bool | Shuffle |
-| `/cuestar/lecteur/loop` | bool | Loop all |
-| `/cuestar/lecteur/transition` | `cut`, `black` or `fade`, then float (s) | Transition and duration |
+| `/cuestar/cuelist/goto` | int | Plays cue number n at once |
+| `/cuestar/cuelist/loop` | bool | Loop the running order |
+| `/cuestar/cuelist/transition` | `cut`, `black` or `fade`, then float (s) | Standby cue transition and duration |
 | `/cuestar/cuelist/go` | — | Plays the standby cue (or resumes) |
 | `/cuestar/cuelist/play`, `pause`, `toggle`, `stop` | — | Cuelist transport |
 | `/cuestar/cuelist/next`, `prev` | — | Next / previous standby cue |
@@ -282,9 +295,9 @@ items and cues, the playing item and the standby cue's name.
 ### Example
 
 ```
-oscsend localhost 9000 /cuestar/lecteur/goto i 3
+oscsend localhost 9000 /cuestar/cuelist/goto i 3
 oscsend localhost 9000 /cuestar/cuelist/go
-oscsend localhost 9000 /cuestar/lecteur/transition sf black 1.5
+oscsend localhost 9000 /cuestar/cuelist/transition sf black 1.5
 curl http://localhost:9001/cuestar/cuelist/standby_name?VALUE
 ```
 
@@ -297,9 +310,10 @@ CueStar's actions, as in JingleStar:
 2. In **Mappings**, add a row, pick the action, click **Learn**, then touch the note, the
    controller or the console key.
 
-Available actions: GO, pause, stop, next, previous, item number (from the value received),
-shuffle and loop all for the Player; play, pause, stop, next, previous for the Slideshow; GO,
-next cue, previous cue, pause, stop for the Cuelist; **Black**; dropped frame counter reset.
+Available actions: GO, next cue, previous cue, pause, stop, play cue number (from the value
+received) and loop the running order for the Cuelist; play, pause, stop, next, previous for the
+Slideshow; **Black**; dropped frame counter reset. Saved mappings of the former Player act on
+the Cuelist.
 
 ## Keyboard and mouse shortcuts
 
@@ -310,7 +324,7 @@ in a text field.
 |---|---|
 | Black: cut the output | **Esc** |
 | Open or close help | **F1** |
-| Player or Cuelist GO; Slideshow play / pause | **Space** |
+| Cuelist GO; Slideshow play / pause | **Space** |
 | Cuelist pause / resume | **P** |
 | Previous / next standby item or cue | **Up / Down arrow** |
 | Slideshow previous / next media | **Left / Right arrow** |
