@@ -11,6 +11,7 @@ mod notes;
 mod remote_view;
 mod log_view;
 mod output_view;
+mod six25;
 mod presentation;
 
 use crate::link::OutputLink;
@@ -846,6 +847,10 @@ impl eframe::App for CueStarApp {
         DOUBLE_GO_MS.store(self.prefs.double_go_ms, std::sync::atomic::Ordering::Relaxed);
         if !typing && self.prefs.escape_black && ctx.input(|i| i.key_pressed(Key::Escape)) {
             self.out.send(Command::Stop);
+        }
+        // F : sortie en plein écran ou dans une fenêtre, sans toucher à la lecture (pas pendant une saisie).
+        if !typing && ctx.input(|i| i.modifiers.is_none() && i.key_pressed(Key::F)) {
+            self.out.send(Command::Fullscreen { on: None });
         }
         // Raccourcis de fichier habituels. Ctrl+Maj+S d'abord : Ctrl+S l'attraperait aussi.
         let cmd = egui::Modifiers::COMMAND;

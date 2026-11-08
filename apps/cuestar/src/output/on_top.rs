@@ -7,8 +7,9 @@
 //! - le curseur reste invisible au-dessus de la sortie, focus ou pas, sans y être enfermé
 //!   (le masquage de winit coince le curseur au centre de la fenêtre dès qu'elle a le focus).
 //!
-//! Échap ferme la sortie seulement quand on a cliqué dessus (elle a alors le focus clavier) :
-//! voir `window_event`.
+//! La touche F fait passer la sortie dans une fenêtre normale et la remet en plein écran ;
+//! Échap la remet seulement dans une fenêtre (voir `window_event`). En fenêtre, le premier plan
+//! et le curseur caché sont suspendus (`set_enabled`).
 
 use winit::window::{Window, WindowAttributes, WindowLevel};
 
@@ -38,10 +39,22 @@ pub fn install(window: &Window) {
     window.set_cursor_visible(false);
 }
 
+/// Premier plan et curseur caché en marche (plein écran) ou suspendus (sortie dans une fenêtre).
+pub fn set_enabled(window: &Window, on: bool) {
+    #[cfg(windows)]
+    {
+        use winit::platform::windows::WindowExtWindows;
+        win::ENABLED.store(on, std::sync::atomic::Ordering::SeqCst);
+        window.set_skip_taskbar(on);
+    }
+    window.set_window_level(if on { WindowLevel::AlwaysOnTop } else { WindowLevel::Normal });
+    window.set_cursor_visible(!on);
+}
+
 #[cfg(windows)]
 mod win {
     use std::ffi::c_void;
-    use std::sync::atomic::{AtomicIsize, Ordering};
+    use std::sync::atomic::{AtomicBool, AtomicIsize, Ordering};
     use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, WPARAM};
     use windows::Win32::UI::WindowsAndMessaging::{
         CallWindowProcW, SetCursor, SetTimer, SetWindowLongPtrW, SetWindowPos, GWLP_WNDPROC, HTCLIENT, HWND_TOPMOST, SWP_NOACTIVATE, SWP_NOMOVE,
@@ -50,6 +63,8 @@ mod win {
 
     /// Procédure d'origine de la fenêtre (celle de winit). Une seule fenêtre de sortie par processus.
     static PREVIOUS: AtomicIsize = AtomicIsize::new(0);
+    /// Faux pendant que la sortie est dans une fenêtre : la procédure laisse tout passer.
+    pub static ENABLED: AtomicBool = AtomicBool::new(true);
     const TIMER_ID: usize = 0xC0E5;
     /// Rappel du premier plan (ms) : passe devant une fenêtre « toujours visible » ouverte après.
     const TIMER_MS: u32 = 500;
@@ -69,18 +84,21 @@ mod win {
     }
 
     unsafe extern "system" fn proc_(hw: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
+        let on = ENABLED.load(Ordering::SeqCst);
         match msg {
             // Curseur invisible au-dessus de l'image, sans l'enfermer.
-            WM_SETCURSOR if (lparam.0 as u32 & 0xFFFF) == HTCLIENT => {
+            WM_SETCURSOR if on && (lparam.0 as u32 & 0xFFFF) == HTCLIENT => {
                 unsafe { SetCursor(None) };
                 return LRESULT(1);
             }
             WM_TIMER if wparam.0 == TIMER_ID => {
-                unsafe { raise(hw) };
+                if on {
+                    unsafe { raise(hw) };
+                }
                 return LRESULT(0);
             }
             // Toute remise en ordre de la fenêtre la garde tout en haut.
-            WM_WINDOWPOSCHANGING => {
+            WM_WINDOWPOSCHANGING if on => {
                 let wp = lparam.0 as *mut WINDOWPOS;
                 if !wp.is_null() {
                     let wp = unsafe { &mut *wp };

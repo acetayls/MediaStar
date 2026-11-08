@@ -61,6 +61,8 @@ pub enum Command {
     Goto { index: usize },
     /// Retour image vers la régie, à la cadence de la vidéo.
     Monitor { on: bool },
+    /// Fenêtre de sortie en plein écran ou dans une fenêtre (None : bascule), sans toucher à la lecture.
+    Fullscreen { on: Option<bool> },
     Quit,
 }
 
@@ -345,6 +347,8 @@ pub enum Event {
     Error { message: String },
     /// Touche appuyée dans la fenêtre de sortie (télécommande de présentation, clavier).
     Key { key: RemoteKey },
+    /// La fenêtre de sortie vient de passer en plein écran (true) ou dans une fenêtre (false).
+    Fullscreen { on: bool },
 }
 
 /// Touches d'une télécommande de présentation (type télécommande PowerPoint), reçues par la

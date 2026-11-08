@@ -217,6 +217,8 @@ struct OutputApp {
     prefs: MachinePrefs,
     /// Maj enfoncée (Maj+F5 de la télécommande).
     shift: bool,
+    /// Ctrl, Alt ou Windows enfoncée : F n'est alors pas la bascule plein écran.
+    ctrl_alt: bool,
     // Ordre des champs = ordre de destruction : l'affichage (et ses mpv) avant les réveils
     // qu'ils référencent, et avant la fenêtre.
     out: Option<Out>,
@@ -277,6 +279,14 @@ struct OutputApp {
     /// Le média à l'antenne signale sa fin même s'il garde sa dernière image (et l'a fait).
     signal_end: bool,
     end_signaled: bool,
+    /// Fenêtre de sortie en plein écran (touche F pour basculer, Échap pour en sortir).
+    fullscreen: bool,
+    /// Un seul écran branché : pas de premier plan imposé, la régie doit rester accessible.
+    single: bool,
+    /// Premier plan Windows installé sur la fenêtre (une seule fois).
+    on_top_installed: bool,
+    /// Écran choisi pour la sortie.
+    screen: Option<MonitorHandle>,
 }
 
 fn describe(m: &MonitorHandle, primary: &Option<MonitorHandle>) -> Monitor {
@@ -329,6 +339,10 @@ impl OutputApp {
         } else if fullscreen {
             window.set_cursor_visible(false);
         }
+        self.fullscreen = fullscreen;
+        self.single = single;
+        self.on_top_installed = on_top;
+        self.screen = chosen.clone();
         self.window = Some(window.clone());
         self.refresh_hz = chosen.as_ref().and_then(|m| m.refresh_rate_millihertz()).map(|r| r as f64 / 1000.0).unwrap_or(60.0);
         self.device = chosen.as_ref().and_then(refresh::device_id);
@@ -350,6 +364,37 @@ impl OutputApp {
         self.emit_audio_devices();
         window.request_redraw();
         Ok(())
+    }
+
+    /// Plein écran sur l'écran choisi, ou fenêtre normale : la lecture continue telle quelle.
+    fn set_fullscreen(&mut self, on: bool) {
+        let Some(window) = self.window.clone() else { return };
+        if on == self.fullscreen {
+            return;
+        }
+        self.fullscreen = on;
+        if on {
+            window.set_fullscreen(Some(Fullscreen::Borderless(self.screen.clone())));
+            if self.single {
+                window.set_cursor_visible(false);
+            } else if self.on_top_installed {
+                on_top::set_enabled(&window, true);
+            } else {
+                window.set_window_level(winit::window::WindowLevel::AlwaysOnTop);
+                on_top::install(&window);
+                self.on_top_installed = true;
+            }
+        } else {
+            if self.on_top_installed {
+                on_top::set_enabled(&window, false);
+            }
+            window.set_fullscreen(None);
+            window.set_cursor_visible(true);
+            let _ = window.request_inner_size(winit::dpi::LogicalSize::new(960.0, 540.0));
+            window.focus_window();
+        }
+        emit(&Event::Fullscreen { on });
+        window.request_redraw();
     }
 
     /// Crée un lecteur mpv avec les réglages communs (pas encore initialisé).
@@ -605,6 +650,10 @@ impl OutputApp {
             self.set_monitor(on);
             return;
         }
+        if let Command::Fullscreen { on } = cmd {
+            self.set_fullscreen(on.unwrap_or(!self.fullscreen));
+            return;
+        }
         if let Command::Warp { corners } = cmd {
             self.warp_corners = corners;
             self.apply_warp();
@@ -825,7 +874,7 @@ impl OutputApp {
                 }
                 Ok(())
             }
-            Command::Pattern { .. } | Command::Warp { .. } | Command::Monitor { .. } | Command::Quit => Ok(()),
+            Command::Pattern { .. } | Command::Warp { .. } | Command::Monitor { .. } | Command::Fullscreen { .. } | Command::Quit => Ok(()),
         };
         if let Err(e) = res {
             emit(&Event::Error { message: e });
@@ -1538,12 +1587,25 @@ impl ApplicationHandler<UserEv> for OutputApp {
     fn window_event(&mut self, el: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
         match event {
             WindowEvent::CloseRequested => el.exit(),
-            // Échap n'arrive ici que si on a cliqué sur la sortie (focus clavier) : elle se ferme.
-            // Partout ailleurs, Échap reste à la régie (noir).
+            // Touches reçues seulement quand la sortie a le focus clavier (on a cliqué dessus, ou
+            // elle recouvre la régie sur un seul écran). Échap la remet dans une fenêtre, sans
+            // arrêter la lecture ; F bascule plein écran / fenêtre. Ailleurs, Échap reste à la régie.
             WindowEvent::KeyboardInput { event, .. }
                 if event.state.is_pressed() && event.logical_key == winit::keyboard::Key::Named(winit::keyboard::NamedKey::Escape) =>
             {
-                el.exit()
+                if !event.repeat {
+                    self.set_fullscreen(false);
+                }
+            }
+            WindowEvent::KeyboardInput { event, .. }
+                if event.state.is_pressed()
+                    && !self.ctrl_alt
+                    && matches!(&event.logical_key, winit::keyboard::Key::Character(c) if c.eq_ignore_ascii_case("f")) =>
+            {
+                if !event.repeat {
+                    let on = !self.fullscreen;
+                    self.set_fullscreen(on);
+                }
             }
             WindowEvent::Resized(s) => {
                 if let Some(Out::Composite(scr)) = &self.out {
@@ -1552,7 +1614,10 @@ impl ApplicationHandler<UserEv> for OutputApp {
                 self.paint_cpu();
             }
             WindowEvent::RedrawRequested => self.paint_cpu(),
-            WindowEvent::ModifiersChanged(m) => self.shift = m.state().shift_key(),
+            WindowEvent::ModifiersChanged(m) => {
+                self.shift = m.state().shift_key();
+                self.ctrl_alt = m.state().control_key() || m.state().alt_key() || m.state().super_key();
+            }
             WindowEvent::KeyboardInput { event, .. } if event.state.is_pressed() => {
                 if let Some(key) = remote_key(&event.logical_key, self.shift) {
                     emit(&Event::Key { key });
@@ -1611,6 +1676,7 @@ pub fn run(prefs: MachinePrefs, monitor_port: Option<u16>) {
     let volume = prefs.volume.clamp(0.0, 100.0);
     let mut app = OutputApp {
         shift: false,
+        ctrl_alt: false,
         prefs,
         out: None,
         wakes: Vec::new(),
@@ -1654,6 +1720,10 @@ pub fn run(prefs: MachinePrefs, monitor_port: Option<u16>) {
         prepare_after: None,
         signal_end: false,
         end_signaled: false,
+        fullscreen: false,
+        single: false,
+        on_top_installed: false,
+        screen: None,
     };
     let _ = event_loop.run_app(&mut app);
 }
