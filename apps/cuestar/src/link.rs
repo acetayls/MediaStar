@@ -235,6 +235,7 @@ impl OutputLink {
                 }
                 Event::Slide { index, count, path } => s.slide = (count > 0).then_some((index, count, path)),
                 Event::Key { key } => s.keys.push(key),
+                Event::Fullscreen { on } => s.fullscreen = on,
             }
         }
         if closed {
