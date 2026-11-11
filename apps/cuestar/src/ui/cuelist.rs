@@ -998,7 +998,11 @@ impl Cuelist {
         }
         self.preview.poll();
         self.preview.settle(ctx);
-        self.infos.retain_mut(|w| w.show(ctx));
+        let mut slot = 0;
+        self.infos.retain_mut(|w| {
+            slot += 1;
+            w.show(ctx, slot)
+        });
         self.rename_window(ctx);
         let Some(i) = self.editor else { return };
         let running = self.running == Some(i) && out.state.current.is_some();
@@ -1015,11 +1019,13 @@ impl Cuelist {
             .with_title(format!("CueStar — Cue {} : {}", i + 1, c.name))
             .with_inner_size([700.0, 760.0])
             .with_min_inner_size([420.0, 300.0]);
+        let vp = star_ui::floating::placed(ctx, "editeur-cue", vp);
         let editor_id = egui::ViewportId::from_hash_of("cl-editor");
         if std::mem::take(&mut self.raise_editor) {
             star_ui::floating::raise(ctx, editor_id);
         }
         ctx.show_viewport_immediate(editor_id, vp, |ui, _| {
+            star_ui::floating::track(ui.ctx(), "editeur-cue");
             if ui.ctx().input(|i| i.viewport().close_requested()) {
                 open = false;
             }

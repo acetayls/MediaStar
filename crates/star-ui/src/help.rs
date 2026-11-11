@@ -89,8 +89,10 @@ impl HelpWindow {
         // Fenêtre du système à part : elle peut sortir de la fenêtre principale (autre écran…).
         let title = if self.app.is_empty() { tr("Aide", "Help").to_string() } else { format!("{} — {}", self.app, tr("Aide", "Help")) };
         let vp = egui::ViewportBuilder::default().with_title(title).with_inner_size([900.0, 680.0]).with_min_inner_size([560.0, 320.0]);
+        let vp = crate::floating::placed(ctx, "aide", vp);
         let id = self.viewport_id();
         ctx.show_viewport_immediate(id, vp, |ui, _| {
+            crate::floating::track(ui.ctx(), "aide");
             // Croix de la fenêtre, ou F1 quand l'aide a le focus : on ferme.
             if ui.ctx().input(|i| i.viewport().close_requested() || i.key_pressed(egui::Key::F1)) {
                 open = false;

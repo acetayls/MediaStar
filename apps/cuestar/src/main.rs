@@ -51,6 +51,9 @@ fn main() {
     // Régie : journal neuf à chaque lancement (la session précédente reste en cuestar.old.log).
     star_core::log::start_fresh();
     star_core::log::install_panic_hook(&format!("Démarrage de CueStar {}", env!("CARGO_PKG_VERSION")));
+    // Fenêtre de projet retenue à côté des autres réglages de la machine. eframe recentre une
+    // fenêtre restaurée si on lui demande : le centrage est donc réservé au premier lancement.
+    let window_state = project::APP.config_file("fenetre.ron");
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("CueStar")
@@ -58,6 +61,12 @@ fn main() {
             .with_min_inner_size([900.0, 560.0])
             .with_drag_and_drop(true)
             .with_icon(eframe::icon_data::from_png_bytes(include_bytes!("../assets/icons/cuestar-fenetre-256.png")).expect("icône PNG valide")),
+        // Premier lancement : fenêtre de projet centrée sur l'écran principal (la sortie prend
+        // le premier écran secondaire). Ensuite, sa position et sa taille sont retenues
+        // (ramenées sur un écran présent si celui d'avant est débranché).
+        centered: !window_state.as_ref().is_some_and(|p| p.exists()),
+        persist_window: true,
+        persistence_path: window_state,
         ..Default::default()
     };
     if let Err(e) = eframe::run_native("CueStar", options, Box::new(|cc| Ok(Box::new(ui::CueStarApp::new(cc))))) {

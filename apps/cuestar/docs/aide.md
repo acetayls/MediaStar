@@ -13,6 +13,8 @@ panneau **Texte** s'affiche à côté pour garder la conduite écrite sous les y
 
 1. Au lancement, la sortie s'ouvre en plein écran sur le deuxième écran (dans une fenêtre s'il
    n'y en a qu'un). La barre du bas indique **Sortie : 1920×1080 @ 60.00 Hz** quand elle est prête.
+   Le bouton **Plein écran**, en haut juste avant Préférences, met la sortie en plein écran ou
+   dans une fenêtre (une confirmation est demandée pour quitter le plein écran).
 2. Dans la **Cuelist**, cliquez sur **Ajouter des médias** ou glissez des fichiers sur la liste.
 3. Double-cliquez sur un cue, ou mettez-le en attente d'un clic et appuyez sur **Espace** (GO).
 4. **Échap** ou le bouton rouge **NOIR** coupe l'image à tout moment.
@@ -199,8 +201,8 @@ taille. **Importer…** reprend un texte existant. Il est enregistré avec le pr
 **Préférences** ouvre les réglages de la sortie, en onglets (Écran et moteur, Audio, Mires de
 test, Mapping 4 coins) :
 
-- **Écran de sortie** : automatique (premier écran secondaire) ou un écran précis ; **Sortie
-  dans une fenêtre** quand il n'y a qu'un écran.
+- **Écran de sortie** : automatique (premier écran secondaire) ou un écran précis. Le plein
+  écran se règle avec le bouton **Plein écran** de la barre du haut.
 - **Décodage** : automatique, GPU ou CPU. **Rendu de secours** et **Rendu léger** pour une
   petite machine.
 - **Synchro de l'image** : **Mélange d'images** (conseillé, choisi d'office) fait comme

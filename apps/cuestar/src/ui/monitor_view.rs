@@ -52,7 +52,9 @@ impl MonitorView {
         let mut open = self.open;
         // Vraie fenêtre du système : elle peut sortir de la régie (autre écran, par exemple).
         let vp = egui::ViewportBuilder::default().with_title("CueStar — Monitoring").with_inner_size([480.0, 300.0]).with_min_inner_size([160.0, 110.0]);
+        let vp = star_ui::floating::placed(ctx, "monitoring", vp);
         ctx.show_viewport_immediate(viewport_id(), vp, |ui, _| {
+            star_ui::floating::track(ui.ctx(), "monitoring");
             if ui.ctx().input(|i| i.viewport().close_requested()) {
                 open = false;
             }

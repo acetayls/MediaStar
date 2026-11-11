@@ -1,6 +1,33 @@
 # Journal des modifications
 
-## 0.1.1 — en cours (pas encore publiée)
+## 0.0.2 — en cours
+
+### Fenêtres
+
+- **Fenêtre de projet** : au premier lancement, elle s'ouvre centrée sur l'écran principal (la
+  sortie plein écran prend le premier écran secondaire, ou une fenêtre s'il n'y a qu'un écran).
+  Ensuite, sa position et sa taille sont retenues d'un lancement à l'autre, et ramenées sur un
+  écran présent si celui d'avant est débranché.
+- **Fenêtres flottantes** (Préférences, Monitoring, Télécommandes, Aide, édition d'un cue,
+  Informations) : chacune se rouvre là où elle a été fermée, sur le même écran et à la même
+  taille, y compris au lancement suivant et avec des écrans à des échelles différentes.
+- **Bouton « Plein écran »** dans la barre du haut, juste avant Préférences : il met la sortie en
+  plein écran ou dans une fenêtre, sans toucher à la lecture. L'activer est immédiat ; le
+  désactiver demande une confirmation, pour éviter un clic malheureux en plein spectacle. Le
+  choix est retenu pour le lancement suivant et remplace la case « Sortie dans une fenêtre »
+  des Préférences.
+- **Fermeture de CueStar** : la sortie se ferme avec l'appli et ne laisse plus l'écran de sortie
+  noir. Sa fenêtre disparaît et l'écran retrouve sa fréquence dès la fermeture ; si le moteur se
+  bloque en libérant la vidéo, il s'arrête quand même au bout de deux secondes, et la régie ne
+  se fige plus à l'attendre (avant, Windows finissait par les fermer de force).
+
+### Téléchargements
+
+- **AppImage Linux** : les bibliothèques dont dépend libmpv (VA-API, VDPAU, PulseAudio, X11,
+  Wayland, polices…) sont toujours embarquées dans le paquet, y compris quand libmpv est reprise
+  du cache de compilation.
+
+## 0.0.1 — 11 novembre 2026
 
 Première version de CueStar : diffusion de vidéos, d'images et de sons sur un écran de sortie,
 dans la charte de JingleStar.

@@ -1,6 +1,6 @@
 [package]
 name = "cuestar"
-version = "0.0.1"
+version = "0.0.2"
 description = "Diffusion vidéo sur écran de sortie : lecteur, diaporama, cuelist (Windows, macOS, Linux)"
 authors = ["Pierrick"]
 edition.workspace = true
@@ -14,7 +14,8 @@ star-remote = { workspace = true, features = ["ui"] }
 star-pptx.workspace = true
 # Rendu des PDF du module Présentation.
 star-pdf.workspace = true
-eframe.workspace = true
+# persistence : position et taille de la fenêtre de projet retenues d'un lancement à l'autre.
+eframe = { workspace = true, features = ["persistence"] }
 egui.workspace = true
 rfd = "0.17"
 serde = { version = "1", features = ["derive"] }

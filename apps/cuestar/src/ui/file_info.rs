@@ -23,7 +23,9 @@ impl FileInfo {
     }
 
     /// Affiche la fenêtre ; false quand elle est fermée.
-    pub fn show(&mut self, ctx: &egui::Context) -> bool {
+    /// `slot` : rang de la fenêtre parmi celles ouvertes (1, 2…), chacune retient sa place.
+    pub fn show(&mut self, ctx: &egui::Context, slot: usize) -> bool {
+        let key = format!("infos-fichier-{slot}");
         if let Some(rx) = &self.rx {
             match rx.try_recv() {
                 Ok(r) => {
@@ -44,11 +46,13 @@ impl FileInfo {
             .with_title(format!("{} — {name}", tr("Informations", "Information")))
             .with_inner_size([600.0, 640.0])
             .with_min_inner_size([320.0, 200.0]);
+        let vp = star_ui::floating::placed(ctx, &key, vp);
         let id = egui::ViewportId::from_hash_of(("file-info", &self.path));
         if std::mem::take(&mut self.raise) {
             star_ui::floating::raise(ctx, id);
         }
         ctx.show_viewport_immediate(id, vp, |ui, _| {
+            star_ui::floating::track(ui.ctx(), &key);
             if ui.ctx().input(|i| i.viewport().close_requested()) {
                 open = false;
             }

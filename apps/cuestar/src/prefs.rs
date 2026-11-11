@@ -167,6 +167,7 @@ pub struct MachinePrefs {
     /// Écran de sortie, par nom de moniteur. None = premier écran secondaire.
     pub screen: Option<String>,
     /// Quand l'ordinateur n'a qu'un écran : sortie dans une fenêtre plutôt qu'en plein écran sur la régie.
+    /// Retenu par le bouton « Plein écran » de la barre du haut (plus de case dans les Préférences).
     pub windowed_if_single: bool,
     /// Calage des images sur l'écran.
     pub cadence: Cadence,
@@ -272,6 +273,7 @@ impl MachinePrefs {
         a.language = o.language;
         a.escape_black = o.escape_black;
         a.double_go_ms = o.double_go_ms;
+        a.windowed_if_single = o.windowed_if_single;
         a == *o
     }
 

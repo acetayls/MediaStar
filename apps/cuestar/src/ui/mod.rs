@@ -89,6 +89,8 @@ pub struct CueStarApp {
     dialogs: Dialogs,
     renaming: Option<String>,
     confirm_new: bool,
+    /// Confirmation demandée avant de sortir la sortie du plein écran (bouton « Plein écran »).
+    confirm_windowed: bool,
     /// Message bien en vue (session réparée, médias introuvables…).
     alert: Option<String>,
     missing: usize,
@@ -115,6 +117,10 @@ pub struct CueStarApp {
 impl CueStarApp {
     pub fn new(cc: &eframe::CreationContext) -> Self {
         theme::apply(&cc.egui_ctx);
+        // Fenêtres flottantes rouvertes là où elles ont été fermées, d'un lancement à l'autre.
+        if let Some(p) = crate::project::APP.config_file("fenetres.json") {
+            star_ui::floating::remember_in(p);
+        }
         let prefs = MachinePrefs::load();
         star_core::i18n::set_lang(prefs.language);
         let mut app = Self {
@@ -139,6 +145,7 @@ impl CueStarApp {
             dialogs: Dialogs::default(),
             renaming: None,
             confirm_new: false,
+            confirm_windowed: false,
             alert: None,
             missing: 0,
             status: None,
@@ -456,9 +463,11 @@ impl CueStarApp {
             return;
         }
         let vp = egui::ViewportBuilder::default().with_title("CueStar — Télécommandes").with_inner_size([680.0, 560.0]);
+        let vp = star_ui::floating::placed(ctx, "telecommandes", vp);
         let mut close = false;
         let mut apply = false;
         ctx.show_viewport_immediate(osc_viewport(), vp, |ui, _| {
+            star_ui::floating::track(ui.ctx(), "telecommandes");
             close = ui.ctx().input(|i| i.viewport().close_requested());
             egui::CentralPanel::default().frame(egui::Frame::new().fill(BG).inner_margin(12)).show(ui, |ui| {
                 ui.horizontal_wrapped(|ui| {
@@ -634,6 +643,8 @@ impl CueStarApp {
                     })
                     .response
                     .on_hover_text("Préférences, Monitoring, Télécommandes, Aide");
+                    ui.add_space(6.0);
+                    self.fullscreen_button(ui);
                 } else {
                     // Fenêtres flottantes : un clic les ouvre, ou les ramène devant si elles sont
                     // déjà ouvertes (passées derrière la régie). On les ferme par leur croix.
@@ -661,6 +672,7 @@ impl CueStarApp {
                     {
                         star_ui::floating::open_or_raise(ui.ctx(), &mut self.output_view.open, output_view::viewport_id());
                     }
+                    self.fullscreen_button(ui);
                 }
                 ui.add_space(12.0);
                 // Partie gauche dans la place restante, coupée plutôt que de passer sous la droite.
@@ -714,6 +726,76 @@ impl CueStarApp {
                 });
             });
         });
+    }
+
+    /// Interrupteur « Plein écran » de la sortie, juste avant Préférences. L'activer est immédiat ;
+    /// le désactiver demande une confirmation (pas de clic malheureux en plein spectacle).
+    fn fullscreen_button(&mut self, ui: &mut egui::Ui) {
+        let s = &self.out.state;
+        let on = s.ready && s.fullscreen;
+        let tip = if !s.ready {
+            "Sortie pas encore ouverte"
+        } else if on {
+            "Sortie en plein écran sur son écran. Clic : la passer dans une fenêtre (confirmation demandée)"
+        } else {
+            "Sortie dans une fenêtre. Clic : la passer en plein écran sur son écran"
+        };
+        let resp = ui.add_enabled(s.ready, egui::Button::selectable(on, "Plein écran")).on_hover_text(tip).on_disabled_hover_text(tip);
+        if resp.clicked() {
+            if on {
+                self.confirm_windowed = true;
+            } else {
+                self.set_output_fullscreen(true);
+            }
+        }
+    }
+
+    /// Plein écran de la sortie, retenu pour les prochains lancements (sur un seul écran, la
+    /// sortie s'ouvre alors dans une fenêtre ou en plein écran comme on l'a laissée).
+    fn set_output_fullscreen(&mut self, on: bool) {
+        self.out.send(Command::Fullscreen { on: Some(on) });
+        if self.prefs.windowed_if_single == on {
+            self.prefs.windowed_if_single = !on;
+            self.prefs.save();
+        }
+    }
+
+    /// Boîte de confirmation avant de sortir la sortie du plein écran.
+    fn confirm_windowed_dialog(&mut self, ctx: &egui::Context) {
+        if !self.confirm_windowed {
+            return;
+        }
+        // Sortie déjà dans une fenêtre (touche F, Échap sur la sortie) : plus rien à confirmer.
+        if !self.out.state.fullscreen {
+            self.confirm_windowed = false;
+            return;
+        }
+        let mut answer = None;
+        let modal = egui::Modal::new(egui::Id::unique("confirm_windowed")).show(ctx, |ui| {
+            ui.set_max_width(360.0);
+            ui.label(RichText::new("Quitter le plein écran ?").strong().size(16.0));
+            ui.add_space(6.0);
+            ui.label("La sortie passe dans une fenêtre : le public verra le bureau autour de l'image. La lecture continue.");
+            ui.add_space(10.0);
+            ui.horizontal(|ui| {
+                if ui.add(egui::Button::new(RichText::new("Passer dans une fenêtre").color(Color32::WHITE)).fill(STOP)).clicked() {
+                    answer = Some(true);
+                }
+                if ui.button("Rester en plein écran").clicked() {
+                    answer = Some(false);
+                }
+            });
+        });
+        // Échap ou clic à côté : on reste en plein écran.
+        if modal.should_close() && answer.is_none() {
+            answer = Some(false);
+        }
+        if let Some(yes) = answer {
+            self.confirm_windowed = false;
+            if yes {
+                self.set_output_fullscreen(false);
+            }
+        }
     }
 
     fn output_badge(&mut self, ui: &mut egui::Ui) {
@@ -829,6 +911,11 @@ impl CueStarApp {
 }
 
 impl eframe::App for CueStarApp {
+    /// Seule la fenêtre de projet est retenue d'un lancement à l'autre, pas l'état interne d'egui.
+    fn persist_egui_memory(&self) -> bool {
+        false
+    }
+
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         let had_mpv_report = self.out.state.mpv_missing.is_some();
@@ -850,7 +937,8 @@ impl eframe::App for CueStarApp {
             self.help.toggle();
         }
         DOUBLE_GO_MS.store(self.prefs.double_go_ms, std::sync::atomic::Ordering::Relaxed);
-        if !typing && self.prefs.escape_black && ctx.input(|i| i.key_pressed(Key::Escape)) {
+        // Échap ferme la confirmation « Quitter le plein écran ? » sans mettre la sortie au noir.
+        if !typing && !self.confirm_windowed && self.prefs.escape_black && ctx.input(|i| i.key_pressed(Key::Escape)) {
             self.out.send(Command::Stop);
         }
         // F : sortie en plein écran ou dans une fenêtre, sans toucher à la lecture (pas pendant une saisie).
@@ -933,6 +1021,7 @@ impl eframe::App for CueStarApp {
             Tab::Cuelist => self.cuelist.ui(ui, &mut self.out, typing),
         });
 
+        self.confirm_windowed_dialog(&ctx);
         self.monitor.show(&ctx, &mut self.out);
         self.help.show(&ctx);
         self.osc_window(&ctx);
@@ -953,6 +1042,7 @@ impl eframe::App for CueStarApp {
 
     fn on_exit(&mut self) {
         self.flush_session();
+        star_ui::floating::save_places();
         self.out.stop();
     }
 }

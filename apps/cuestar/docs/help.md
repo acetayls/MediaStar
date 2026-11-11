@@ -12,6 +12,8 @@ can chain on their own), the **Slideshow** (Diaporama, a folder of photos and vi
 
 1. At startup the output opens full screen on the second display (in a window if there is only
    one). The bottom bar reads **Sortie : 1920×1080 @ 60.00 Hz** once it is ready.
+   The **Plein écran** (full screen) button, at the top just before Préférences, puts the output
+   full screen or in a window (leaving full screen asks for confirmation).
 2. In the **Cuelist**, click **Ajouter des médias** (Add media) or drop files on the list.
 3. Double-click a cue, or click it to put it on standby and press **Space** (GO).
 4. **Esc** or the red **NOIR** button cuts the picture at any time.
@@ -195,8 +197,8 @@ colours, size. **Importer…** brings in an existing text. It is saved with the 
 **Préférences** opens the output settings, in tabs (Écran et moteur, Audio, Mires de test,
 Mapping 4 coins):
 
-- **Output screen**: automatic (first secondary screen) or a given screen; **output in a
-  window** when there is only one screen.
+- **Output screen**: automatic (first secondary screen) or a given screen. Full screen is set
+  with the **Plein écran** button in the top bar.
 - **Decoding**: automatic, GPU or CPU. **Fallback renderer** and **light rendering** for a small
   machine.
 - **Picture sync**: **Mélange d'images** (frame blending, recommended and chosen by default)

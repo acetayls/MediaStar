@@ -161,8 +161,10 @@ impl OutputView {
             return Action::None;
         }
         let vp = egui::ViewportBuilder::default().with_title("CueStar — Préférences").with_inner_size([1040.0, 660.0]).with_min_inner_size([600.0, 400.0]);
+        let vp = star_ui::floating::placed(ctx, "preferences", vp);
         let mut close = false;
         let action = ctx.show_viewport_immediate(viewport_id(), vp, |ui, _| {
+            star_ui::floating::track(ui.ctx(), "preferences");
             close = ui.ctx().input(|i| i.viewport().close_requested());
             let typing = ui.ctx().egui_wants_keyboard_input();
             egui::CentralPanel::default()
@@ -243,11 +245,6 @@ impl OutputView {
                 .on_hover_text("Images par seconde de la sortie : l'écran de sortie est passé sur cette fréquence (en Hz) à l'ouverture de la sortie, et la retrouve en quittant CueStar. Windows, macOS, Linux X11 (pas sous Wayland). Noir un instant au changement.");
                 ui.end_row();
 
-                ui.label("Avec un seul écran");
-                ui.checkbox(&mut d.windowed_if_single, "Sortie dans une fenêtre")
-                    .on_hover_text("Quand l'ordinateur n'a qu'un écran (pas de vidéoprojecteur branché) : la sortie s'ouvre dans une fenêtre au lieu de recouvrir la régie en plein écran.");
-                ui.end_row();
-
                 ui.label("Décodage");
                 egui::ComboBox::from_id_salt("decode").selected_text(d.decode.label()).width(320.0).show_ui(ui, |ui| {
                     for v in Decode::ALL {
@@ -300,10 +297,11 @@ impl OutputView {
             ui.horizontal(|ui| {
                 let b = egui::Button::new(RichText::new("Appliquer").color(if changed { PLAYING_INK } else { TEXT_DIM })).fill(if changed { ACCENT } else { PANEL_HI });
                 if ui.add_enabled(changed, b).clicked() {
-                    // La langue, le mapping, l'audio et l'onglet Système se règlent à chaud :
-                    // le brouillon ne les remplace pas.
+                    // La langue, le mapping, l'audio, l'onglet Système et le plein écran (bouton
+                    // de la barre du haut) se règlent à chaud : le brouillon ne les remplace pas.
                     *prefs = MachinePrefs {
                         language: prefs.language,
+                        windowed_if_single: prefs.windowed_if_single,
                         warp: prefs.warp,
                         audio_device: prefs.audio_device.clone(),
                         volume: prefs.volume,
