@@ -205,7 +205,14 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Dépendances Linux
-        run: sudo apt-get update && sudo apt-get install -y libasound2-dev libxkbcommon-dev libgtk-3-dev libmediainfo0v5
+        # Les bibliothèques dont dépend la libmpv compilée (VA-API, VDPAU, PulseAudio, X11, Wayland…) :
+        # linuxdeploy doit les trouver pour l'AppImage, même quand libmpv vient du cache.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev libxkbcommon-dev libgtk-3-dev libmediainfo0v5 \
+            libva2 libva-drm2 libva-x11-2 libva-wayland2 libvdpau1 libpulse0 libxpresent1 libxss1 libxinerama1 \
+            libxrandr2 libdrm2 libgbm1 libegl1 libgl1 libwayland-client0 libwayland-cursor0 libwayland-egl1 \
+            libfribidi0 libfreetype6 libfontconfig1 libharfbuzz0b liblcms2-2 libjpeg8 libsnappy1v5 zlib1g
       # libmpv : celle d'Ubuntu 22.04 (0.34) est trop ancienne pour CueStar. Compilée ici, une
       # vingtaine de minutes la première fois, puis reprise du cache tant que le script ne change pas.
       - name: Cache de libmpv
