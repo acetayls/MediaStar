@@ -64,8 +64,8 @@ git clone --depth 1 https://github.com/mpv-player/mpv-build.git "$WORK/mpv-build
 cd "$WORK/mpv-build"
 ./use-mpv-custom "$MPV_REF"
 if [ "$FFMPEG_REF" = release ]; then ./use-ffmpeg-release; else ./use-ffmpeg-custom "$FFMPEG_REF"; fi
-# Une ligne = un argument, sans guillemets.
-printf '%s\n' --enable-pic --enable-libdav1d --enable-libsnappy --enable-vaapi --enable-vdpau --enable-ffnvcodec --enable-nvdec > ffmpeg_options
+# Une ligne = un argument, sans guillemets. libfreetype et libharfbuzz : filtre drawtext (mire de synchro).
+printf '%s\n' --enable-pic --enable-libfreetype --enable-libharfbuzz --enable-libfontconfig --enable-libfribidi --enable-libdav1d --enable-libsnappy --enable-vaapi --enable-vdpau --enable-ffnvcodec --enable-nvdec > ffmpeg_options
 # La bibliothèque seule : pas de lecteur en ligne de commande, pas de scripts Lua ni JavaScript.
 printf '%s\n' -Dlibmpv=true -Dcplayer=false -Dlua=disabled -Djavascript=disabled -Dmanpage-build=disabled \
   -Dx11=enabled -Degl=enabled -Dvaapi=enabled -Dalsa=enabled -Dpulse=enabled > mpv_options
@@ -95,7 +95,7 @@ for sym in mpv_create mpv_command_ret mpv_render_context_create mpv_render_conte
   nm -D --defined-only "$OUT/libmpv.so.2" | grep -q " $sym\$" || { echo "symbole manquant : $sym"; exit 1; }
 done
 # Décodeurs et accélérations attendus dans le FFmpeg lié.
-for mot in libdav1d hap prores vaapi nvdec; do
+for mot in drawtext libdav1d hap prores vaapi nvdec; do
   grep -q -a "$mot" "$OUT/libmpv.so.2" || { echo "absent de la bibliothèque : $mot"; exit 1; }
 done
 echo "Bibliothèques système dont elle dépend :"

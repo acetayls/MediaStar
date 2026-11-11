@@ -282,28 +282,39 @@ pub fn sync_graph(w: u32, h: u32, fps: u32) -> String {
         g.push(format!("[{last}][c{k}]overlay=x={}:y={y0}:enable='eq(mod(n,{every}),0)'[w{k}]", x0 + k as i64 * (q + gap)));
         last = format!("w{k}");
     }
-    let font = mire_font();
-    let mut txt = format!(
-        "[{last}]drawtext={font}timecode='00\\:00\\:00\\:00':rate={fps}:fontsize={}:fontcolor=white:x=(w-tw)/2:y={}",
-        px(64.0),
-        rect_y + rh + px(10.0)
-    );
-    for (k, label) in ["1/2", "1/3", "1/4", "1/5", "bip"].iter().enumerate() {
-        txt += &format!(",drawtext={font}text='{label}':fontsize={fs}:fontcolor=white:x={}+({q}-tw)/2:y={}", x0 + k as i64 * (q + gap), y0 - fs - px(6.0));
+    // Textes (timecode, légendes) seulement si le FFmpeg livré a drawtext : celui de Homebrew,
+    // embarqué dans le paquet macOS, est compilé sans libfreetype depuis FFmpeg 9 et refuserait
+    // tout le graphe (« Filter not found »). Sur Mac, la mire garde donc ses motifs, sans texte.
+    if DRAWTEXT {
+        let font = mire_font();
+        let mut txt = format!(
+            "[{last}]drawtext={font}timecode='00\\:00\\:00\\:00':rate={fps}:fontsize={}:fontcolor=white:x=(w-tw)/2:y={}",
+            px(64.0),
+            rect_y + rh + px(10.0)
+        );
+        for (k, label) in ["1/2", "1/3", "1/4", "1/5", "bip"].iter().enumerate() {
+            txt += &format!(",drawtext={font}text='{label}':fontsize={fs}:fontcolor=white:x={}+({q}-tw)/2:y={}", x0 + k as i64 * (q + gap), y0 - fs - px(6.0));
+        }
+        txt += &format!(",drawtext={font}text='CueStar  {fps} i/s':fontsize={fs}:fontcolor=white:x=(w-tw)/2:y={}[out0]", band_y + px(10.0));
+        g.push(txt);
+    } else {
+        g.push(format!("[{last}]null[out0]"));
     }
-    txt += &format!(",drawtext={font}text='CueStar  {fps} i/s':fontsize={fs}:fontcolor=white:x=(w-tw)/2:y={}[out0]", band_y + px(10.0));
-    g.push(txt);
     g.push(format!(
         "aevalsrc='if(lt(mod(t\\,1)\\,1/{fps})\\,0.126*sin(2*PI*1000*t)\\,0.1*sin(2*PI*440*t))':s=48000:c=stereo[out1]"
     ));
     g.join(";")
 }
 
+/// drawtext présent dans le FFmpeg livré avec CueStar (voir `sync_graph`).
+const DRAWTEXT: bool = !cfg!(target_os = "macos");
+
 /// Option `fontfile` des textes de la mire, à placer devant les autres options de drawtext.
 /// Sans elle, ffmpeg cherche la police « Sans » par fontconfig, absent de la libmpv Windows :
 /// tout le graphe est alors refusé et la mire ne s'affiche pas. On donne donc à drawtext une
 /// police embarquée (Hack, à chasse fixe pour que le timecode ne bouge pas), écrite une fois dans
 /// le dossier temporaire. Vide si le fichier ne peut pas être écrit (fontconfig prend le relais).
+#[cfg_attr(target_os = "macos", allow(dead_code))]
 fn mire_font() -> &'static str {
     static FONT: std::sync::OnceLock<String> = std::sync::OnceLock::new();
     FONT.get_or_init(|| {
