@@ -607,7 +607,7 @@ impl OutputApp {
             #[cfg(not(windows))]
             {
                 let _ = chosen;
-                screen_gl::open(window, size, self.refresh_hz, decks)
+                screen_gl::open(window, size, self.refresh_hz, decks()?)
             }
         })();
         self.child = child;

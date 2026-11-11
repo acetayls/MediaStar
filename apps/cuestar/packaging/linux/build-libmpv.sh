@@ -35,9 +35,11 @@ sudo apt-get install -y --no-install-recommends \
   libva-dev libvdpau-dev \
   libasound2-dev libpulse-dev \
   libjpeg-dev liblcms2-dev libsnappy-dev zlib1g-dev
-# mpv demande meson 1.3 au minimum ; libplacebo demande jinja2.
-python3 -m pip install --user --upgrade 'meson>=1.3' jinja2 markupsafe
-export PATH="$HOME/.local/bin:$PATH"
+# mpv demande meson 1.3 au minimum ; libplacebo demande jinja2. Installés pour tout le système
+# (/usr/local) : « sudo ninja install » relance meson en root, qui ne voit pas ~/.local.
+sudo python3 -m pip install --upgrade 'meson>=1.3' jinja2 markupsafe
+hash -r
+meson --version
 
 # Bibliothèques compilées ici et liées en statique dans FFmpeg : installées dans /usr/local, que
 # pkg-config consulte toujours (mpv-build règle lui-même PKG_CONFIG_PATH pendant sa compilation).
