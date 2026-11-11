@@ -26,6 +26,11 @@ use star_ui::theme::{self, *};
 use star_ui::widgets;
 use std::time::Duration;
 
+/// Fenêtre du système des Télécommandes.
+fn osc_viewport() -> egui::ViewportId {
+    egui::ViewportId::from_hash_of("cuestar-osc")
+}
+
 /// Version de build : version, commit, date (onglet Système des Préférences).
 pub fn build_version() -> String {
     format!("CueStar {} · {} · {}", env!("CARGO_PKG_VERSION"), env!("STAR_GIT"), env!("STAR_BUILD_DATE"))
@@ -147,7 +152,7 @@ impl CueStarApp {
             },
             osc_draft: crate::osc::OscSettings::load(),
             osc_open: false,
-            help: star_ui::help::HelpWindow::new(AIDE_FR, HELP_EN),
+            help: star_ui::help::HelpWindow::new(AIDE_FR, HELP_EN).app("CueStar"),
             remotes: {
                 let ctx = cc.egui_ctx.clone();
                 remote_view::Remotes::new(std::sync::Arc::new(move || ctx.request_repaint()))
@@ -445,7 +450,7 @@ impl CueStarApp {
         }
     }
 
-    /// Fenêtre flottante « Commande OSC ».
+    /// Fenêtre flottante « Télécommandes » (OSC, MIDI, consoles…).
     fn osc_window(&mut self, ctx: &egui::Context) {
         if !self.osc_open {
             return;
@@ -453,7 +458,7 @@ impl CueStarApp {
         let vp = egui::ViewportBuilder::default().with_title("CueStar — Télécommandes").with_inner_size([680.0, 560.0]);
         let mut close = false;
         let mut apply = false;
-        ctx.show_viewport_immediate(egui::ViewportId::from_hash_of("cuestar-osc"), vp, |ui, _| {
+        ctx.show_viewport_immediate(osc_viewport(), vp, |ui, _| {
             close = ui.ctx().input(|i| i.viewport().close_requested());
             egui::CentralPanel::default().frame(egui::Frame::new().fill(BG).inner_margin(12)).show(ui, |ui| {
                 ui.horizontal_wrapped(|ui| {
@@ -608,49 +613,53 @@ impl CueStarApp {
                 ui.add_space(8.0);
                 if grouped {
                     ui.menu_button(RichText::new("Menu ▾").size(15.0), |ui| {
+                        // Fenêtres flottantes : un clic les ouvre, ou les ramène devant si elles sont
+                        // déjà ouvertes (passées derrière la régie). On les ferme par leur croix.
                         if ui.selectable_label(self.output_view.open, "Préférences").clicked() {
-                            self.output_view.open = !self.output_view.open;
+                            star_ui::floating::open_or_raise(ui.ctx(), &mut self.output_view.open, output_view::viewport_id());
                             ui.close();
                         }
                         if ui.selectable_label(self.monitor.open, "Monitoring").clicked() {
-                            self.monitor.toggle(&mut self.out);
+                            self.monitor.open_or_raise(ui.ctx(), &mut self.out);
                             ui.close();
                         }
                         if ui.selectable_label(self.osc_open, "Télécommandes").clicked() {
-                            self.osc_open = !self.osc_open;
+                            star_ui::floating::open_or_raise(ui.ctx(), &mut self.osc_open, osc_viewport());
                             ui.close();
                         }
                         if ui.selectable_label(self.help.open, tr("Aide (F1)", "Help (F1)")).clicked() {
-                            self.help.toggle();
+                            self.help.open_or_raise(ui.ctx());
                             ui.close();
                         }
                     })
                     .response
                     .on_hover_text("Préférences, Monitoring, Télécommandes, Aide");
                 } else {
+                    // Fenêtres flottantes : un clic les ouvre, ou les ramène devant si elles sont
+                    // déjà ouvertes (passées derrière la régie). On les ferme par leur croix.
                     if ui.selectable_label(self.help.open, tr("? Aide", "? Help")).on_hover_text("F1").clicked() {
-                        self.help.toggle();
+                        self.help.open_or_raise(ui.ctx());
                     }
                     if ui
                         .selectable_label(self.osc_open, "Télécommandes")
                         .on_hover_text("OSC, MIDI, consoles Yamaha et Midas, correspondances, raccourcis")
                         .clicked()
                     {
-                        self.osc_open = !self.osc_open;
+                        star_ui::floating::open_or_raise(ui.ctx(), &mut self.osc_open, osc_viewport());
                     }
                     if ui
                         .selectable_label(self.monitor.open, "Monitoring")
                         .on_hover_text("Fenêtre flottante : retour de l'image envoyée sur la sortie")
                         .clicked()
                     {
-                        self.monitor.toggle(&mut self.out);
+                        self.monitor.open_or_raise(ui.ctx(), &mut self.out);
                     }
                     if ui
                         .selectable_label(self.output_view.open, "Préférences")
                         .on_hover_text("Fenêtre flottante en onglets : écran et moteur de sortie, audio, mires de test, mapping 4 coins, système")
                         .clicked()
                     {
-                        self.output_view.open = !self.output_view.open;
+                        star_ui::floating::open_or_raise(ui.ctx(), &mut self.output_view.open, output_view::viewport_id());
                     }
                 }
                 ui.add_space(12.0);

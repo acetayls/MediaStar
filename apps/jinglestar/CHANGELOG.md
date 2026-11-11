@@ -20,11 +20,42 @@
   précédent** et **Cuelist : pause / reprise** (au lieu de « Conduite »), comme le module Cuelist.
 - Les « correspondances » s'appellent désormais **assignations** (onglet, aide, messages).
 
+### Fenêtres flottantes
+
+- **Aide** et **Télécommandes** s'ouvrent désormais dans leur propre fenêtre, comme les
+  Préférences : on peut les déplacer hors de JingleStar (sur un autre écran par exemple) et les
+  garder ouvertes pendant le spectacle.
+- **Une fenêtre passée derrière revient devant** : si Préférences, Aide ou Télécommandes est
+  déjà ouverte mais cachée derrière la fenêtre principale (ou réduite), un nouveau clic sur son
+  bouton la ramène au premier plan. On la ferme avec sa croix (l'aide aussi avec **F1**).
+- Rouvrir les Préférences de cette façon garde les réglages en cours de saisie.
+- Le bouton **Préférences** reste allumé tant que la fenêtre est ouverte, comme Aide et
+  Télécommandes.
+
+### Cuelist
+
+- **Avancement du cue en cours bien visible** : une barre verte pleine en bas de la ligne et une
+  tête de lecture qui avance, par-dessus le nom du cue. En mode édition, le cadre du nom ne cache
+  plus l'avancement.
+
 ### Icône
 
 - **Icône plus lisible** : en grand (Dock, barre des tâches, installeur), le pad central de la
   grille est agrandi avec un liseré sombre et porte le casque ; en petit (64 px et moins, titre
   de fenêtre), un pad orange plein cadre avec le casque en grand.
+
+### Icônes de l'interface
+
+- **Icônes alignées et toujours affichées** : les symboles des boutons et des barres (⚙ Préférences,
+  ✏ mode édition, 🗑, ✓ Terminé, ⟳, ■ TOUT ARRÊTER, ●, ⚠, ⓘ, ▾…) sont désormais dessinés par
+  l'application et centrés sur leur texte. Avant, la plupart manquaient dans la police : Windows
+  les prenait dans une autre police, plus grande ou décalée, ou ne les affichait pas.
+- Le **+** des boutons « Ajouter » et les repères « début » / « fin » de boucle de l'éditeur de
+  son sont alignés de la même façon.
+- Dans l'**aide**, les symboles cités dans le texte (⚙, ✏, 🗑, ⏸, ⏮ / ⏭…) s'affichent avec les
+  mêmes icônes que dans l'interface.
+- Les flèches et symboles restants (→, ↑ / ↓, ★, ♪) viennent d'une petite police intégrée, à la
+  taille du texte.
 
 ### Coulisses
 

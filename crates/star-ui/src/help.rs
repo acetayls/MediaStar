@@ -34,6 +34,8 @@ enum Block {
 /// recherche et liens internes.
 pub struct HelpWindow {
     pub open: bool,
+    /// Nom de l'appli, pour le titre de la fenêtre (« JingleStar — Aide »).
+    app: &'static str,
     /// Manuels bruts, français et anglais.
     src_fr: &'static str,
     src_en: &'static str,
@@ -49,11 +51,29 @@ pub struct HelpWindow {
 impl HelpWindow {
     /// `fr` et `en` : le manuel en Markdown, en général lu avec `include_str!`.
     pub fn new(fr: &'static str, en: &'static str) -> Self {
-        Self { open: false, src_fr: fr, src_en: en, fr: OnceLock::new(), en: OnceLock::new(), jump: None, query: String::new() }
+        Self { open: false, app: "", src_fr: fr, src_en: en, fr: OnceLock::new(), en: OnceLock::new(), jump: None, query: String::new() }
     }
 
+    /// Nom de l'appli affiché dans le titre de la fenêtre.
+    pub fn app(mut self, app: &'static str) -> Self {
+        self.app = app;
+        self
+    }
+
+    /// Fenêtre du système qui porte l'aide.
+    pub fn viewport_id(&self) -> egui::ViewportId {
+        egui::ViewportId::from_hash_of(("star-help", self.app))
+    }
+
+    /// Ouvre ou ferme l'aide (touche F1).
     pub fn toggle(&mut self) {
         self.open = !self.open;
+    }
+
+    /// Bouton « Aide » : ouvre l'aide, ou la ramène au premier plan si elle est déjà ouverte.
+    pub fn open_or_raise(&mut self, ctx: &egui::Context) {
+        let id = self.viewport_id();
+        crate::floating::open_or_raise(ctx, &mut self.open, id);
     }
 
     pub fn show(&mut self, ctx: &egui::Context) {
@@ -66,17 +86,20 @@ impl HelpWindow {
             self.fr.get_or_init(|| parse(self.src_fr))
         };
         let mut open = true;
-        egui::Window::new(tr("Aide", "Help"))
-            .id(egui::Id::unique("help-window"))
-            .open(&mut open)
-            .default_size([860.0, 640.0])
-            .min_width(520.0)
-            .resizable(true)
-            .collapsible(false)
-            .show(ctx, |ui| {
+        // Fenêtre du système à part : elle peut sortir de la fenêtre principale (autre écran…).
+        let title = if self.app.is_empty() { tr("Aide", "Help").to_string() } else { format!("{} — {}", self.app, tr("Aide", "Help")) };
+        let vp = egui::ViewportBuilder::default().with_title(title).with_inner_size([900.0, 680.0]).with_min_inner_size([560.0, 320.0]);
+        let id = self.viewport_id();
+        ctx.show_viewport_immediate(id, vp, |ui, _| {
+            // Croix de la fenêtre, ou F1 quand l'aide a le focus : on ferme.
+            if ui.ctx().input(|i| i.viewport().close_requested() || i.key_pressed(egui::Key::F1)) {
+                open = false;
+            }
+            egui::CentralPanel::default().frame(egui::Frame::new().fill(BG).inner_margin(12)).show(ui, |ui| {
                 // Recherche : n'affiche que les passages qui contiennent les mots tapés.
                 ui.horizontal(|ui| {
-                    ui.label("🔍");
+                    let ink = ui.visuals().text_color();
+                    crate::icons::icon_only(ui, crate::icons::Icon::Search, ink);
                     let field = ui.add(
                         egui::TextEdit::singleline(&mut self.query)
                             .hint_text(tr("Rechercher dans l'aide…", "Search the help…"))
@@ -85,7 +108,7 @@ impl HelpWindow {
                     if ui.input(|i| i.modifiers.command && i.key_pressed(egui::Key::F)) {
                         field.request_focus();
                     }
-                    if !self.query.is_empty() && ui.small_button("✕").on_hover_text(tr("Effacer", "Clear")).clicked() {
+                    if !self.query.is_empty() && ui.small_button(crate::icons::atom_small(crate::icons::Icon::Close)).on_hover_text(tr("Effacer", "Clear")).clicked() {
                         self.query.clear();
                     }
                 });
@@ -130,6 +153,7 @@ impl HelpWindow {
                     });
                 });
             });
+        });
         if !open {
             self.open = false;
         }
@@ -394,13 +418,15 @@ fn inline(ui: &mut egui::Ui, spans: &[Span]) -> Option<String> {
     let mut clicked = None;
     ui.horizontal_wrapped(|ui| {
         ui.spacing_mut().item_spacing.x = 0.0;
+        let ink = ui.visuals().text_color();
         for s in spans {
             match s {
+                // Les symboles du manuel (⚙, ✏, 🗑, ⏸…) sont remplacés par les icônes dessinées.
                 Span::Text(t) => {
-                    ui.label(t);
+                    crate::icons::text_with_icons(ui, t, |s| RichText::new(s), ink);
                 }
                 Span::Bold(t) => {
-                    ui.label(RichText::new(t).strong().color(Color32::WHITE));
+                    crate::icons::text_with_icons(ui, t, |s| RichText::new(s).strong().color(Color32::WHITE), Color32::WHITE);
                 }
                 Span::Code(t) => {
                     ui.label(RichText::new(t).monospace().color(ACCENT).background_color(PANEL_HI));

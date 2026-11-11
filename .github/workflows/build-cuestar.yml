@@ -6,7 +6,8 @@ name: Build CueStar
 #   Windows : installeur (Inno Setup) et zip portable, avec libmpv-2.dll (build shinchiro)
 #             et MediaInfo.dll (mediaarea.net)
 #   macOS   : .dmg avec CueStar.app (libmpv et libmediainfo Homebrew dans Contents/Frameworks)
-#   Linux   : AppImage (libmpv et libmediainfo d'Ubuntu 22.04, avec leurs dépendances)
+#   Linux   : AppImage (libmpv compilée ici par mpv-build, la même version que sous Windows ;
+#             libmediainfo d'Ubuntu 22.04, avec leurs dépendances)
 # Les scripts sont dans apps/cuestar/packaging et se lancent aussi à la main.
 on:
   workflow_dispatch:
@@ -26,6 +27,10 @@ on:
         default: ""
       mpv_windows:
         description: "Tag du build shinchiro/mpv-winbuild-cmake pour Windows (ex. 20251102) ; vide = le dernier"
+        required: false
+        default: ""
+      mpv_linux:
+        description: "Version de mpv compilée pour Linux (tag ou commit, ex. v0.42.0) ; vide = v0.42.0"
         required: false
         default: ""
       mediainfo_windows:
@@ -200,16 +205,35 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
       - name: Dépendances Linux
-        run: sudo apt-get update && sudo apt-get install -y libasound2-dev libxkbcommon-dev libgtk-3-dev libmpv-dev libmediainfo0v5
+        run: sudo apt-get update && sudo apt-get install -y libasound2-dev libxkbcommon-dev libgtk-3-dev libmediainfo0v5
+      # libmpv : celle d'Ubuntu 22.04 (0.34) est trop ancienne pour CueStar. Compilée ici, une
+      # vingtaine de minutes la première fois, puis reprise du cache tant que le script ne change pas.
+      - name: Cache de libmpv
+        id: libmpv
+        uses: actions/cache@v4
+        with:
+          path: dist/libmpv
+          key: libmpv-linux-${{ hashFiles('apps/cuestar/packaging/linux/build-libmpv.sh') }}-${{ inputs.mpv_linux }}
+      - name: Compiler libmpv (mpv-build)
+        if: steps.libmpv.outputs.cache-hit != 'true'
+        env:
+          MPV_REF: ${{ inputs.mpv_linux || 'v0.42.0' }}
+          WORK: ${{ runner.temp }}/libmpv
+        run: bash apps/cuestar/packaging/linux/build-libmpv.sh dist/libmpv
       - name: Tests
         run: cargo test -p cuestar -p star-core -p star-ui -p star-remote -p star-build -p star-pptx
       - name: Build release
         run: cargo build --release -p cuestar
       - name: AppImage
-        run: apps/cuestar/packaging/linux/appimage.sh dist
+        env:
+          LIBMPV: dist/libmpv/libmpv.so.2
+        run: |
+          cat dist/libmpv/mpv-build.txt
+          apps/cuestar/packaging/linux/appimage.sh dist
       - name: Vérifier le paquet
         run: |
-          ls dist/CueStar.AppDir/usr/lib/ | grep -E '^libmpv\.so'
+          ls dist/CueStar.AppDir/usr/lib/ | grep -E '^libmpv\.so\.2$'
+          test -f dist/CueStar.AppDir/usr/share/doc/cuestar/licences/mpv-build.txt
           ls dist/CueStar.AppDir/usr/lib/ | grep -E '^libmediainfo\.so'
           test -f dist/CueStar.AppDir/usr/share/doc/cuestar/licences/TIERS.txt
       - uses: actions/upload-artifact@v4

@@ -36,9 +36,15 @@ pub struct RemoteWindow {
 }
 
 impl RemoteWindow {
-    pub fn toggle(&mut self) {
-        self.open = !self.open;
-        if self.open {
+    /// Fenêtre du système des télécommandes.
+    fn viewport_id() -> egui::ViewportId {
+        egui::ViewportId::from_hash_of("jinglestar-remote")
+    }
+
+    /// Bouton « Télécommandes » : ouvre la fenêtre, ou la ramène au premier plan si elle est
+    /// déjà ouverte (passée derrière la fenêtre principale).
+    pub fn open_or_raise(&mut self, ctx: &egui::Context) {
+        if star_ui::floating::open_or_raise(ctx, &mut self.open, Self::viewport_id()) {
             self.midi_ports = star_remote::midi::port_names(crate::project::APP);
         }
     }
@@ -49,13 +55,16 @@ impl RemoteWindow {
             return;
         }
         let mut open = true;
-        egui::Window::new(tr("Télécommandes", "Remote control"))
-            .id(egui::Id::unique("remote-window"))
-            .open(&mut open)
-            .default_width(620.0)
-            .resizable(true)
-            .collapsible(false)
-            .show(ctx, |ui| {
+        // Fenêtre du système à part : elle peut sortir de la fenêtre de JingleStar (autre écran…).
+        let vp = egui::ViewportBuilder::default()
+            .with_title(format!("JingleStar — {}", tr("Télécommandes", "Remote control")))
+            .with_inner_size([680.0, 560.0])
+            .with_min_inner_size([480.0, 300.0]);
+        ctx.show_viewport_immediate(Self::viewport_id(), vp, |ui, _| {
+            if ui.ctx().input(|i| i.viewport().close_requested()) {
+                open = false;
+            }
+            egui::CentralPanel::default().frame(egui::Frame::new().fill(BG).inner_margin(12)).show(ui, |ui| {
                 ui.horizontal_wrapped(|ui| {
                     for (tab, label) in [
                         (Tab::Osc, "OSC"),
@@ -73,8 +82,7 @@ impl RemoteWindow {
                 if self.tab != Tab::Mappings {
                     ctrl.inputs.learn = None;
                 }
-                let max_h = (ctx.content_rect().height() - 120.0).max(200.0);
-                egui::ScrollArea::vertical().id_salt("remote-scroll").max_height(max_h).auto_shrink([false, true]).show(ui, |ui| match self.tab {
+                egui::ScrollArea::vertical().id_salt("remote-scroll").auto_shrink([false, false]).show(ui, |ui| match self.tab {
                     Tab::Osc => self.osc_section(ui, ctrl),
                     Tab::Midi => self.midi_section(ui, ctrl),
                     Tab::Yamaha => self.console_section(ui, ctrl),
@@ -88,6 +96,7 @@ impl RemoteWindow {
                     }
                 });
             });
+        });
         if !open {
             self.open = false;
             ctrl.inputs.learn = None;
@@ -197,8 +206,11 @@ impl MappingRows for Rows<'_> {
                         _ => (md.name.clone(), false),
                     }
                 };
-                let txt = if warn { format!("⚠ {txt}") } else { txt };
-                let resp = ui.label(RichText::new(txt).small().color(if warn { ACCENT } else { TEXT_DIM }));
+                let resp = if warn {
+                    star_ui::icons::label(ui, star_ui::icons::Icon::Warning, ACCENT, RichText::new(txt).small().color(ACCENT))
+                } else {
+                    ui.label(RichText::new(txt).small().color(TEXT_DIM))
+                };
                 if warn {
                     resp.on_hover_text(tr(
                         "Cette assignation n'agit que sur un module présent et dans le mode de l'action (Jingles, Playlist ou Cuelist).",
@@ -218,7 +230,7 @@ impl MappingRows for Rows<'_> {
                 let name = ctrl.project.modules.get(m.module).and_then(|md| md.jingles[m.jingle].as_ref()).map(|j| j.name.clone());
                 match name {
                     Some(name) => ui.label(RichText::new(name).small().color(TEXT_DIM)),
-                    None => ui.label(RichText::new(tr("⚠ emplacement vide", "⚠ empty slot")).small().color(ACCENT)),
+                    None => star_ui::icons::label(ui, star_ui::icons::Icon::Warning, ACCENT, RichText::new(tr("emplacement vide", "empty slot")).small().color(ACCENT)),
                 };
             });
         } else {

@@ -12,6 +12,7 @@ pub type Handle = *mut c_void;
 
 pub const EVENT_NONE: c_int = 0;
 pub const EVENT_SHUTDOWN: c_int = 1;
+pub const EVENT_START_FILE: c_int = 6;
 pub const EVENT_END_FILE: c_int = 7;
 pub const EVENT_FILE_LOADED: c_int = 8;
 pub const EVENT_VIDEO_RECONFIG: c_int = 17;
@@ -68,6 +69,14 @@ pub struct RawProperty {
 pub struct RawEndFile {
     pub reason: c_int,
     pub error: c_int,
+    /// Numéro de l'entrée qui se termine (le même que celui rendu par `loadfile`).
+    pub playlist_entry_id: i64,
+}
+
+#[repr(C)]
+pub struct RawStartFile {
+    /// Numéro de l'entrée qui démarre.
+    pub playlist_entry_id: i64,
 }
 
 struct Api {
@@ -285,6 +294,12 @@ impl Mpv {
         format!("{}.{}", v >> 16, v & 0xffff)
     }
 
+    /// La libmpv chargée est au moins à cette version de l'API client (2.3 = mpv 0.38).
+    pub fn api_at_least(&self, major: u64, minor: u64) -> bool {
+        let v = unsafe { (self.api.client_api_version)() };
+        (v >> 16, v & 0xffff) >= (major, minor)
+    }
+
     pub fn set_option(&self, name: &str, value: &str) -> Result<(), String> {
         let (n, v) = (cstr(name), cstr(value));
         self.check(unsafe { (self.api.set_option_string)(self.handle, n.as_ptr(), v.as_ptr()) }, name)
@@ -317,9 +332,35 @@ impl Mpv {
         self.check(unsafe { (self.api.command)(self.handle, ptrs.as_ptr()) }, args.first().copied().unwrap_or("commande"))
     }
 
-    /// Copie RGBA de l'image vidéo en cours (`screenshot-raw`) : (largeur, hauteur, pas, pixels).
+    /// `loadfile` : charge un média et rend le numéro que mpv donne à cette entrée
+    /// (`playlist_entry_id`), repris par ses événements de début et de fin de fichier.
+    /// 0 si mpv ne le donne pas. `args` = arguments après le nom de la commande.
+    pub fn loadfile(&self, args: &[&str]) -> Result<i64, String> {
+        let owned: Vec<CString> = std::iter::once("loadfile").chain(args.iter().copied()).map(cstr).collect();
+        let mut ptrs: Vec<*const c_char> = owned.iter().map(|c| c.as_ptr()).collect();
+        ptrs.push(std::ptr::null());
+        let mut node = Node { u: 0, format: 0 };
+        self.check(unsafe { (self.api.command_ret)(self.handle, ptrs.as_ptr(), &mut node) }, "loadfile")?;
+        let mut id = 0;
+        if node.format == FORMAT_NODE_MAP && node.u != 0 {
+            let list = unsafe { &*(node.u as *const NodeList) };
+            for i in 0..list.num.max(0) as usize {
+                let key = unsafe { CStr::from_ptr(*list.keys.add(i)) }.to_bytes();
+                let v = unsafe { &*list.values.add(i) };
+                if key == b"playlist_entry_id" && v.format == FORMAT_INT64 {
+                    id = v.u as i64;
+                }
+            }
+        }
+        unsafe { (self.api.free_node_contents)(&mut node) };
+        Ok(id)
+    }
+
+    /// Copie RGBA de ce que mpv montre dans sa fenêtre (`screenshot-raw window`) : (largeur,
+    /// hauteur, pas, pixels). La fenêtre et non la vidéo source : le retour image doit montrer
+    /// la rotation, les fondus et le mapping tels qu'ils sont à l'écran.
     pub fn screenshot_rgba(&self) -> Option<(usize, usize, usize, Vec<u8>)> {
-        let owned: Vec<CString> = ["screenshot-raw", "video", "rgba"].iter().map(|a| cstr(a)).collect();
+        let owned: Vec<CString> = ["screenshot-raw", "window", "rgba"].iter().map(|a| cstr(a)).collect();
         let mut ptrs: Vec<*const c_char> = owned.iter().map(|c| c.as_ptr()).collect();
         ptrs.push(std::ptr::null());
         let mut node = Node { u: 0, format: 0 };

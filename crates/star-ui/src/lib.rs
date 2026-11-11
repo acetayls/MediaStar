@@ -5,7 +5,9 @@
 
 pub mod eq_view;
 pub mod dialogs;
+pub mod floating;
 pub mod help;
+pub mod icons;
 pub mod notes;
 pub mod sound_editor;
 pub mod theme;

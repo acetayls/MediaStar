@@ -60,6 +60,12 @@ impl Embedded {
 
     /// Envoie une vignette de l'image en cours (copie par mpv : bloque la lecture quelques ms).
     pub fn capture(&self, feed: &mut MonitorFeed) {
+        // Rien à l'écran (lecteur à l'arrêt, son seul) : mpv rendrait encore sa dernière image.
+        let idle = self.mpv.get_property("idle-active").as_deref() == Some("yes");
+        if idle || self.mpv.get_property("current-tracks/video/id").is_none() {
+            feed.send_black();
+            return;
+        }
         match self.mpv.screenshot_rgba() {
             Some((w, h, stride, px)) => feed.send(w, h, stride, &px),
             None => feed.send_black(),

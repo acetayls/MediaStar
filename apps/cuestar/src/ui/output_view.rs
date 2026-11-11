@@ -148,6 +148,11 @@ pub enum Action {
     Restart,
 }
 
+/// Fenêtre du système des Préférences.
+pub fn viewport_id() -> egui::ViewportId {
+    egui::ViewportId::from_hash_of("cuestar-preferences")
+}
+
 impl OutputView {
     /// Fenêtre flottante du système (peut sortir de la régie).
     pub fn show(&mut self, ctx: &egui::Context, prefs: &mut MachinePrefs, out: &mut OutputLink, pattern: &mut Option<PatternKind>) -> Action {
@@ -157,7 +162,7 @@ impl OutputView {
         }
         let vp = egui::ViewportBuilder::default().with_title("CueStar — Préférences").with_inner_size([1040.0, 660.0]).with_min_inner_size([600.0, 400.0]);
         let mut close = false;
-        let action = ctx.show_viewport_immediate(egui::ViewportId::from_hash_of("cuestar-preferences"), vp, |ui, _| {
+        let action = ctx.show_viewport_immediate(viewport_id(), vp, |ui, _| {
             close = ui.ctx().input(|i| i.viewport().close_requested());
             let typing = ui.ctx().egui_wants_keyboard_input();
             egui::CentralPanel::default()

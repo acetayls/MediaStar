@@ -27,9 +27,14 @@ Provenance des bibliothèques, par système :
 - macOS : libmpv et ses dépendances Homebrew (formule « mpv »,
   https://formulae.brew.sh/formula/mpv), copiées dans
   CueStar.app/Contents/Frameworks. Sources indiquées par chaque formule.
-- Linux (AppImage) : libmpv et ses dépendances du paquet libmpv d'Ubuntu
-  (https://packages.ubuntu.com, paquet source « mpv »), copiées dans
-  usr/lib de l'AppImage.
+- Linux (AppImage) : libmpv compilée depuis les sources par mpv-build
+  (https://github.com/mpv-player/mpv-build), avec FFmpeg, libplacebo,
+  libass et dav1d liés dedans ; version GPL de mpv. Les versions et
+  commits exacts sont dans mpv-build.txt, à côté de ce fichier ; le
+  script de compilation est apps/cuestar/packaging/linux/build-libmpv.sh
+  dans le dépôt de CueStar. Ses autres dépendances viennent des paquets
+  d'Ubuntu (https://packages.ubuntu.com) et sont copiées dans usr/lib de
+  l'AppImage.
 
 Sur simple demande à l'auteur de CueStar (via
 https://github.com/acetayls/mediastar/issues), une copie du code source

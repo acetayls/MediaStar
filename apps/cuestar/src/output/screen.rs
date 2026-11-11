@@ -276,6 +276,8 @@ fn run<B: Backend>(shared: Arc<Shared>, mut g: B, mut decks: Vec<DeckRc>) {
     let mut stat = (Instant::now(), [0u32; DECKS], [0u32; DECKS], 0u32, [0i64; DECKS]);
     let mut monitor: Option<(MonitorFeed, Duration)> = None;
     let mut next_thumb = Instant::now();
+    // Une composition est partie à l'écran sans sa vignette (cadence du retour image dépassée).
+    let mut thumb_late = false;
     let mut size = shared.st.lock().map(|s| s.size).unwrap_or((1, 1));
 
     loop {
@@ -341,7 +343,21 @@ fn run<B: Backend>(shared: Arc<Shared>, mut g: B, mut decks: Vec<DeckRc>) {
             let next = decks.iter().filter(|d| d.has_frame).filter_map(|d| d.target).min();
             let mut wait = next.map(|t| Duration::from_micros((t - vsync_us - now).clamp(0, 100_000) as u64)).unwrap_or(Duration::from_millis(100));
             // Vignettes encore sur la carte : on repasse vite les chercher.
-            if let Some((feed, _)) = &mut monitor {
+            if let Some((feed, every)) = &mut monitor {
+                // Dernier changement sans vignette : le retour image resterait sur une image
+                // périmée (dernière image d'un média alors que l'écran est passé au noir).
+                if thumb_late {
+                    let t = Instant::now();
+                    if t >= next_thumb {
+                        let mut p = params;
+                        p.wx[11][2] = 0.0;
+                        g.compose_thumb(&p);
+                        next_thumb = t + *every;
+                        thumb_late = false;
+                    } else {
+                        wait = wait.min(next_thumb - t);
+                    }
+                }
                 g.read_thumbs(feed);
                 if g.thumbs_pending() {
                     wait = wait.min(Duration::from_millis(4));
@@ -387,6 +403,9 @@ fn run<B: Backend>(shared: Arc<Shared>, mut g: B, mut decks: Vec<DeckRc>) {
                 p.wx[11][2] = 0.0;
                 g.compose_thumb(&p);
                 next_thumb = Instant::now() + *every;
+                thumb_late = false;
+            } else {
+                thumb_late = true;
             }
         }
         g.present();

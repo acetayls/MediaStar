@@ -30,6 +30,7 @@ use crate::project::{AudioSettings, ModuleMode, Transition, DEFAULT_COLORS};
 use dialogs::{Dialogs, Kind, Pick};
 use theme::*;
 use widgets::*;
+use star_ui::icons::{self, Icon};
 
 /// Contrôleur partagé avec le thread de pilotage. L'interface le verrouille le temps de
 /// dessiner une image ; entre deux images, le thread de pilotage traite les événements du
@@ -159,7 +160,7 @@ impl JingleStarApp {
             mode_draft: None,
             module_eq: None,
             settings: None,
-            help: star_ui::help::HelpWindow::new(AIDE_FR, HELP_EN),
+            help: star_ui::help::HelpWindow::new(AIDE_FR, HELP_EN).app("JingleStar"),
             remote: remote_view::RemoteWindow::default(),
             meters: [[-120.0; 2]; MAX_MODULES],
             last_frame: Instant::now(),
@@ -175,7 +176,13 @@ impl JingleStarApp {
         }
     }
 
-    fn open_settings(&mut self) {
+    /// Ouvre les Préférences, ou les ramène au premier plan si elles sont déjà ouvertes
+    /// (sans perdre les réglages en cours de saisie).
+    fn open_settings(&mut self, ctx: &egui::Context) {
+        if self.settings.is_some() {
+            star_ui::floating::raise(ctx, settings_viewport());
+            return;
+        }
         let audio = self.ctrl.project.audio.clone();
         let devices = list_devices(audio.host.as_deref());
         self.settings = Some(SettingsDraft { audio, hosts: host_names(), devices });
@@ -207,13 +214,17 @@ impl JingleStarApp {
             ui.add_space(10.0);
             // « Enregistrer » : dans le projet ouvert ; un point signale des modifications.
             let file = self.ctrl.project_path.as_ref().and_then(|p| p.file_stem()).map(|n| n.to_string_lossy().into_owned());
-            let label = if self.ctrl.modified { format!("● {}", tr("Enregistrer", "Save")) } else { tr("Enregistrer", "Save").to_string() };
+            let label = if self.ctrl.modified {
+                egui::Button::new((icons::atom_with(Icon::Dot, 8.0, None), tr("Enregistrer", "Save")))
+            } else {
+                egui::Button::new(tr("Enregistrer", "Save"))
+            };
             let tip = match &file {
                 Some(n) if self.ctrl.modified => format!("{} « {n} » (Ctrl+S) : {}", tr("Enregistre le projet", "Saves the project"), tr("modifications non enregistrées", "unsaved changes")),
                 Some(n) => format!("{} « {n} » (Ctrl+S)", tr("Enregistre le projet", "Saves the project")),
                 None => tr("Aucun projet ouvert : choisit où l'enregistrer (Ctrl+S)", "No open project: choose where to save it (Ctrl+S)").to_string(),
             };
-            if ui.button(label).on_hover_text(tip).clicked() {
+            if ui.add(label).on_hover_text(tip).clicked() {
                 self.save(ui.ctx());
             }
             // Nouveau projet, après confirmation : le projet en cours est remplacé.
@@ -231,7 +242,7 @@ impl JingleStarApp {
             }
 
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                let panic = egui::Button::new(RichText::new(tr("■  TOUT ARRÊTER", "■  STOP ALL")).strong().color(Color32::WHITE))
+                let panic = egui::Button::new((icons::atom_colored(Icon::Stop, Color32::WHITE), RichText::new(tr("TOUT ARRÊTER", "STOP ALL")).strong().color(Color32::WHITE)))
                     .fill(STOP)
                     .min_size(vec2(150.0, 32.0));
                 let panic = ui.add(panic).on_hover_text(tr("Arrête jingles et playlists", "Stops jingles and playlists"));
@@ -239,18 +250,20 @@ impl JingleStarApp {
                     self.ctrl.stop_all();
                 }
                 ui.add_space(8.0);
+                // Fenêtres flottantes : un clic les ouvre, ou les ramène devant si elles sont
+                // déjà ouvertes (passées derrière la fenêtre principale). On les ferme par leur croix.
                 if ui.selectable_label(self.help.open, tr("? Aide", "? Help")).on_hover_text("F1").clicked() {
-                    self.help.toggle();
+                    self.help.open_or_raise(ui.ctx());
                 }
                 if ui
                     .selectable_label(self.remote.open, tr("Télécommandes", "Remote"))
                     .on_hover_text(tr("Pilotage MIDI et console Yamaha : assignations et mode apprendre", "MIDI and Yamaha console control: mappings and learn mode"))
                     .clicked()
                 {
-                    self.remote.toggle();
+                    self.remote.open_or_raise(ui.ctx());
                 }
-                if ui.button(tr("⚙ Préférences", "⚙ Preferences")).clicked() {
-                    self.open_settings();
+                if ui.button((icons::atom(Icon::Gear), tr("Préférences", "Preferences"))).clicked() {
+                    self.open_settings(ui.ctx());
                 }
                 ui.add_space(8.0);
                 let n = self.ctrl.project.module_count;
@@ -301,10 +314,10 @@ impl JingleStarApp {
                         self.project_renaming = Some(name);
                     }
                     if self.ctrl.modified {
-                        ui.label(RichText::new("●").size(13.0).color(ACCENT)).on_hover_text(tr("Modifications non enregistrées", "Unsaved changes"));
+                        icons::icon_only(ui, Icon::Dot, ACCENT).on_hover_text(tr("Modifications non enregistrées", "Unsaved changes"));
                     }
                 }
-                ui.menu_button(RichText::new("▾").color(TEXT_DIM), |ui| {
+                ui.menu_button(icons::atom_colored(Icon::Caret, TEXT_DIM), |ui| {
                     if ui.button(tr("Nouveau (Ctrl+N)", "New (Ctrl+N)")).on_hover_text(tr(
                         "Projet vierge : un module Jingles et un module Playlist (les préférences sont gardées). Pensez à enregistrer le projet en cours.",
                         "Blank project: one Jingles module and one Playlist module (preferences are kept). Save the current project first.",
@@ -336,11 +349,11 @@ impl JingleStarApp {
         ui.horizontal_centered(|ui| {
             match &self.ctrl.device {
                 Some(d) => {
-                    ui.label(RichText::new("●").color(GO));
+                    icons::icon_only(ui, Icon::Dot, GO);
                     ui.label(format!("{} · {} · {} {} · {} Hz", d.host, d.name, d.channels, tr("canaux", "channels"), d.sample_rate));
                 }
                 None => {
-                    ui.label(RichText::new("●").color(STOP));
+                    icons::icon_only(ui, Icon::Dot, STOP);
                     ui.label(tr("Aucune sortie audio", "No audio output"));
                 }
             }
@@ -349,7 +362,7 @@ impl JingleStarApp {
                 ui.label(RichText::new(tr("Ouverture de la sortie audio…", "Opening audio output…")).color(TEXT_DIM));
             }
             if let Some(e) = &self.ctrl.device_error {
-                ui.label(RichText::new(format!("⚠ {e}")).color(STOP));
+                icons::label(ui, Icon::Warning, STOP, RichText::new(e.to_string()).color(STOP));
             }
             if let Some(s) = &self.ctrl.status {
                 ui.label(RichText::new(s).color(TEXT_DIM));
@@ -359,7 +372,11 @@ impl JingleStarApp {
             let mut relocate = false;
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
                 let mem_col = if mem.over_limit { STOP } else { TEXT_DIM };
-                ui.label(RichText::new(format!("{}{}", if mem.over_limit { "⚠ " } else { "" }, fmt_bytes(mem.bytes))).monospace().color(mem_col))
+                (if mem.over_limit {
+                    icons::label(ui, Icon::Warning, mem_col, RichText::new(fmt_bytes(mem.bytes)).monospace().color(mem_col))
+                } else {
+                    ui.label(RichText::new(fmt_bytes(mem.bytes)).monospace().color(mem_col))
+                })
                     .on_hover_text(if mem.over_limit {
                         format!(
                             "{} ({} {}). {}",
@@ -381,19 +398,19 @@ impl JingleStarApp {
                         .clicked();
                 }
                 if !mem.warnings.is_empty() {
-                    ui.label(RichText::new(format!("⚠ {}", mem.warnings.len())).color(ACCENT))
+                    icons::label(ui, Icon::Warning, ACCENT, RichText::new(mem.warnings.len().to_string()).color(ACCENT))
                         .on_hover_text(format!("{} :\n{}", tr("Sons à vérifier", "Sounds to check"), mem.warnings.join("\n")));
                 }
                 let (dot, col, text) = if !mem.failed.is_empty() {
                     let n = mem.failed.len();
-                    ("⚠", STOP, if n == 1 { tr("1 son illisible", "1 unreadable sound").to_string() } else { format!("{n} {}", tr("sons illisibles", "unreadable sounds")) })
+                    (Icon::Warning, STOP, if n == 1 { tr("1 son illisible", "1 unreadable sound").to_string() } else { format!("{n} {}", tr("sons illisibles", "unreadable sounds")) })
                 } else if mem.ready < mem.total {
-                    ("●", ACCENT, format!("{} {}/{}", tr("Chargement", "Loading"), mem.ready, mem.total))
+                    (Icon::Dot, ACCENT, format!("{} {}/{}", tr("Chargement", "Loading"), mem.ready, mem.total))
                 } else {
-                    ("●", GO, tr("Tout est chargé", "All loaded").to_string())
+                    (Icon::Dot, GO, tr("Tout est chargé", "All loaded").to_string())
                 };
                 let r = ui.label(RichText::new(text).color(col));
-                ui.label(RichText::new(dot).color(col));
+                icons::icon_only(ui, dot, col);
                 let tip = if mem.failed.is_empty() {
                     format!("{} : {}/{}", tr("Jingles et cues prêts en mémoire", "Jingles and cues ready in memory"), mem.ready, mem.total)
                 } else {
@@ -589,7 +606,7 @@ impl JingleStarApp {
                     .on_hover_text(tr("Type du module : se change en mode édition (✏)", "Module type: change it in edit mode (✏)"));
             }
             // Crayon juste à droite du type : on voit tout de suite ce qu'il modifie.
-            let edit = ui.selectable_label(editing, "✏").on_hover_text(tr("Mode édition", "Edit mode"));
+            let edit = ui.selectable_label(editing, icons::atom(Icon::Pencil)).on_hover_text(tr("Mode édition", "Edit mode"));
             if edit.clicked() {
                 self.edit_mode[m] = !editing;
                 self.confirm_delete = None;
@@ -605,7 +622,7 @@ impl JingleStarApp {
                             self.remove_module(m);
                             return;
                         }
-                    } else if ui.button("🗑").on_hover_text(tr("Supprimer le module", "Delete module")).clicked() {
+                    } else if ui.button(icons::atom(Icon::Trash)).on_hover_text(tr("Supprimer le module", "Delete module")).clicked() {
                         self.confirm_delete = Some(m);
                     }
                 }
@@ -654,12 +671,11 @@ impl JingleStarApp {
             let mode = self.ctrl.project.modules[m].mode;
             if self.mode_draft.is_some_and(|(dm, d)| dm == m && d != mode) {
                 let playing = (0..crate::audio::mixer::SLOTS).any(|s| self.ctrl.engine.telemetry.position(m, s).is_some());
-                let warn = if playing {
-                    RichText::new(tr("⚠ Le son en cours de ce module sera coupé.", "⚠ This module's sound will be cut.")).color(STOP)
+                if playing {
+                    icons::label(ui, Icon::Warning, STOP, RichText::new(tr("Le son en cours de ce module sera coupé.", "This module's sound will be cut.")).small().color(STOP));
                 } else {
-                    RichText::new(tr("Le contenu actuel est gardé : on le retrouve en revenant à ce type.", "Current content is kept: switch back to find it again.")).color(TEXT_DIM)
-                };
-                ui.label(warn.small());
+                    ui.label(RichText::new(tr("Le contenu actuel est gardé : on le retrouve en revenant à ce type.", "Current content is kept: switch back to find it again.")).small().color(TEXT_DIM));
+                }
             }
         }
     }
@@ -668,10 +684,10 @@ impl JingleStarApp {
         let pairs = self.ctrl.output_pairs();
         let cur = self.ctrl.project.modules[m].output_pair;
         let label = |p: usize| format!("{} {}-{}", tr("Sortie", "Output"), p * 2 + 1, p * 2 + 2);
-        let text = if cur < pairs {
-            RichText::new(label(cur))
+        let text: egui::Atoms = if cur < pairs {
+            egui::IntoAtoms::into_atoms(RichText::new(label(cur)))
         } else {
-            RichText::new(format!("⚠ {} → 1-2", label(cur))).color(ACCENT)
+            egui::IntoAtoms::into_atoms((icons::atom_colored(Icon::Warning, ACCENT), RichText::new(format!("{} → 1-2", label(cur))).color(ACCENT)))
         };
         egui::ComboBox::from_id_salt(("out", m)).selected_text(text).width(96.0).show_ui(ui, |ui| {
             for p in 0..pairs.max(cur + 1) {
@@ -741,7 +757,7 @@ impl JingleStarApp {
             self.ctrl.set_module_volume(m, v);
         }
         let stop_rect = Rect::from_min_max(egui::pos2(strip.left(), strip.bottom() - stop_h), strip.max);
-        let stop = ui.put(stop_rect, egui::Button::new(RichText::new("■").color(Color32::WHITE)).fill(STOP.gamma_multiply(0.6))).on_hover_text(tr("Arrêter le module", "Stop module"));
+        let stop = ui.put(stop_rect, egui::Button::new(icons::atom_colored(Icon::Stop, Color32::WHITE)).fill(STOP.gamma_multiply(0.6))).on_hover_text(tr("Arrêter le module", "Stop module"));
         if pressed(ui, &stop) {
             self.ctrl.stop_module(m);
         }
@@ -884,7 +900,7 @@ impl JingleStarApp {
             egui::Frame::new().fill(fill).inner_margin(egui::Margin::symmetric(12, 6)).show(ui, |ui| {
                 ui.set_width(ui.available_width());
                 ui.horizontal_wrapped(|ui| {
-                    ui.label(RichText::new(text).strong().color(Color32::WHITE));
+                    icons::text_with_icons(ui, &text, |t| RichText::new(t).strong().color(Color32::WHITE), Color32::WHITE);
                     add(ui);
                 });
             });
@@ -911,7 +927,7 @@ impl JingleStarApp {
                 }
             }
             if prefs {
-                self.open_settings();
+                self.open_settings(ui.ctx());
             }
         } else if let Some(missing) = self.ctrl.device.as_ref().and_then(|d| d.wanted_missing.clone().map(|w| (w, d.name.clone()))) {
             let text = format!(
@@ -927,7 +943,7 @@ impl JingleStarApp {
                 prefs |= ui.button(tr("Préférences…", "Preferences…")).clicked();
             });
             if prefs {
-                self.open_settings();
+                self.open_settings(ui.ctx());
             }
         }
         if let Some(a) = self.ctrl.alert.clone() {
@@ -1012,7 +1028,7 @@ impl JingleStarApp {
                     ui.add_space(6.0);
                     ui.horizontal(|ui| {
                         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                            if ui.button(tr("✓ Terminé", "✓ Done")).clicked() {
+                            if ui.button((icons::atom(Icon::Check), tr("Terminé", "Done"))).clicked() {
                                 done = true;
                             }
                             if ui.button(RichText::new(tr("Vider l'emplacement", "Clear slot")).color(STOP)).clicked() {
@@ -1091,7 +1107,7 @@ impl JingleStarApp {
                     self.dialogs.show(ui.ctx(), Pick::PlaylistSetFolder(m), Kind::Folder);
                 }
             });
-            if pl.folder.is_some() && ui.button("⟳").on_hover_text(tr("Relire le dossier", "Rescan folder")).clicked() {
+            if pl.folder.is_some() && ui.button(icons::atom(Icon::Refresh)).on_hover_text(tr("Relire le dossier", "Rescan folder")).clicked() {
                 self.ctrl.rescan_playlist(m);
             }
             if !pl.tracks.is_empty() {
@@ -1103,7 +1119,7 @@ impl JingleStarApp {
                     if ui.button(tr("Annuler", "Cancel")).clicked() {
                         self.confirm_clear = None;
                     }
-                } else if ui.button(tr("🗑 Vider", "🗑 Clear")).on_hover_text(tr("Vider la playlist (avec confirmation)", "Clear the playlist (asks first)")).clicked() {
+                } else if ui.button((icons::atom(Icon::Trash), tr("Vider", "Clear"))).on_hover_text(tr("Vider la playlist (avec confirmation)", "Clear the playlist (asks first)")).clicked() {
                     self.confirm_clear = Some(m);
                 }
             }
@@ -1295,8 +1311,8 @@ impl JingleStarApp {
             ui.set_max_width(row_w);
             if pl.tracks.is_empty() {
                 ui.label(RichText::new(tr(
-                    "Ajoutez des fichiers ou un dossier avec « ＋ Ajouter », ou glissez-les ici.",
-                    "Add files or a folder with “＋ Add”, or drop them here.",
+                    "Ajoutez des fichiers ou un dossier avec « + Ajouter », ou glissez-les ici.",
+                    "Add files or a folder with “+ Add”, or drop them here.",
                 )).color(TEXT_DIM));
             }
             ui.spacing_mut().item_spacing.y = 1.0;
@@ -1427,7 +1443,7 @@ impl JingleStarApp {
             .with_title(format!("JingleStar — {}", tr("Préférences", "Preferences")))
             .with_inner_size([520.0, 560.0])
             .with_min_inner_size([420.0, 300.0]);
-        ctx.show_viewport_immediate(egui::ViewportId::from_hash_of("jinglestar-preferences"), vp, |ui, _| {
+        ctx.show_viewport_immediate(settings_viewport(), vp, |ui, _| {
             if ui.ctx().input(|i| i.viewport().close_requested()) {
                 open = false;
             }
@@ -1822,6 +1838,11 @@ impl JingleStarApp {
         let busy = self.ctrl.anything_playing() || self.meters.iter().flatten().any(|d| *d > -100.0);
         ctx.request_repaint_after(Duration::from_millis(if busy { 33 } else { 250 }));
     }
+}
+
+/// Fenêtre du système des Préférences.
+fn settings_viewport() -> egui::ViewportId {
+    egui::ViewportId::from_hash_of("jinglestar-preferences")
 }
 
 /// Onglet « Raccourcis » des Télécommandes : la liste de toutes les touches.

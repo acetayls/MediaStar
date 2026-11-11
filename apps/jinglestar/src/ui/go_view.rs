@@ -106,7 +106,7 @@ impl JingleStarApp {
                     ui.add_space(6.0);
                     ui.horizontal(|ui| {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ui.button(tr("✓ Terminé", "✓ Done")).clicked() {
+                            if ui.button((star_ui::icons::atom(star_ui::icons::Icon::Check), tr("Terminé", "Done"))).clicked() {
                                 done = true;
                             }
                         });
@@ -154,7 +154,7 @@ impl JingleStarApp {
             if add_button(ui, tr("Ajouter des sons…", "Add sounds…"), true).clicked() {
                 self.dialogs.show(ui.ctx(), Pick::CueFiles(m), Kind::AudioMany);
             }
-            if editing && len > 0 && ui.button("🗑").on_hover_text(tr("Vider la conduite", "Clear the cue list")).clicked() {
+            if editing && len > 0 && ui.button(star_ui::icons::atom(star_ui::icons::Icon::Trash)).on_hover_text(tr("Vider la conduite", "Clear the cue list")).clicked() {
                 self.ctrl.clear_cues(m);
             }
             let count = if len == 1 { "1 cue".to_string() } else { format!("{len} cues") };
@@ -341,10 +341,11 @@ impl JingleStarApp {
                 } else if resp.hovered() {
                     p.rect_filled(rect, CornerRadius::same(3), PANEL_HI);
                 }
-                // Barre de progression derrière le nom quand le cue sonne.
-                if let Some((pp, l)) = pos {
-                    let frac = if l > 0 { (pp as f32 / l as f32).clamp(0.0, 1.0) } else { 0.0 };
-                    p.rect_filled(Rect::from_min_size(rect.min, vec2(rect.width() * frac, rect.height())), CornerRadius::same(3), GO.gamma_multiply(0.22));
+                // Avancement quand le cue sonne : fond teinté derrière le nom, puis barre et tête
+                // de lecture par-dessus (après le nom, plus bas).
+                let progress = pos.map(|(pp, l)| if l > 0 { (pp as f32 / l as f32).clamp(0.0, 1.0) } else { 0.0 });
+                if let Some(frac) = progress {
+                    cue_progress_back(&p, rect, frac);
                 }
                 let col = if pos.is_some() { GO } else if is_standby { ACCENT } else { TEXT };
                 // Poignée de glisser (points) en mode édition ou au survol, sinon le repère d'attente.
@@ -356,7 +357,7 @@ impl JingleStarApp {
                         }
                     }
                 } else if is_standby {
-                    p.text(pos2(rect.left() + 8.0, rect.center().y), Align2::LEFT_CENTER, "▶", FontId::proportional(11.0), ACCENT);
+                    star_ui::icons::paint(&p, Rect::from_min_size(pos2(rect.left() + 8.0, rect.center().y - 4.5), vec2(9.0, 9.0)), star_ui::icons::Icon::Play, ACCENT);
                 }
                 p.text(pos2(rect.left() + 34.0, rect.center().y), Align2::RIGHT_CENTER, format!("{}", i + 1), FontId::monospace(12.0), TEXT_DIM);
                 // Enchaîner / arrêter à la fin du cue : pastille cliquable.
@@ -420,7 +421,12 @@ impl JingleStarApp {
                 let name_r = Rect::from_min_max(pos2(rect.left() + 62.0, rect.top() + 2.0), pos2(right, rect.bottom() - 2.0));
                 if editing {
                     let mut name = c.name.clone();
-                    if ui.put(name_r, egui::TextEdit::singleline(&mut name).font(FontId::proportional(13.0))).changed() {
+                    // Cue qui sonne : champ transparent, l'avancement reste visible derrière le nom.
+                    let mut field = egui::TextEdit::singleline(&mut name).font(FontId::proportional(13.0));
+                    if progress.is_some() {
+                        field = field.background_color(Color32::TRANSPARENT);
+                    }
+                    if ui.put(name_r, field).changed() {
                         action = Some((i, CueAction::Rename(name)));
                     }
                 } else {
@@ -428,6 +434,9 @@ impl JingleStarApp {
                     job.wrap = egui::text::TextWrapping::truncate_at_width(name_r.width().max(10.0));
                     let g = p.layout_job(job);
                     p.galley(pos2(name_r.left(), rect.center().y - g.size().y / 2.0), g, col);
+                }
+                if let Some(frac) = progress {
+                    cue_progress_front(&ui.painter_at(rect), rect, frac);
                 }
 
                 // Double-clic : GO sur ce cue (en mode édition : ses réglages).

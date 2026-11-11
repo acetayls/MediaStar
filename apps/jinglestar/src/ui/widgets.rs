@@ -113,7 +113,7 @@ pub fn jingle_button(ui: &mut Ui, rect: Rect, v: &SlotView) -> Response {
             p.text(rect.right_bottom() - vec2(6.0, 5.0), Align2::RIGHT_BOTTOM, "…", FontId::proportional(14.0), TEXT_DIM);
         }
         if v.error {
-            p.text(rect.right_bottom() - vec2(6.0, 5.0), Align2::RIGHT_BOTTOM, "⚠", FontId::proportional(14.0), STOP);
+            star_ui::icons::paint(&p, Rect::from_min_max(rect.right_bottom() - vec2(19.0, 18.0), rect.right_bottom() - vec2(6.0, 5.0)), star_ui::icons::Icon::Warning, STOP);
         }
         let stroke = if v.playing {
             // Cadre vert épais et halo : le jingle qui joue se repère de loin.

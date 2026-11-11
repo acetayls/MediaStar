@@ -172,7 +172,7 @@ impl JingleStarApp {
                 }
             });
             if let Some(msg) = &self.hotkey_msg {
-                ui.label(RichText::new(format!("ⓘ {msg} {}", tr("Choisissez-en un autre.", "Pick another one."))).color(ACCENT));
+                star_ui::icons::label(ui, star_ui::icons::Icon::Info, ACCENT, RichText::new(format!("{msg} {}", tr("Choisissez-en un autre.", "Pick another one."))).color(ACCENT));
             }
         });
     }

@@ -58,6 +58,19 @@ pub fn apply(ctx: &egui::Context) {
         std::sync::Arc::new(egui::FontData::from_static(include_bytes!("../assets/fonts/BarlowCondensed-SemiBold.ttf"))),
     );
     fonts.families.insert(logo_family(), vec!["barlow".into()]);
+    // Flèches et symboles absents des polices d'egui (→, ↑, ★, ⚠…) : sans elle, ils venaient
+    // d'une police du système, d'une autre taille et d'une autre ligne de base, ou manquaient.
+    // Sous-ensemble de DejaVu Sans renommé « Star Symbols » (licence dans assets/fonts).
+    fonts.font_data.insert(
+        "star-symbols".into(),
+        std::sync::Arc::new(egui::FontData::from_static(include_bytes!("../assets/fonts/StarSymbols.ttf")).tweak(egui::FontTweak {
+            scale: 0.85,
+            ..Default::default()
+        })),
+    );
+    for family in [egui::FontFamily::Proportional, egui::FontFamily::Monospace] {
+        fonts.families.entry(family).or_default().push("star-symbols".into());
+    }
     ctx.set_fonts(fonts);
     ctx.all_styles_mut(|s| {
         s.spacing.item_spacing = egui::vec2(6.0, 6.0);

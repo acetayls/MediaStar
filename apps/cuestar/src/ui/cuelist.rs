@@ -9,7 +9,7 @@ use crate::protocol::{Command, TransitionKind};
 use star_core::i18n::tr;
 use egui::{pos2, vec2, Align2, Color32, CornerRadius, FontId, Id, Key, Rect, RichText, Sense, Stroke, StrokeKind};
 use star_ui::theme::*;
-use star_ui::widgets::{add_button, fmt_time, loop_icon, mode_chip, transport_button, TransportIcon};
+use star_ui::widgets::{add_button, cue_progress_back, cue_progress_front, fmt_time, loop_icon, mode_chip, transport_button, TransportIcon};
 use std::path::{Path, PathBuf};
 
 const ROW_H: f32 = 26.0;
@@ -33,6 +33,8 @@ pub struct Cuelist {
     running: Option<usize>,
     seen_end: u64,
     editor: Option<usize>,
+    /// « Réglages… » demandé alors que l'éditeur est déjà ouvert : le ramener au premier plan.
+    raise_editor: bool,
     pending_play: Option<usize>,
     pending_go: bool,
     /// Aperçu muet de l'éditeur de cue (processus lancé à la première ouverture).
@@ -768,9 +770,11 @@ impl Cuelist {
                     p.rect_filled(rect, CornerRadius::same(3), PANEL_HI);
                 }
                 let (a, b) = cue_span(c, s.duration);
-                if is_running && b > a {
-                    let frac = ((s.time - a) / (b - a)).clamp(0.0, 1.0) as f32;
-                    p.rect_filled(Rect::from_min_size(rect.min, vec2(rect.width() * frac, rect.height())), CornerRadius::same(3), GO.gamma_multiply(0.22));
+                // Avancement du cue qui passe : fond teinté derrière le nom, barre et tête de lecture
+                // par-dessus (après le nom, plus bas).
+                let progress = (is_running && b > a).then(|| ((s.time - a) / (b - a)).clamp(0.0, 1.0) as f32);
+                if let Some(frac) = progress {
+                    cue_progress_back(&p, rect, frac);
                 }
                 let col = if is_running { GO } else if is_standby { ACCENT } else { TEXT };
                 if grip_hovered && !is_standby {
@@ -824,6 +828,9 @@ impl Cuelist {
                 job.wrap = egui::text::TextWrapping::truncate_at_width(name_r.width().max(10.0));
                 let g = p.layout_job(job);
                 p.galley(pos2(name_r.left(), rect.center().y - g.size().y / 2.0), g, col);
+                if let Some(frac) = progress {
+                    cue_progress_front(&p, rect, frac);
+                }
 
                 if resp.double_clicked() {
                     action = Some((i, CueAction::Go));
@@ -924,7 +931,10 @@ impl Cuelist {
                 self.cues[i].clip.sound.looping = l;
                 self.clip_changed = Some(i);
             }
-            Some((i, CueAction::Edit)) => self.editor = Some(i),
+            Some((i, CueAction::Edit)) => {
+                self.raise_editor = self.editor.is_some();
+                self.editor = Some(i);
+            }
             Some((i, CueAction::Rename)) => self.renaming = Some((i, self.cues[i].name.clone(), true)),
             Some((i, CueAction::Info)) => {
                 if let Some(p) = self.cues[i].path.clone() {
@@ -1005,7 +1015,11 @@ impl Cuelist {
             .with_title(format!("CueStar — Cue {} : {}", i + 1, c.name))
             .with_inner_size([700.0, 760.0])
             .with_min_inner_size([420.0, 300.0]);
-        ctx.show_viewport_immediate(egui::ViewportId::from_hash_of("cl-editor"), vp, |ui, _| {
+        let editor_id = egui::ViewportId::from_hash_of("cl-editor");
+        if std::mem::take(&mut self.raise_editor) {
+            star_ui::floating::raise(ctx, editor_id);
+        }
+        ctx.show_viewport_immediate(editor_id, vp, |ui, _| {
             if ui.ctx().input(|i| i.viewport().close_requested()) {
                 open = false;
             }

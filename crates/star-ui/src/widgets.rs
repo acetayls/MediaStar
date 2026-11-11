@@ -377,7 +377,6 @@ pub fn segmented(ui: &mut Ui, rect: Rect, id: impl std::hash::Hash + std::fmt::D
 }
 
 /// Vrai à l'image où le bouton gauche s'enfonce sur ce widget : GO, arrêt et jingles partent
-/// à l'appui, sans attendre le relâché (un clic dure couramment 80 à 150 ms).
 /// Symbole de boucle dessiné (deux flèches qui se suivent sur un anneau arrondi),
 /// plus net à petite taille qu'un emoji.
 pub fn loop_icon(p: &egui::Painter, r: Rect, color: Color32) {
@@ -404,17 +403,35 @@ pub fn loop_icon(p: &egui::Painter, r: Rect, color: Color32) {
     p.add(egui::Shape::convex_polygon(vec![tip + vec2(-head, 0.0), tip + vec2(head * 0.6, head), tip + vec2(head * 0.6, -head)], color, Stroke::NONE));
 }
 
+/// Avancement d'un cue qui passe, derrière le nom dans sa ligne de conduite : fond teinté
+/// jusqu'à la position. `frac` : de 0 (début) à 1 (fin).
+pub fn cue_progress_back(p: &egui::Painter, row: Rect, frac: f32) {
+    let frac = frac.clamp(0.0, 1.0);
+    p.rect_filled(Rect::from_min_size(row.min, vec2(row.width() * frac, row.height())), CornerRadius::same(3), GO.gamma_multiply(0.28));
+}
+
+/// Avancement d'un cue qui passe, par-dessus la ligne (à dessiner après le nom et son champ de
+/// saisie, qui ne le cachent donc jamais) : barre pleine en bas de la ligne et tête de lecture.
+pub fn cue_progress_front(p: &egui::Painter, row: Rect, frac: f32) {
+    let frac = frac.clamp(0.0, 1.0);
+    let x = row.left() + row.width() * frac;
+    let bar = Rect::from_min_max(pos2(row.left(), row.bottom() - 3.0), row.max);
+    p.rect_filled(bar, CornerRadius::same(1), GO.gamma_multiply(0.25));
+    p.rect_filled(Rect::from_min_max(bar.min, pos2(x, bar.bottom())), CornerRadius::same(1), GO);
+    p.rect_filled(Rect::from_min_max(pos2(x - 1.0, row.top()), pos2(x + 1.0, row.bottom())), CornerRadius::ZERO, GO);
+}
+
 /// Bouton « Ajouter » : un « + » orange épais dessiné à gauche du libellé, cadre orange.
 pub fn add_button(ui: &mut Ui, label: &str, enabled: bool) -> Response {
     let col = if enabled { ACCENT } else { TEXT_DIM };
-    let text = egui::RichText::new(format!("      {label}")).size(14.0);
-    let resp = ui.add_enabled(enabled, egui::Button::new(text).stroke(Stroke::new(1.0, col.gamma_multiply(0.6))));
-    let c = pos2(resp.rect.left() + 15.0, resp.rect.center().y);
-    let stroke = Stroke::new(3.0, col);
-    ui.painter().line_segment([c - vec2(6.0, 0.0), c + vec2(6.0, 0.0)], stroke);
-    ui.painter().line_segment([c - vec2(0.0, 6.0), c + vec2(0.0, 6.0)], stroke);
-    resp
+    // Le « + » est un élément du bouton (et non des espaces devant le texte) : toujours aligné.
+    let plus = crate::icons::atom_with(crate::icons::Icon::Plus, 12.0, Some(col));
+    let text = egui::RichText::new(label).size(14.0);
+    ui.add_enabled(enabled, egui::Button::new((plus, text)).stroke(Stroke::new(1.0, col.gamma_multiply(0.6))))
 }
+
+/// Vrai à l'image où le bouton gauche s'enfonce sur ce widget : GO, arrêt et jingles partent
+/// à l'appui, sans attendre le relâché (un clic dure couramment 80 à 150 ms).
 
 pub fn pressed(ui: &Ui, resp: &Response) -> bool {
     resp.hovered() && ui.input(|i| i.pointer.primary_pressed())
@@ -603,13 +620,20 @@ pub fn waveform_editor(
     if looping {
         // Boucle étroite à l'écran : les étiquettes passent à l'extérieur pour ne pas se chevaucher.
         let narrow = x_of(m.loop_end) - x_of(m.loop_start) < 110.0;
-        for (t, label) in [(m.loop_start, tr("⟲ début", "⟲ start")), (m.loop_end, tr("fin ⟳", "end ⟳"))] {
+        // « ⟲ début » et « fin ⟳ » : flèches dessinées, centrées sur la ligne du texte.
+        for (t, label, start) in [(m.loop_start, tr("début", "start"), true), (m.loop_end, tr("fin", "end"), false)] {
             let x = x_of(t);
             p.line_segment([pos2(x, rect.top()), pos2(x, rect.bottom())], Stroke::new(2.0, ACCENT));
-            let inside_left = label.starts_with('⟲') != narrow;
-            let align = if inside_left { Align2::LEFT_TOP } else { Align2::RIGHT_TOP };
-            let off = if align == Align2::LEFT_TOP { 3.0 } else { -3.0 };
-            p.text(pos2(x + off, rect.top() + 1.0), align, label, FontId::proportional(10.0), ACCENT);
+            let inside_left = start != narrow;
+            let g = p.layout_no_wrap(label.to_owned(), FontId::proportional(10.0), ACCENT);
+            let (s, gap) = (9.0, 2.0);
+            let total = s + gap + g.size().x;
+            let left = if inside_left { x + 3.0 } else { x - 3.0 - total };
+            let top = rect.top() + 1.0;
+            let (icon_x, text_x) = if start { (left, left + s + gap) } else { (left + g.size().x + gap, left) };
+            let icon = if start { crate::icons::Icon::RefreshBack } else { crate::icons::Icon::Refresh };
+            crate::icons::paint(&p, Rect::from_min_size(pos2(icon_x, top + (g.size().y - s) / 2.0), vec2(s, s)), icon, ACCENT);
+            p.galley(pos2(text_x, top), g, ACCENT);
         }
     }
 

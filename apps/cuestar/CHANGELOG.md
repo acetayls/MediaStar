@@ -59,6 +59,14 @@ dans la charte de JingleStar.
 - **Monitoring** : fenêtre flottante avec le retour de l'image de sortie, fps, CPU et GPU.
 - Compteur d'**images perdues et retardées** cumulé sur tous les médias, avec remise à zéro
   (clic droit, bouton, OSC `output/drops/reset`).
+- Moteur de sortie fiabilisé (audit du 10 novembre 2026, essais dans `tools/essai-moteur`) :
+  - décocher la boucle d'un cue qui a un point de sortie n'arrête plus la sortie ;
+  - le **fondu de sortie** d'une vidéo se fait de nouveau ;
+  - un fichier **absent ou illisible** est signalé, et le cue précédent reste à l'écran ;
+  - plus d'écran noir ni d'image d'un autre cue après une navigation rapide suivie d'un GO ;
+  - le **retour image** suit toujours le dernier changement ; en affichage de secours, il montre
+    ce qui est à l'écran (rotation, fondus, noir en fin de média) ;
+  - Linux : chargement des médias aussi avec une libmpv antérieure à la 0.38.
 
 ### Télécommandes
 
@@ -73,7 +81,15 @@ dans la charte de JingleStar.
 - Projet **.cuestar** comme JingleStar : session, sauvegarde sûre, médias retrouvés s'ils ont
   bougé ; journal de la régie et de la sortie.
 - Interface en **français ou en anglais** (choix gardé sur la machine).
-- **Manuel** français et anglais (**F1**, bouton **? Aide**).
+- **Manuel** français et anglais (**F1**, bouton **? Aide**), dans sa propre fenêtre : on peut le
+  déplacer hors de la régie, sur un autre écran par exemple.
+- **Une fenêtre flottante passée derrière revient devant** : si Préférences, Monitoring,
+  Télécommandes ou Aide est déjà ouverte mais cachée derrière la régie (ou réduite), un nouveau
+  clic sur son bouton (ou dans le menu) la ramène au premier plan. On la ferme avec sa croix (l'aide
+  aussi avec **F1**). De même, **Réglages…** ou **Informations sur le fichier…** sur un cue dont la
+  fenêtre est déjà ouverte la ramène devant.
+- Cuelist : **avancement du cue en cours bien visible**, avec une barre verte pleine en bas de la
+  ligne et une tête de lecture par-dessus le nom.
 - Icône CueStar plus lisible en grand comme en petit.
 
 ### Téléchargements

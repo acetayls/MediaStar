@@ -36,7 +36,7 @@ pub fn midi_section(ui: &mut Ui, midi: &mut MidiSettings, ports: &mut Vec<String
                     ui.selectable_value(&mut midi.port, Some(p.clone()), p);
                 }
             });
-            if ui.small_button("⟳").on_hover_text(tr("Rafraîchir la liste et reconnecter", "Refresh list and reconnect")).clicked() {
+            if ui.small_button(star_ui::icons::atom_small(star_ui::icons::Icon::Refresh)).on_hover_text(tr("Rafraîchir la liste et reconnecter", "Refresh list and reconnect")).clicked() {
                 *ports = crate::midi::port_names(inputs.app());
                 restart = true;
             }
@@ -218,13 +218,13 @@ pub fn mappings_table<R: MappingRows>(ui: &mut Ui, rows: &mut R) {
                         rows.inputs().learn = if learning { None } else { Some(i) };
                     }
                     ui.label(R::trigger_mut(&mut m).label());
-                    ui.menu_button("✏", |ui| trigger_editor(ui, R::trigger_mut(&mut m)))
+                    ui.menu_button(star_ui::icons::atom(star_ui::icons::Icon::Pencil), |ui| trigger_editor(ui, R::trigger_mut(&mut m)))
                         .response
                         .on_hover_text(tr("Modifier la valeur apprise", "Edit the learned value"));
                     rows.trigger_note(ui, i);
                 });
                 rows.action_cells(ui, i, &mut m);
-                if ui.small_button("🗑").on_hover_text(tr("Supprimer", "Delete")).clicked() {
+                if ui.small_button(star_ui::icons::atom_small(star_ui::icons::Icon::Trash)).on_hover_text(tr("Supprimer", "Delete")).clicked() {
                     remove = Some(i);
                 }
                 ui.end_row();
@@ -242,7 +242,7 @@ pub fn mappings_table<R: MappingRows>(ui: &mut Ui, rows: &mut R) {
         ui.label(RichText::new(tr("Aucune assignation.", "No mapping yet.")).color(TEXT_DIM));
     }
     ui.add_space(4.0);
-    if ui.button(tr("＋ Ajouter et apprendre", "＋ Add and learn")).clicked() {
+    if ui.button((star_ui::icons::atom(star_ui::icons::Icon::Plus), tr("Ajouter et apprendre", "Add and learn"))).clicked() {
         let next = rows.next();
         rows.add(next);
         let n = rows.mappings().len();

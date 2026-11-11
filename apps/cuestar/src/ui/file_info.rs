@@ -13,11 +13,13 @@ pub struct FileInfo {
     rx: Option<Receiver<Result<Report, String>>>,
     result: Option<Result<Report, String>>,
     search: String,
+    /// Fenêtre redemandée alors qu'elle est ouverte : la ramener au premier plan.
+    raise: bool,
 }
 
 impl FileInfo {
     pub fn open(path: &Path) -> Self {
-        Self { path: path.to_path_buf(), full: false, rx: Some(media_info::fetch(path, false)), result: None, search: String::new() }
+        Self { path: path.to_path_buf(), full: false, rx: Some(media_info::fetch(path, false)), result: None, search: String::new(), raise: false }
     }
 
     /// Affiche la fenêtre ; false quand elle est fermée.
@@ -42,7 +44,11 @@ impl FileInfo {
             .with_title(format!("{} — {name}", tr("Informations", "Information")))
             .with_inner_size([600.0, 640.0])
             .with_min_inner_size([320.0, 200.0]);
-        ctx.show_viewport_immediate(egui::ViewportId::from_hash_of(("file-info", &self.path)), vp, |ui, _| {
+        let id = egui::ViewportId::from_hash_of(("file-info", &self.path));
+        if std::mem::take(&mut self.raise) {
+            star_ui::floating::raise(ctx, id);
+        }
+        ctx.show_viewport_immediate(id, vp, |ui, _| {
             if ui.ctx().input(|i| i.viewport().close_requested()) {
                 open = false;
             }
@@ -110,9 +116,10 @@ impl FileInfo {
     }
 }
 
-/// Ouvre la fenêtre d'un fichier, sauf si elle l'est déjà.
+/// Ouvre la fenêtre d'un fichier ; si elle l'est déjà, la ramène au premier plan.
 pub fn open_once(list: &mut Vec<FileInfo>, path: &Path) {
-    if !list.iter().any(|w| w.path == path) {
-        list.push(FileInfo::open(path));
+    match list.iter_mut().find(|w| w.path == path) {
+        Some(w) => w.raise = true,
+        None => list.push(FileInfo::open(path)),
     }
 }

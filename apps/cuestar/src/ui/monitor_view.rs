@@ -8,6 +8,11 @@ use star_ui::theme::*;
 use star_ui::widgets::fmt_time;
 use std::path::Path;
 
+/// Fenêtre du système du monitoring.
+fn viewport_id() -> egui::ViewportId {
+    egui::ViewportId::from_hash_of("cuestar-monitoring")
+}
+
 #[derive(Default)]
 pub struct MonitorView {
     pub open: bool,
@@ -16,9 +21,12 @@ pub struct MonitorView {
 }
 
 impl MonitorView {
-    pub fn toggle(&mut self, out: &mut OutputLink) {
-        self.open = !self.open;
-        self.sync(out);
+    /// Bouton « Monitoring » : ouvre la fenêtre, ou la ramène au premier plan si elle est déjà
+    /// ouverte (passée derrière la régie).
+    pub fn open_or_raise(&mut self, ctx: &egui::Context, out: &mut OutputLink) {
+        if star_ui::floating::open_or_raise(ctx, &mut self.open, viewport_id()) {
+            self.sync(out);
+        }
     }
 
     /// Dit à la sortie s'il faut envoyer des images (aussi après une relance de la sortie).
@@ -44,7 +52,7 @@ impl MonitorView {
         let mut open = self.open;
         // Vraie fenêtre du système : elle peut sortir de la régie (autre écran, par exemple).
         let vp = egui::ViewportBuilder::default().with_title("CueStar — Monitoring").with_inner_size([480.0, 300.0]).with_min_inner_size([160.0, 110.0]);
-        ctx.show_viewport_immediate(egui::ViewportId::from_hash_of("cuestar-monitoring"), vp, |ui, _| {
+        ctx.show_viewport_immediate(viewport_id(), vp, |ui, _| {
             if ui.ctx().input(|i| i.viewport().close_requested()) {
                 open = false;
             }
