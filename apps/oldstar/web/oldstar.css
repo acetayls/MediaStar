@@ -1,0 +1,1059 @@
+/* OldStar : feuille de style de la page iPad, charte de JingleStar (crates/star-ui/src/theme.rs).
+ *
+ * Plancher : Safari 9 (iOS 9) et Chrome 30 (Android 4.4). Pas de variables CSS, de
+ * backdrop-filter, de position:sticky ni de calc ; flexbox écrit deux fois (-webkit-flex puis
+ * flex) ; transform et transition avec leur préfixe -webkit-.
+ *
+ * Couleurs : fond #1a1a1d, panneau #242429, panneau clair #2e2e35, bord #3a3a43,
+ * texte #dddde2, texte pâle #858590, GO #46c855, STOP #d94848, accent #f0b030, édition #4a90e2.
+ */
+
+html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    overflow: hidden;
+    background: #1a1a1d;
+    color: #dddde2;
+    font-family: -apple-system, "Helvetica Neue", Helvetica, Roboto, Arial, sans-serif;
+    font-size: 15px;
+    -webkit-text-size-adjust: 100%;
+    -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    user-select: none;
+}
+
+body {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+}
+
+* {
+    -webkit-box-sizing: border-box;
+    box-sizing: border-box;
+}
+
+.scroll {
+    -webkit-overflow-scrolling: touch;
+}
+
+/* ---------- Bandeau du haut ---------- */
+
+#top {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 52px;
+    background: #141416;
+    border-bottom: 1px solid #3a3a43;
+    display: -webkit-flex;
+    display: flex;
+    -webkit-align-items: center;
+    align-items: center;
+    padding: 0 8px;
+}
+
+.brand {
+    font-size: 20px;
+    font-weight: bold;
+    padding: 0 12px 0 4px;
+    white-space: nowrap;
+}
+
+.brand span {
+    color: #f0b030;
+}
+
+#tabs {
+    -webkit-flex: 1;
+    flex: 1;
+    display: -webkit-flex;
+    display: flex;
+    height: 100%;
+}
+
+.tab {
+    height: 100%;
+    line-height: 52px;
+    padding: 0 18px;
+    color: #858590;
+    font-size: 16px;
+    border-bottom: 3px solid transparent;
+    cursor: pointer;
+}
+
+.tab.on {
+    color: #dddde2;
+    border-bottom-color: #f0b030;
+}
+
+.tab.down {
+    background: #2e2e35;
+}
+
+.link {
+    font-size: 13px;
+    padding: 4px 10px;
+    border-radius: 12px;
+    white-space: nowrap;
+    max-width: 260px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.link.ok {
+    color: #101010;
+    background: #46c855;
+}
+
+.link.wait {
+    color: #101010;
+    background: #f0b030;
+}
+
+.link.bad {
+    color: #ffffff;
+    background: #d94848;
+}
+
+#main {
+    position: absolute;
+    top: 52px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.pane {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+.empty {
+    color: #858590;
+    padding: 24px;
+    text-align: center;
+}
+
+/* ---------- Boutons ---------- */
+
+.btn {
+    display: inline-block;
+    min-height: 40px;
+    line-height: 38px;
+    padding: 0 14px;
+    background: #2e2e35;
+    border: 1px solid #3a3a43;
+    border-radius: 6px;
+    color: #dddde2;
+    text-align: center;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    cursor: pointer;
+}
+
+.btn.down,
+.btn.flash {
+    background: #45454f;
+}
+
+.btn.lit {
+    background: #46c855;
+    border-color: #46c855;
+    color: #101010;
+    font-weight: bold;
+}
+
+.btn.go {
+    background: #46c855;
+    border-color: #46c855;
+    color: #101010;
+    font-weight: bold;
+}
+
+.btn.stop {
+    background: #d94848;
+    border-color: #d94848;
+    color: #ffffff;
+    font-weight: bold;
+}
+
+.btn.accent {
+    background: #f0b030;
+    border-color: #f0b030;
+    color: #101010;
+    font-weight: bold;
+}
+
+.btn.go.down, .btn.go.flash,
+.btn.stop.down, .btn.stop.flash,
+.btn.accent.down, .btn.accent.flash {
+    background: #ffffff;
+    color: #101010;
+}
+
+.btn.seg {
+    margin: 0 6px 6px 0;
+}
+
+.btn.seg.on {
+    background: #4a90e2;
+    border-color: #4a90e2;
+    color: #ffffff;
+}
+
+/* ---------- Barres d'outils ---------- */
+
+.bar {
+    display: -webkit-flex;
+    display: flex;
+    -webkit-align-items: center;
+    align-items: center;
+    padding: 8px 8px 2px 8px;
+}
+
+.bar.wrap {
+    -webkit-flex-wrap: wrap;
+    flex-wrap: wrap;
+}
+
+.info {
+    -webkit-flex: 1;
+    flex: 1;
+    font-size: 14px;
+    padding: 0 8px 6px 4px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.info.ok {
+    color: #46c855;
+}
+
+.info.bad {
+    color: #d94848;
+}
+
+.segs {
+    white-space: nowrap;
+}
+
+/* ---------- Curseurs ---------- */
+
+.sl {
+    position: relative;
+    cursor: pointer;
+}
+
+.sl-track {
+    position: absolute;
+    background: #141416;
+    border: 1px solid #3a3a43;
+    border-radius: 4px;
+}
+
+.sl-fill {
+    position: absolute;
+    background: #4a90e2;
+    opacity: 0.45;
+    border-radius: 3px;
+}
+
+.sl-knob {
+    position: absolute;
+    background: #c8c8d0;
+    border: 1px solid #ffffff;
+    border-radius: 4px;
+    -webkit-box-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+}
+
+.sl.active .sl-knob {
+    background: #f0b030;
+    border-color: #f0b030;
+}
+
+/* Vertical : la zone de toucher prend toute la hauteur et la largeur de la tranche. */
+.sl-v {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    left: 16px;
+    right: 0;
+}
+
+.sl-v .sl-track {
+    top: 16px;
+    bottom: 16px;
+    left: 50%;
+    width: 8px;
+    margin-left: -4px;
+}
+
+.sl-v .sl-fill {
+    left: 0;
+    right: 0;
+    bottom: 0;
+}
+
+.sl-v .sl-knob {
+    left: 50%;
+    width: 44px;
+    height: 28px;
+    margin-left: -22px;
+    margin-bottom: -14px;
+}
+
+/* Horizontal */
+.sl-h {
+    height: 44px;
+    -webkit-flex: 1;
+    flex: 1;
+    margin: 0 10px;
+}
+
+.sl-h .sl-track {
+    left: 14px;
+    right: 14px;
+    top: 50%;
+    height: 8px;
+    margin-top: -4px;
+}
+
+.sl-h .sl-fill {
+    top: 0;
+    bottom: 0;
+    left: 0;
+}
+
+.sl-h .sl-knob {
+    top: 50%;
+    width: 28px;
+    height: 36px;
+    margin-top: -18px;
+    margin-left: -14px;
+}
+
+/* ---------- Console : tranches ---------- */
+
+.console .strips {
+    position: absolute;
+    top: 52px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding: 0 4px 6px 4px;
+}
+
+.strip-row {
+    height: 100%;
+    white-space: nowrap;
+}
+
+.strip {
+    position: relative;
+    display: inline-block;
+    vertical-align: top;
+    width: 84px;
+    height: 100%;
+    min-height: 300px;
+    margin-right: 4px;
+    background: #242429;
+    border: 1px solid #3a3a43;
+    border-radius: 6px;
+    white-space: normal;
+}
+
+.strip .num {
+    position: absolute;
+    top: 2px;
+    left: 0;
+    right: 0;
+    font-size: 11px;
+    color: #858590;
+    text-align: center;
+}
+
+.strip .name {
+    position: absolute;
+    top: 16px;
+    left: 2px;
+    right: 2px;
+    height: 22px;
+    line-height: 22px;
+    font-size: 13px;
+    font-weight: bold;
+    text-align: center;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.strip-body {
+    position: absolute;
+    top: 42px;
+    bottom: 120px;
+    left: 4px;
+    right: 4px;
+}
+
+.strip .db {
+    position: absolute;
+    bottom: 96px;
+    left: 0;
+    right: 0;
+    height: 20px;
+    font-size: 12px;
+    text-align: center;
+    color: #dddde2;
+}
+
+.strip .on-btn {
+    position: absolute;
+    bottom: 50px;
+    left: 6px;
+    right: 6px;
+    padding: 0;
+}
+
+.strip .sel-btn {
+    position: absolute;
+    bottom: 6px;
+    left: 6px;
+    right: 6px;
+    padding: 0;
+    font-size: 12px;
+}
+
+.meter {
+    position: absolute;
+    top: 16px;
+    bottom: 16px;
+    left: 2px;
+    width: 10px;
+    background: #141416;
+    border: 1px solid #3a3a43;
+    overflow: hidden;
+}
+
+.meter-fill {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 0;
+    background: #46c855;
+}
+
+.meter-fill.mid {
+    background: #e8c53a;
+}
+
+.meter-fill.hot {
+    background: #e04545;
+}
+
+/* ---------- Console : détail d'une voie ---------- */
+
+.detail {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 10;
+    background: #1a1a1d;
+}
+
+.detail-head {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 56px;
+    display: -webkit-flex;
+    display: flex;
+    -webkit-align-items: center;
+    align-items: center;
+    padding: 0 10px;
+    border-bottom: 1px solid #3a3a43;
+}
+
+.detail-title {
+    -webkit-flex: 1;
+    flex: 1;
+    font-size: 18px;
+    font-weight: bold;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.detail-body {
+    position: absolute;
+    top: 56px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    overflow-y: auto;
+    padding: 6px 10px 20px 10px;
+}
+
+.section {
+    margin-top: 10px;
+    background: #242429;
+    border: 1px solid #3a3a43;
+    border-radius: 6px;
+    padding: 6px 10px;
+}
+
+.section-head {
+    display: -webkit-flex;
+    display: flex;
+    -webkit-align-items: center;
+    align-items: center;
+    padding: 2px 0 6px 0;
+}
+
+.section-title {
+    -webkit-flex: 1;
+    flex: 1;
+    font-weight: bold;
+    color: #f0b030;
+}
+
+.band {
+    border-top: 1px solid #3a3a43;
+    padding: 4px 0;
+}
+
+.band-title {
+    font-size: 13px;
+    color: #858590;
+    padding: 2px 0;
+}
+
+.param {
+    display: -webkit-flex;
+    display: flex;
+    -webkit-align-items: center;
+    align-items: center;
+    min-height: 48px;
+}
+
+.param-label {
+    width: 120px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.param-value {
+    width: 84px;
+    text-align: right;
+    font-size: 14px;
+    padding-right: 8px;
+}
+
+.param .on-btn {
+    width: 64px;
+    padding: 0;
+}
+
+/* ---------- Applis ---------- */
+
+.applis {
+    padding: 8px;
+}
+
+.card {
+    background: #242429;
+    border: 1px solid #3a3a43;
+    border-radius: 8px;
+    margin: 0 0 12px 0;
+    padding: 8px;
+}
+
+.card-head {
+    display: -webkit-flex;
+    display: flex;
+    -webkit-align-items: center;
+    align-items: center;
+    padding: 2px 4px 8px 4px;
+}
+
+.card-title {
+    font-size: 18px;
+    font-weight: bold;
+}
+
+.dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 6px;
+    background: #3a3a43;
+    margin-right: 8px;
+}
+
+.dot.ok {
+    background: #46c855;
+}
+
+.feedback {
+    background: #141416;
+    border-radius: 6px;
+    padding: 4px 8px;
+    margin: 0 4px 8px 4px;
+}
+
+.fb-row {
+    display: -webkit-flex;
+    display: flex;
+    padding: 3px 0;
+}
+
+.fb-label {
+    width: 140px;
+    color: #858590;
+}
+
+.fb-value {
+    -webkit-flex: 1;
+    flex: 1;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.grid {
+    overflow: hidden;
+}
+
+.cell {
+    float: left;
+    width: 50%;
+    padding: 4px;
+}
+
+.cell.wide {
+    width: 100%;
+}
+
+.btn.big {
+    display: block;
+    min-height: 64px;
+    line-height: 62px;
+    font-size: 18px;
+}
+
+/* ---------- Fenêtres ---------- */
+
+.pane.fixed {
+    overflow: hidden;
+}
+
+.win-list {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    overflow-y: auto;
+    padding: 10px 8px;
+}
+
+.list-title {
+    color: #858590;
+    padding: 0 0 8px 2px;
+}
+
+.list-title.grow {
+    -webkit-flex: 1;
+    flex: 1;
+}
+
+.win-free {
+    margin-top: 10px;
+    border-top: 1px solid #3a3a43;
+    padding-top: 10px;
+}
+
+.win-item {
+    background: #242429;
+    border: 1px solid #3a3a43;
+    border-radius: 6px;
+    padding: 8px 12px;
+    margin: 0 0 6px 0;
+    cursor: pointer;
+}
+
+.win-item.down {
+    background: #45454f;
+}
+
+.win-item.min {
+    opacity: 0.55;
+}
+
+.win-item-title {
+    font-weight: bold;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.win-item-exe {
+    font-size: 12px;
+    color: #858590;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.empty.small {
+    padding: 8px 2px;
+    text-align: left;
+}
+
+.win-bar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    padding: 8px 8px 0 8px;
+    background: #1a1a1d;
+    border-bottom: 1px solid #3a3a43;
+}
+
+.win-row {
+    display: -webkit-flex;
+    display: flex;
+    -webkit-align-items: center;
+    align-items: center;
+    -webkit-flex-wrap: wrap;
+    flex-wrap: wrap;
+}
+
+.win-row .btn {
+    margin: 0 8px 8px 0;
+}
+
+.btn.big-close {
+    min-height: 48px;
+    line-height: 46px;
+    padding: 0 20px;
+    font-size: 17px;
+    font-weight: bold;
+}
+
+.win-title {
+    -webkit-flex: 1;
+    flex: 1;
+    font-size: 17px;
+    font-weight: bold;
+    padding: 0 0 8px 4px;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
+.win-hint {
+    font-size: 13px;
+    color: #f0b030;
+    padding: 0 2px 8px 2px;
+}
+
+.shot {
+    position: absolute;
+    top: 120px;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    overflow: auto;
+    padding: 8px;
+}
+
+.shot.fit {
+    overflow: hidden;
+}
+
+.shot-img {
+    display: block;
+    margin: 0 auto;
+    border: 1px solid #3a3a43;
+    -webkit-user-drag: none;
+}
+
+.shot.control .shot-img {
+    border-color: #f0b030;
+}
+
+/* Applis côte à côte quand la largeur le permet. */
+@media (min-width: 700px) {
+    .applis .card {
+        float: left;
+        width: 49%;
+        margin-right: 2%;
+    }
+    .applis .card.last {
+        margin-right: 0;
+    }
+}
+
+/* Petit écran (iPhone 4S, iPod) : bandeau plus serré. */
+@media (max-width: 600px) {
+    .brand {
+        display: none;
+    }
+    .tab {
+        padding: 0 10px;
+        font-size: 15px;
+    }
+    .link {
+        max-width: 110px;
+    }
+    .param-label {
+        width: 80px;
+    }
+    .param-value {
+        width: 70px;
+    }
+}
+
+/* ---------- Plein écran d'une fenêtre ---------- */
+
+body.full #top {
+    display: none;
+}
+
+body.full #main {
+    top: 0;
+}
+
+body.full .win-bar {
+    display: none;
+}
+
+body.full .shot {
+    padding: 0;
+    background: #000000;
+}
+
+body.full .shot-img {
+    border: 0;
+}
+
+.full-exit {
+    position: absolute;
+    top: 10px;
+    right: 10px;
+    z-index: 20;
+    width: 52px;
+    height: 52px;
+    line-height: 52px;
+    border-radius: 26px;
+    text-align: center;
+    font-size: 24px;
+    color: #ffffff;
+    background: rgba(20, 20, 22, 0.55);
+    border: 1px solid rgba(255, 255, 255, 0.35);
+    cursor: pointer;
+}
+
+.full-exit.down {
+    background: rgba(240, 176, 48, 0.8);
+    color: #101010;
+}
+
+.win-note {
+    font-size: 13px;
+    color: #858590;
+    padding: 0 0 8px 2px;
+}
+
+/* Petits écrans (iPhone 4S, iPod) : cartes Applis plus serrées pour tenir sans défiler. */
+@media (max-width: 600px) {
+    .applis {
+        padding: 4px;
+    }
+    .card {
+        padding: 4px;
+        margin-bottom: 6px;
+    }
+    .card.last {
+        margin-bottom: 0;
+    }
+    .card-head {
+        padding: 0 2px 4px 2px;
+    }
+    .card-title {
+        font-size: 15px;
+    }
+    .feedback {
+        padding: 2px 6px;
+        margin: 0 2px 4px 2px;
+        font-size: 13px;
+    }
+    .fb-row {
+        padding: 1px 0;
+    }
+    .cell {
+        padding: 2px;
+    }
+    .btn.big {
+        font-size: 15px;
+    }
+}
+
+/* ---------- Égaliseur façon CL/QL ---------- */
+
+.eq-on {
+    margin-left: 8px;
+}
+
+.eq-graph {
+    display: block;
+    width: 100%;
+    height: 180px;
+    border: 1px solid #3a3a43;
+    border-radius: 4px;
+    margin: 4px 0 8px 0;
+}
+
+.eq-cols {
+    display: -webkit-flex;
+    display: flex;
+    -webkit-flex-wrap: wrap;
+    flex-wrap: wrap;
+}
+
+.eq-col {
+    -webkit-flex: 1;
+    flex: 1;
+    min-width: 96px;
+    text-align: center;
+    padding: 4px;
+    border-left: 1px solid #3a3a43;
+}
+
+.eq-col-title {
+    font-weight: bold;
+    font-size: 13px;
+    padding: 2px 0 6px 0;
+}
+
+.eq-col .on-btn {
+    width: 64px;
+    padding: 0;
+    margin-bottom: 6px;
+}
+
+.eq-types {
+    padding-bottom: 4px;
+}
+
+.btn.eq-type {
+    min-height: 30px;
+    line-height: 28px;
+    padding: 0 6px;
+    margin: 0 2px 4px 2px;
+    font-size: 12px;
+}
+
+.btn.eq-type.lit {
+    background: #4a90e2;
+    border-color: #4a90e2;
+    color: #ffffff;
+}
+
+.enc {
+    display: inline-block;
+    margin: 2px 4px 6px 4px;
+    cursor: ns-resize;
+}
+
+.enc.off {
+    opacity: 0.35;
+}
+
+.enc-label {
+    font-size: 11px;
+    color: #858590;
+}
+
+.enc-knob {
+    display: block;
+    margin: 0 auto;
+}
+
+.enc-value {
+    font-size: 12px;
+}
+
+/* ---------- Sends on Fader ---------- */
+
+.btn.sof-btn.lit {
+    background: #f0b030;
+    border-color: #f0b030;
+    color: #101010;
+}
+
+.sof-bar {
+    position: absolute;
+    top: 52px;
+    left: 0;
+    right: 0;
+    background: #f0b030;
+    color: #101010;
+    padding: 6px 8px;
+    overflow: hidden;
+}
+
+.sof-text {
+    float: left;
+    font-weight: bold;
+    line-height: 36px;
+    padding-left: 4px;
+}
+
+.btn.sof-back {
+    float: right;
+    min-height: 36px;
+    line-height: 34px;
+    background: #101010;
+    border-color: #101010;
+    color: #f0b030;
+}
+
+.sof-pick {
+    position: absolute;
+    top: 52px;
+    left: 0;
+    right: 0;
+    padding: 8px;
+    background: #242429;
+    border-bottom: 1px solid #3a3a43;
+    z-index: 5;
+}
+
+.strip.sof {
+    border-color: #f0b030;
+}
+
+.strip.sof .sl-fill {
+    background: #f0b030;
+}

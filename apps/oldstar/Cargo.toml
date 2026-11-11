@@ -1,0 +1,49 @@
+[package]
+name = "oldstar"
+version = "0.0.1"
+description = "Télécommande web pour iPad : console Yamaha CL/QL, CueStar et JingleStar en OSC, fenêtres Windows capturées"
+authors = ["Pierrick"]
+edition = "2021"
+license = "MIT"
+
+# Pour l'instant OldStar se construit à part (son propre Cargo.lock), pour ne pas toucher au
+# Cargo.lock commun pendant que les autres applis évoluent. Pour l'intégrer à la suite :
+# retirer ce bloc et ajouter "apps/oldstar" aux membres du Cargo.toml racine.
+[workspace]
+
+[dependencies]
+star-core = { path = "../../crates/star-core" }
+star-ui = { path = "../../crates/star-ui" }
+# Rendu glow (OpenGL) seulement : exe plus léger que wgpu, largement assez pour cette fenêtre.
+eframe = { version = "0.37", default-features = false, features = ["glow", "default_fonts", "clipboard", "links", "wayland", "x11"] }
+egui = "0.37"
+# QR code de l'adresse à taper sur la tablette (pur Rust).
+qrcode = { version = "0.14", default-features = false }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+rosc = "0.11"
+if-addrs = "0.15"
+image = { version = "0.25", default-features = false, features = ["jpeg"] }
+
+[build-dependencies]
+star-build = { path = "../../crates/star-build" }
+
+[target."cfg(windows)".dependencies]
+# Capture des fenêtres (PrintWindow) et clics simulés (SendInput / PostMessage).
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_Storage_Xps",
+    "Win32_UI_HiDpi",
+    "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_WindowsAndMessaging",
+    "Win32_System_SystemInformation",
+    "Win32_System_Threading",
+] }
+
+[profile.dev.package."*"]
+opt-level = 3
+
+[profile.release]
+lto = true
+codegen-units = 1
