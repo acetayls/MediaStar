@@ -153,8 +153,15 @@ impl OutputLink {
                 }
                 std::thread::sleep(std::time::Duration::from_millis(50));
             }
+            // Attente bornée après l'arrêt forcé : un moteur coincé dans le pilote graphique peut
+            // mettre du temps à disparaître, la régie ne doit pas se figer à l'attendre.
             let _ = c.kill();
-            let _ = c.wait();
+            for _ in 0..40 {
+                if !matches!(c.try_wait(), Ok(None)) {
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
         }
         self.rx = None;
         self.state.running = false;

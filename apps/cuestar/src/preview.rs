@@ -645,8 +645,14 @@ impl Drop for Preview {
     fn drop(&mut self) {
         self.stdin = None;
         if let Some(mut c) = self.child.take() {
+            // Attente bornée : la régie ne se fige pas sur un aperçu qui tarde à disparaître.
             let _ = c.kill();
-            let _ = c.wait();
+            for _ in 0..40 {
+                if !matches!(c.try_wait(), Ok(None)) {
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
         }
     }
 }

@@ -743,7 +743,7 @@ impl OutputApp {
 
     fn command(&mut self, el: &ActiveEventLoop, cmd: Command) {
         if let Command::Quit = cmd {
-            el.exit();
+            self.quit(el);
             return;
         }
         if let Command::Monitor { on } = cmd {
@@ -1443,7 +1443,7 @@ impl OutputApp {
                     continue;
                 }
                 if ev.event_id == mpv::EVENT_SHUTDOWN {
-                    el.exit();
+                    self.quit(el);
                     continue;
                 }
                 if self.warming.get(deck).copied().unwrap_or(0) > 0 {
@@ -1747,14 +1747,40 @@ impl OutputApp {
     }
 }
 
-impl Drop for OutputApp {
-    fn drop(&mut self) {
-        // L'écran retrouve sa fréquence d'origine.
-        if self.refresh_changed {
+impl OutputApp {
+    /// L'écran retrouve sa fréquence d'origine (une seule fois).
+    fn restore_refresh(&mut self) {
+        if std::mem::take(&mut self.refresh_changed) {
             if let Some(d) = &self.device {
                 refresh::restore(d);
             }
         }
+    }
+
+    /// Fermeture de la sortie (régie fermée ou partie, fenêtre fermée, mpv arrêté) : la fenêtre
+    /// disparaît et l'écran retrouve sa fréquence tout de suite, avant la libération des
+    /// lecteurs et de Direct3D. Si cette libération se bloque, le processus s'arrête quand même
+    /// au bout de deux secondes : une sortie figée laisserait l'écran noir après la régie.
+    fn quit(&mut self, el: &ActiveEventLoop) {
+        if let Some(w) = &self.window {
+            w.set_visible(false);
+        }
+        self.restore_refresh();
+        std::thread::Builder::new()
+            .name("sortie-arret".into())
+            .spawn(|| {
+                std::thread::sleep(Duration::from_secs(2));
+                star_core::log::write("Sortie : fermeture bloquée, arrêt forcé du moteur");
+                std::process::exit(0);
+            })
+            .ok();
+        el.exit();
+    }
+}
+
+impl Drop for OutputApp {
+    fn drop(&mut self) {
+        self.restore_refresh();
     }
 }
 
@@ -1772,7 +1798,7 @@ impl ApplicationHandler<UserEv> for OutputApp {
         match ev {
             UserEv::Cmd(c) => self.command(el, c),
             UserEv::Mpv(deck) => self.mpv_events(el, deck),
-            UserEv::Detached => el.exit(),
+            UserEv::Detached => self.quit(el),
         }
     }
 
@@ -1815,7 +1841,7 @@ impl ApplicationHandler<UserEv> for OutputApp {
 
     fn window_event(&mut self, el: &ActiveEventLoop, _id: WindowId, event: WindowEvent) {
         match event {
-            WindowEvent::CloseRequested => el.exit(),
+            WindowEvent::CloseRequested => self.quit(el),
             // Touches reçues seulement quand la sortie a le focus clavier (on a cliqué dessus, ou
             // elle recouvre la régie sur un seul écran). Échap la remet dans une fenêtre, sans
             // arrêter la lecture ; F bascule plein écran / fenêtre. Ailleurs, Échap reste à la régie.
