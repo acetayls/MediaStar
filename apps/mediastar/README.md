@@ -22,10 +22,10 @@ CueStar démarre sur la mire ; JingleStar n'a besoin de rien.
 |---|---|---|
 | Windows | `libmpv-2.dll` (build « mpv-dev » de shinchiro) et `MediaInfo.dll` (DLL x64 de mediaarea.net) | `packaging/windows/package.ps1` |
 | macOS | `libmpv.2.dylib` et `libmediainfo.0.dylib` (Homebrew) avec leurs dépendances, dans `MediaStar.app/Contents/Frameworks` (dylibbundler) | `packaging/macos/bundle.sh` |
-| Linux | `libmpv.so.2` (0.38 ou plus, `build-libmpv.sh`) et `libmediainfo.so.0`, dans `../lib` de l'AppImage ou installées sur le système | `apps/cuestar/packaging/linux/appimage.sh` (pas encore repris pour MediaStar) |
+| Linux | `libmpv.so.2` (0.38 ou plus, `build-libmpv.sh`) et `libmediainfo.so.0`, dans `../lib` de l'AppImage ou installées sur le système | `packaging/linux/appimage.sh` (libmpv : `apps/cuestar/packaging/linux/build-libmpv.sh`) |
 
 Paquets : workflow `.github/workflows/build-mediastar.yml` (à la demande) : installeur et zip
-portable Windows, un `.dmg` macOS Intel et un `.dmg` Apple Silicon. Tant que l'app n'est pas
+portable Windows, un `.dmg` macOS Intel, un `.dmg` Apple Silicon et une AppImage Linux x86_64. Tant que l'app n'est pas
 notarisée, le `.dmg` contient `LISEZ-MOI - Ouvrir MediaStar.txt` (passer Gatekeeper : clic
 droit > Ouvrir, « Ouvrir quand même » sous macOS 15, ou `xattr -dr com.apple.quarantine`).
 Licences livrées : celles de CueStar (`apps/cuestar/packaging/licences`) et `packaging/LICENCES.txt`.

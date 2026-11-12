@@ -1,7 +1,7 @@
 [Desktop Entry]
 Type=Application
 Name=MediaStar
-Comment=JingleStar et CueStar : jingles, playlists et diffusion vidéo
+Comment=JingleStar, CueStar, OldStar et SweepStar : jingles, vidéo, télécommande tablette et mesure acoustique
 Exec=mediastar
 Icon=mediastar
 Categories=AudioVideo;Audio;Video;Player;

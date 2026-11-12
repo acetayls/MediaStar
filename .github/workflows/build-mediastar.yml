@@ -9,6 +9,8 @@ name: Build MediaStar
 #   macOS Apple Silicon    : MediaStar-<version>-macos-apple-silicon.dmg (aarch64-apple-darwin)
 #   Les .dmg contiennent MediaStar.app (libmpv et libmediainfo Homebrew dans Contents/Frameworks)
 #   et, tant que l'app n'est pas notarisée, « LISEZ-MOI - Ouvrir MediaStar.txt » (Gatekeeper).
+#   Linux                  : MediaStar-<version>-linux-x86_64.AppImage (libmpv compilée ici par
+#                            le script de CueStar, libmediainfo d'Ubuntu 22.04)
 # Les scripts sont dans apps/mediastar/packaging et se lancent aussi à la main.
 on:
   workflow_dispatch:
@@ -23,6 +25,7 @@ on:
           - macos
           - macos-intel
           - macos-apple-silicon
+          - linux
       release:
         description: "Tag de la release GitHub à créer et remplir (ex. mediastar-v0.0.1) ; vide = simple build"
         required: false
@@ -33,6 +36,10 @@ on:
         default: ""
       mediainfo_windows:
         description: "Version de MediaInfo DLL pour Windows (ex. 26.10) ; vide = la dernière"
+        required: false
+        default: ""
+      mpv_linux:
+        description: "Version de mpv compilée pour Linux (tag ou commit, ex. v0.42.0) ; vide = v0.42.0"
         required: false
         default: ""
 
@@ -226,3 +233,67 @@ jobs:
           name: MediaStar ${{ inputs.release }}
           target_commitish: ${{ github.sha }}
           files: dist/*.dmg
+
+  linux:
+    if: inputs.cible == 'tout' || inputs.cible == 'linux'
+    # Ubuntu 22.04 : glibc assez ancienne pour que l'AppImage tourne sur la plupart des distributions.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: mediastar-linux
+      - name: Dépendances Linux
+        # Comme CueStar : ALSA (audio de JingleStar et SweepStar), GTK (boîtes de dialogue),
+        # et les bibliothèques dont dépend la libmpv compilée, que linuxdeploy doit trouver.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libasound2-dev libxkbcommon-dev libgtk-3-dev libmediainfo0v5 \
+            libva2 libva-drm2 libva-x11-2 libva-wayland2 libvdpau1 libpulse0 libxpresent1 libxss1 libxinerama1 \
+            libxrandr2 libdrm2 libgbm1 libegl1 libgl1 libwayland-client0 libwayland-cursor0 libwayland-egl1 \
+            libfribidi0 libfreetype6 libfontconfig1 libharfbuzz0b liblcms2-2 libjpeg8 libsnappy1v5 zlib1g
+      # libmpv : celle d'Ubuntu 22.04 (0.34) est trop ancienne pour CueStar. Compilée par le script
+      # de CueStar ; même clé de cache que le workflow de CueStar, donc reprise de son cache.
+      - name: Cache de libmpv
+        id: libmpv
+        uses: actions/cache@v4
+        with:
+          path: dist/libmpv
+          key: libmpv-linux-${{ hashFiles('apps/cuestar/packaging/linux/build-libmpv.sh') }}-${{ inputs.mpv_linux }}
+      - name: Compiler libmpv (mpv-build)
+        if: steps.libmpv.outputs.cache-hit != 'true'
+        env:
+          MPV_REF: ${{ inputs.mpv_linux || 'v0.42.0' }}
+          WORK: ${{ runner.temp }}/libmpv
+        run: bash apps/cuestar/packaging/linux/build-libmpv.sh dist/libmpv
+      - name: Tests
+        run: cargo test -p mediastar
+      - name: Build release
+        run: cargo build --release -p mediastar
+      - name: AppImage
+        env:
+          LIBMPV: dist/libmpv/libmpv.so.2
+        run: |
+          cat dist/libmpv/mpv-build.txt
+          bash apps/mediastar/packaging/linux/appimage.sh dist
+      - name: Vérifier le paquet
+        run: |
+          ls dist/MediaStar.AppDir/usr/lib/ | grep -E '^libmpv\.so\.2$'
+          ls dist/MediaStar.AppDir/usr/lib/ | grep -E '^libmediainfo\.so'
+          test -f dist/MediaStar.AppDir/usr/share/doc/mediastar/licences/mpv-build.txt
+          test -f dist/MediaStar.AppDir/usr/share/doc/mediastar/licences/TIERS.txt
+          test -f dist/MediaStar.AppDir/usr/share/doc/mediastar/licences/LICENCES.txt
+          ls dist/*.AppImage
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mediastar-linux
+          path: dist/*.AppImage
+      - name: Publier dans la release
+        if: inputs.release != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.release }}
+          name: MediaStar ${{ inputs.release }}
+          target_commitish: ${{ github.sha }}
+          files: dist/*.AppImage

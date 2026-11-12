@@ -23,8 +23,9 @@
 - Toutes les versions sont affichées précédées d'un « v » (v0.1.4…).
 - Les exécutables JingleStar, CueStar, OldStar et SweepStar restent disponibles séparément, avec leurs
   propres numéros de version.
-- **Paquets prêts pour Windows et Mac** : installeur et version portable pour Windows, et une
-  image disque pour chaque type de Mac (Intel, ou Apple Silicon : M1, M2…). Lecteur vidéo et
+- **Paquets prêts pour Windows, Mac et Linux** : installeur et version portable pour Windows, une
+  image disque pour chaque type de Mac (Intel, ou Apple Silicon : M1, M2…) et une AppImage
+  pour Linux (à rendre exécutable, puis à lancer). Lecteur vidéo et
   MediaInfo sont inclus, il n'y a rien d'autre à installer. Comme l'appli n'est pas encore
   signée par Apple, l'image disque contient un LISEZ-MOI qui explique comment l'ouvrir la
   première fois (clic droit > Ouvrir, ou « Ouvrir quand même » dans Confidentialité et
