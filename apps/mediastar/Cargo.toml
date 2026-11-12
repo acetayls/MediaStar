@@ -1,6 +1,6 @@
 [package]
 name = "mediastar"
-version = "0.0.1"
+version = "0.0.2"
 description = "Suite MediaStar : JingleStar, CueStar, OldStar et SweepStar dans un seul exécutable (Windows, macOS, Linux)"
 authors = ["Pierrick"]
 edition.workspace = true

@@ -1,6 +1,8 @@
 # Journal des modifications
 
-## 0.0.1 — en cours
+## 0.0.2 — en cours
+
+## 0.0.1 — 12/11/2026
 
 - **Nouvel exécutable MediaStar** : il regroupe JingleStar, CueStar, OldStar et SweepStar. Chaque module
   s'ouvre dans sa propre fenêtre et son propre processus ; l'accueil reste ouvert pour en lancer
