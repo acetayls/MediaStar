@@ -827,6 +827,7 @@ impl Controller {
                     self.start_track_now(module, index, buf);
                 } else {
                     let gain = self.track_gain(module, index).linear();
+                    let looping = self.track_loops(module, index);
                     let id = self.voice_id();
                     let rt = &mut self.playlists[module];
                     rt.queued = Some((index, id));
@@ -835,7 +836,7 @@ impl Controller {
                         Transition::Gapless => 0,
                         Transition::Crossfade => (pl.crossfade_secs.max(0.0) as f64 * buf.sample_rate as f64) as usize,
                     };
-                    let next = Queued { buffer: buf, gain, id, crossfade };
+                    let next = Queued { buffer: buf, gain, id, crossfade, looping };
                     self.engine.send(Command::QueueNext { module, next: Some(next) });
                 }
             }
@@ -1417,6 +1418,7 @@ impl Controller {
     /// Lance tout de suite un morceau déjà décodé, puis précharge le suivant.
     fn start_track_now(&mut self, module: usize, index: usize, buf: Arc<AudioBuffer>) {
         let gain = self.track_gain(module, index).linear();
+        let looping = self.track_loops(module, index);
         let id = self.voice_id();
         let rt = &mut self.playlists[module];
         rt.loading = false;
@@ -1425,7 +1427,8 @@ impl Controller {
         rt.played.insert(index);
         rt.remember(index);
         rt.duration = Some(buf.duration_secs());
-        let region = Region::full(&buf);
+        let mut region = Region::full(&buf);
+        region.looping = looping.then_some((0, buf.frames));
         let slot = rt.slot;
         self.engine.send(Command::Play { module, slot, id, buffer: buf, gain, region, eq: EqCoeffs::flat() });
         self.preload_next(module);
@@ -1457,10 +1460,50 @@ impl Controller {
 
     fn preload_next(&mut self, m: usize) {
         if let Some(cur) = self.playlists[m].current {
+            // Morceau en boucle : rien à enchaîner tant qu'il tourne.
+            if self.track_loops(m, cur) {
+                return;
+            }
             if let Some(next) = self.next_index(m, cur) {
                 self.load_track(m, next, false);
             }
         }
+    }
+
+    /// Le morceau `index` de la playlist est-il lu en boucle ?
+    pub fn track_loops(&self, m: usize, index: usize) -> bool {
+        let pl = &self.project.modules[m].playlist;
+        pl.tracks.get(index).is_some_and(|p| pl.looped.contains(p))
+    }
+
+    /// Lecture en boucle d'un morceau, comme le bouton boucle d'un cue de CueStar. Pendant la
+    /// lecture, il est pris en compte tout de suite : cochée, le morceau en cours se répète ;
+    /// décochée, il va jusqu'au bout puis la playlist enchaîne comme d'habitude.
+    pub fn set_track_looping(&mut self, m: usize, index: usize, on: bool) {
+        let pl = &mut self.project.modules[m].playlist;
+        let Some(path) = pl.tracks.get(index).cloned() else { return };
+        let changed = if on { pl.looped.insert(path.clone()) } else { pl.looped.remove(&path) };
+        if !changed {
+            return;
+        }
+        self.mark_dirty();
+        let rt = &self.playlists[m];
+        if !rt.playing || rt.voice.is_none() {
+            return;
+        }
+        let tracks = &self.project.modules[m].playlist.tracks;
+        if rt.current.and_then(|c| tracks.get(c)) == Some(&path) {
+            // Bornes ramenées à la longueur du fichier par le mixeur.
+            let region = Region { start: 0, end: usize::MAX, looping: on.then_some((0, usize::MAX)), fade_in: 0, fade_out: 0 };
+            self.engine.send(Command::SetRegion { module: m, slot: rt.slot, region });
+        }
+        // File recalculée : rien après un morceau qui boucle, sinon le suivant habituel.
+        let rt = &mut self.playlists[m];
+        rt.generation += 1;
+        rt.queued = None;
+        rt.loading = false;
+        self.engine.send(Command::QueueNext { module: m, next: None });
+        self.preload_next(m);
     }
 
     pub fn playlist_play(&mut self, m: usize, index: usize) {
@@ -2284,6 +2327,30 @@ mod tests {
         let cur = c.project.modules[0].playlist.tracks.get(2).cloned();
         c.relocate_current(0, cur);
         assert_eq!(c.playlists[0].current, Some(2));
+    }
+
+    #[test]
+    fn looping_track_holds_the_queue() {
+        let mut p = Project::default();
+        p.modules[0].mode = ModuleMode::Playlist;
+        p.modules[0].playlist.tracks = (0..3).map(|i| PathBuf::from(format!("/m/{i}.wav"))).collect();
+        let mut c = headless(p);
+        // Morceau 1 en cours, morceau 2 en file.
+        let rt = &mut c.playlists[0];
+        (rt.playing, rt.current, rt.voice, rt.queued) = (true, Some(1), Some(7), Some((2, 8)));
+        c.set_track_looping(0, 1, true);
+        assert!(c.track_loops(0, 1) && !c.track_loops(0, 0));
+        let rt = &c.playlists[0];
+        assert_eq!(rt.queued, None, "plus de suivant en file derrière un morceau en boucle");
+        assert!(!rt.loading, "rien n'est préchargé tant qu'il boucle");
+        // Boucle retirée : le suivant habituel est rechargé.
+        c.set_track_looping(0, 1, false);
+        assert!(!c.track_loops(0, 1));
+        assert!(c.playlists[0].loading, "le suivant est rechargé");
+        // La boucle suit le fichier, pas sa place dans la liste.
+        c.set_track_looping(0, 2, true);
+        c.remove_track(0, 0);
+        assert!(c.track_loops(0, 1));
     }
 
     #[test]

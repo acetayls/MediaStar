@@ -2,6 +2,14 @@
 
 ## 0.0.2 — en cours
 
+### Barre du haut
+
+- **Barre du haut commune à la suite** : logo et nom « CueStar » (« Star » en jaune) avant le nom
+  du projet ; onglets Cuelist, Diaporama, Présentation en contrôle segmenté, Texte à côté.
+  Aide, Télécommandes et Préférences deviennent des boutons à icône seule (livre, télécommande,
+  engrenage), avec leur nom en infobulle. Fenêtre étroite : le logo seul. La version est
+  maintenant affichée dans la fenêtre d'aide.
+
 ### Fenêtres
 
 - **Fenêtre de projet** : au premier lancement, elle s'ouvre centrée sur l'écran principal (la
@@ -26,6 +34,9 @@
 - **AppImage Linux** : les bibliothèques dont dépend libmpv (VA-API, VDPAU, PulseAudio, X11,
   Wayland, polices…) sont toujours embarquées dans le paquet, y compris quand libmpv est reprise
   du cache de compilation.
+- **Aussi dans MediaStar** : CueStar peut désormais s'ouvrir depuis l'accueil du nouvel
+  exécutable MediaStar, qui regroupe JingleStar et CueStar. L'exécutable CueStar seul reste
+  disponible, avec sa propre version.
 
 ## 0.0.1 — 11 novembre 2026
 

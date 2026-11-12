@@ -148,7 +148,7 @@
 
         /* En-tête : EQ ON, FLAT */
         var head = U.el('div', 'section-head');
-        head.appendChild(U.el('div', 'section-title', 'Égaliseur'));
+        head.appendChild(U.el('div', 'section-title', OS.t('Égaliseur', 'Equalizer')));
         var flat = U.el('div', 'btn', 'FLAT');
         U.tap(flat, function () {
             var i;

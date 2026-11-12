@@ -49,6 +49,10 @@ pub enum Icon {
     Note,
     /// ▾ menu déroulant
     Caret,
+    /// télécommande (boîtier à touches)
+    Remote,
+    /// livre ouvert (aide)
+    Book,
 }
 
 impl Icon {
@@ -289,6 +293,20 @@ pub fn paint(p: &Painter, rect: Rect, icon: Icon, col: Color32) {
         }
         Icon::Caret => {
             p.add(poly(vec![pt(-0.6, -0.3), pt(0.6, -0.3), pt(0.0, 0.4)]));
+        }
+        Icon::Remote => {
+            // Boîtier arrondi, gros bouton rond en haut, quatre petites touches.
+            let r = Rect::from_min_max(pt(-0.5, -0.95), pt(0.5, 0.95));
+            p.rect_stroke(r, CornerRadius::same((0.25 * h) as u8), stroke(0.9), egui::StrokeKind::Middle);
+            p.circle_filled(pt(0.0, -0.5), 0.2 * h, col);
+            for (x, y) in [(-0.2, 0.05), (0.2, 0.05), (-0.2, 0.45), (0.2, 0.45)] {
+                p.circle_filled(pt(x, y), 0.1 * h, col);
+            }
+        }
+        Icon::Book => {
+            // Deux pages pleines, séparées par la reliure.
+            p.add(poly(vec![pt(-0.95, -0.65), pt(-0.08, -0.5), pt(-0.08, 0.8), pt(-0.95, 0.62)]));
+            p.add(poly(vec![pt(0.08, -0.5), pt(0.95, -0.65), pt(0.95, 0.62), pt(0.08, 0.8)]));
         }
         Icon::Note => {
             p.circle_filled(pt(-0.3, 0.5), 0.36 * h, col);

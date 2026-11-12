@@ -23,7 +23,8 @@ use std::path::PathBuf;
 use std::time::Instant;
 use egui::{Align, Color32, Key, Layout, RichText};
 use star_ui::theme::{self, *};
-use star_ui::widgets;
+use star_ui::icons::Icon;
+use star_ui::{app_bar, widgets};
 use std::time::Duration;
 
 /// Fenêtre du système des Télécommandes.
@@ -159,7 +160,7 @@ impl CueStarApp {
             },
             osc_draft: crate::osc::OscSettings::load(),
             osc_open: false,
-            help: star_ui::help::HelpWindow::new(AIDE_FR, HELP_EN).app("CueStar"),
+            help: star_ui::help::HelpWindow::new(AIDE_FR, HELP_EN).app("CueStar").version(crate::VERSION),
             remotes: {
                 let ctx = cc.egui_ctx.clone();
                 remote_view::Remotes::new(std::sync::Arc::new(move || ctx.request_repaint()))
@@ -611,7 +612,7 @@ impl CueStarApp {
         // Fenêtre étroite : onglets plus courts, puis Préférences, Monitoring, Télécommandes et
         // Aide regroupés dans un menu. Le bouton NOIR reste toujours visible à droite.
         let w = ui.available_width();
-        let tab_w = if w >= 1400.0 { 96.0 } else { 72.0 };
+        let tab_w = if w >= 1400.0 { app_bar::TAB_WIDTH } else { app_bar::TAB_WIDTH_COMPACT };
         let grouped = w < 1160.0;
         ui.horizontal_centered(|ui| {
             ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
@@ -648,14 +649,11 @@ impl CueStarApp {
                 } else {
                     // Fenêtres flottantes : un clic les ouvre, ou les ramène devant si elles sont
                     // déjà ouvertes (passées derrière la régie). On les ferme par leur croix.
-                    if ui.selectable_label(self.help.open, tr("? Aide", "? Help")).on_hover_text("F1").clicked() {
+                    // Boutons à icône seule (barre commune) : le nom est dans l'infobulle.
+                    if app_bar::icon_button(ui, Icon::Book, self.help.open, tr("Aide (F1)", "Help (F1)")).clicked() {
                         self.help.open_or_raise(ui.ctx());
                     }
-                    if ui
-                        .selectable_label(self.osc_open, "Télécommandes")
-                        .on_hover_text("OSC, MIDI, consoles Yamaha et Midas, correspondances, raccourcis")
-                        .clicked()
-                    {
+                    if app_bar::icon_button(ui, Icon::Remote, self.osc_open, "Télécommandes : OSC, MIDI, consoles Yamaha et Midas, correspondances, raccourcis").clicked() {
                         star_ui::floating::open_or_raise(ui.ctx(), &mut self.osc_open, osc_viewport());
                     }
                     if ui
@@ -665,11 +663,7 @@ impl CueStarApp {
                     {
                         self.monitor.open_or_raise(ui.ctx(), &mut self.out);
                     }
-                    if ui
-                        .selectable_label(self.output_view.open, "Préférences")
-                        .on_hover_text("Fenêtre flottante en onglets : écran et moteur de sortie, audio, mires de test, mapping 4 coins, système")
-                        .clicked()
-                    {
+                    if app_bar::icon_button(ui, Icon::Gear, self.output_view.open, "Préférences : écran et moteur de sortie, audio, mires de test, mapping 4 coins, système").clicked() {
                         star_ui::floating::open_or_raise(ui.ctx(), &mut self.output_view.open, output_view::viewport_id());
                     }
                     self.fullscreen_button(ui);
@@ -678,8 +672,8 @@ impl CueStarApp {
                 // Partie gauche dans la place restante, coupée plutôt que de passer sous la droite.
                 ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                     ui.set_clip_rect(ui.max_rect().intersect(ui.clip_rect()));
-                    // Le logo seul, discret : le nom du projet passe devant (comme JingleStar).
-                    widgets::logo_mark_play(ui, 26.0).on_hover_text("CueStar");
+                    // Barre commune : logo, nom et version (le logo seul en fenêtre étroite), puis le projet.
+                    app_bar::identity(ui, app_bar::Logo::Cue, "CueStar", grouped);
                     ui.add_space(12.0);
                     ui.scope(|ui| {
                         ui.set_max_width(if grouped { 150.0 } else { 240.0 });
@@ -709,20 +703,10 @@ impl CueStarApp {
                         }
                     }
                     ui.add_space(12.0);
-                    for (t, name) in [(Tab::Cuelist, "Cuelist"), (Tab::Diaporama, "Diaporama"), (Tab::Presentation, "Présentation")] {
-                        let sel = self.tab == t;
-                        let txt = RichText::new(name).size(15.0).color(if sel { PLAYING_INK } else { TEXT });
-                        let b = egui::Button::new(txt).fill(if sel { ACCENT } else { PANEL_HI }).min_size(egui::vec2(tab_w, 30.0));
-                        if ui.add(b).clicked() {
-                            self.tab = t;
-                        }
-                    }
+                    app_bar::tabs(ui, &mut self.tab, &[(Tab::Cuelist, "Cuelist"), (Tab::Diaporama, "Diaporama"), (Tab::Presentation, "Présentation")], tab_w);
                     // Texte : panneau latéral, affiché en plus de l'onglet en cours.
-                    let txt = RichText::new("Texte").size(15.0).color(if self.show_notes { PLAYING_INK } else { TEXT });
-                    let b = egui::Button::new(txt).fill(if self.show_notes { ACCENT } else { PANEL_HI }).min_size(egui::vec2(tab_w, 30.0));
-                    if ui.add(b).on_hover_text("Module Texte : la conduite écrite, sur le côté (clic : afficher / masquer)").clicked() {
-                        self.show_notes = !self.show_notes;
-                    }
+                    ui.add_space(6.0);
+                    app_bar::toggle_tab(ui, &mut self.show_notes, "Texte", tab_w).on_hover_text("Module Texte : la conduite écrite, sur le côté (clic : afficher / masquer)");
                 });
             });
         });
@@ -966,10 +950,7 @@ impl eframe::App for CueStarApp {
             self.confirm_new = true;
         }
 
-        egui::Panel::top("toolbar")
-            .exact_size(50.0)
-            .frame(egui::Frame::new().fill(PANEL).inner_margin(egui::Margin::symmetric(12, 6)))
-            .show(ui, |ui| self.toolbar(ui));
+        app_bar::show(ui, |ui| self.toolbar(ui));
         egui::Panel::bottom("status")
             .exact_size(28.0)
             .frame(egui::Frame::new().fill(PANEL).inner_margin(egui::Margin::symmetric(12, 4)))

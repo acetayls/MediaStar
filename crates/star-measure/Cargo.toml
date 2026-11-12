@@ -1,0 +1,13 @@
+[package]
+name = "star-measure"
+version = "0.1.0"
+description = "Moteur de mesure acoustique de SweepStar, sans interface ni audio : sweep et réponse impulsionnelle, délai, fonction de transfert bi-canal, RTA, lissage, générateurs"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[dependencies]
+# Mêmes versions que celles tirées par rubato, pour ne pas dupliquer les FFT dans le binaire.
+realfft = "3.5"
+num-complex = "0.4"

@@ -36,6 +36,8 @@ pub struct HelpWindow {
     pub open: bool,
     /// Nom de l'appli, pour le titre de la fenêtre (« JingleStar — Aide »).
     app: &'static str,
+    /// Version de l'appli, montrée dans l'aide (et plus dans la barre du haut).
+    version: &'static str,
     /// Manuels bruts, français et anglais.
     src_fr: &'static str,
     src_en: &'static str,
@@ -51,12 +53,18 @@ pub struct HelpWindow {
 impl HelpWindow {
     /// `fr` et `en` : le manuel en Markdown, en général lu avec `include_str!`.
     pub fn new(fr: &'static str, en: &'static str) -> Self {
-        Self { open: false, app: "", src_fr: fr, src_en: en, fr: OnceLock::new(), en: OnceLock::new(), jump: None, query: String::new() }
+        Self { open: false, app: "", version: "", src_fr: fr, src_en: en, fr: OnceLock::new(), en: OnceLock::new(), jump: None, query: String::new() }
     }
 
     /// Nom de l'appli affiché dans le titre de la fenêtre.
     pub fn app(mut self, app: &'static str) -> Self {
         self.app = app;
+        self
+    }
+
+    /// Version de l'appli, affichée dans le titre et en haut à droite de l'aide (« v0.1.4 »).
+    pub fn version(mut self, version: &'static str) -> Self {
+        self.version = version;
         self
     }
 
@@ -87,7 +95,12 @@ impl HelpWindow {
         };
         let mut open = true;
         // Fenêtre du système à part : elle peut sortir de la fenêtre principale (autre écran…).
-        let title = if self.app.is_empty() { tr("Aide", "Help").to_string() } else { format!("{} — {}", self.app, tr("Aide", "Help")) };
+        let name = match (self.app.is_empty(), self.version.is_empty()) {
+            (true, _) => String::new(),
+            (false, true) => self.app.to_string(),
+            (false, false) => format!("{} v{}", self.app, self.version),
+        };
+        let title = if name.is_empty() { tr("Aide", "Help").to_string() } else { format!("{name} — {}", tr("Aide", "Help")) };
         let vp = egui::ViewportBuilder::default().with_title(title).with_inner_size([900.0, 680.0]).with_min_inner_size([560.0, 320.0]);
         let vp = crate::floating::placed(ctx, "aide", vp);
         let id = self.viewport_id();
@@ -112,6 +125,11 @@ impl HelpWindow {
                     }
                     if !self.query.is_empty() && ui.small_button(crate::icons::atom_small(crate::icons::Icon::Close)).on_hover_text(tr("Effacer", "Clear")).clicked() {
                         self.query.clear();
+                    }
+                    if !name.is_empty() {
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            ui.label(RichText::new(&name).color(TEXT_DIM));
+                        });
                     }
                 });
                 ui.add_space(4.0);

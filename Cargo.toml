@@ -9,8 +9,12 @@ members = [
     "crates/star-build",
     "crates/star-pptx",
     "crates/star-pdf",
+    "crates/star-measure",
     "apps/jinglestar",
     "apps/cuestar",
+    "apps/sweepstar",
+    "apps/mediastar",
+    "apps/oldstar",
 ]
 # Outil de mesure de la sortie CueStar (Windows), construit à part.
 exclude = ["tools/bench-sortie"]
@@ -30,6 +34,7 @@ star-remote = { path = "crates/star-remote" }
 star-build = { path = "crates/star-build" }
 star-pptx = { path = "crates/star-pptx" }
 star-pdf = { path = "crates/star-pdf" }
+star-measure = { path = "crates/star-measure" }
 
 # Build de développement plus rapide à l'exécution : dépendances optimisées pour toutes les
 # applications, et CueStar lui-même en opt-level 1 (lecture vidéo, vignettes, régie).

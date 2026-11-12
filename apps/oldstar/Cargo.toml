@@ -1,22 +1,18 @@
 [package]
 name = "oldstar"
 version = "0.0.1"
-description = "Télécommande web pour iPad : console Yamaha CL/QL, CueStar et JingleStar en OSC, fenêtres Windows capturées"
+description = "Télécommande web pour iPad : console Yamaha CL/QL, CueStar et JingleStar en OSC, fenêtres du PC capturées (Windows, macOS)"
 authors = ["Pierrick"]
-edition = "2021"
-license = "MIT"
-
-# Pour l'instant OldStar se construit à part (son propre Cargo.lock), pour ne pas toucher au
-# Cargo.lock commun pendant que les autres applis évoluent. Pour l'intégrer à la suite :
-# retirer ce bloc et ajouter "apps/oldstar" aux membres du Cargo.toml racine.
-[workspace]
+edition.workspace = true
+license.workspace = true
 
 [dependencies]
-star-core = { path = "../../crates/star-core" }
-star-ui = { path = "../../crates/star-ui" }
-# Rendu glow (OpenGL) seulement : exe plus léger que wgpu, largement assez pour cette fenêtre.
-eframe = { version = "0.37", default-features = false, features = ["glow", "default_fonts", "clipboard", "links", "wayland", "x11"] }
-egui = "0.37"
+star-core.workspace = true
+star-ui.workspace = true
+# Même eframe que les autres applis (rendu wgpu). Pas de fonctionnalité « glow » : réunie avec
+# les autres applis dans MediaStar, elle change la signature de `App::on_exit` pour toutes.
+eframe.workspace = true
+egui.workspace = true
 # QR code de l'adresse à taper sur la tablette (pur Rust).
 qrcode = { version = "0.14", default-features = false }
 serde = { version = "1", features = ["derive"] }
@@ -26,7 +22,7 @@ if-addrs = "0.15"
 image = { version = "0.25", default-features = false, features = ["jpeg"] }
 
 [build-dependencies]
-star-build = { path = "../../crates/star-build" }
+star-build.workspace = true
 
 [target."cfg(windows)".dependencies]
 # Capture des fenêtres (PrintWindow) et clics simulés (SendInput / PostMessage).
@@ -41,9 +37,12 @@ windows = { version = "0.62", features = [
     "Win32_System_Threading",
 ] }
 
-[profile.dev.package."*"]
-opt-level = 3
-
-[profile.release]
-lto = true
-codegen-units = 1
+[target."cfg(target_os = \"macos\")".dependencies]
+# Capture des fenêtres (ScreenCaptureKit) et clics simulés (CGEvent), Intel et Apple Silicon.
+objc2 = "0.6"
+block2 = "0.6"
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSArray", "NSError", "NSString", "NSDictionary", "NSValue", "NSThread"] }
+objc2-core-foundation = { version = "0.3", default-features = false, features = ["std", "CFArray", "CFDictionary", "CFNumber", "CFString", "CFBase", "CFCGTypes", "CFData"] }
+objc2-core-graphics = { version = "0.3", default-features = false, features = ["std", "CGWindow", "CGEvent", "CGEventTypes", "CGEventSource", "CGImage", "CGDataProvider", "CGColorSpace", "CGContext", "CGBitmapContext", "CGDirectDisplay", "CGRemoteOperation", "CGGeometry", "CGError", "objc2", "libc"] }
+objc2-screen-capture-kit = { version = "0.3", default-features = false, features = ["std", "block2", "objc2-core-graphics", "SCShareableContent", "SCScreenshotManager", "SCStream", "objc2-core-media"] }
+objc2-app-kit = { version = "0.3", default-features = false, features = ["std", "NSRunningApplication", "libc"] }

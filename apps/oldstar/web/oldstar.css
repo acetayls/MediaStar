@@ -1057,3 +1057,117 @@ body.full .shot-img {
 .strip.sof .sl-fill {
     background: #f0b030;
 }
+
+/* ---------- Onglet Aide ---------- */
+
+.help {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 12px 16px 40px 16px;
+    font-size: 15px;
+    line-height: 1.45;
+    -webkit-user-select: text;
+    user-select: text;
+}
+
+.help-ver {
+    float: right;
+    color: #858590;
+    font-size: 13px;
+    padding: 4px 0 0 12px;
+}
+
+.help h1 {
+    font-size: 22px;
+    margin: 4px 0 12px 0;
+}
+
+.help h2 {
+    font-size: 19px;
+    color: #f0b030;
+    margin: 26px 0 8px 0;
+    padding-bottom: 4px;
+    border-bottom: 1px solid #3a3a43;
+}
+
+.help h3 {
+    font-size: 16px;
+    margin: 18px 0 6px 0;
+}
+
+.help p,
+.help ul,
+.help ol {
+    margin: 0 0 10px 0;
+}
+
+.help ul,
+.help ol {
+    padding-left: 22px;
+}
+
+.help li {
+    margin-bottom: 4px;
+}
+
+.help b {
+    color: #ffffff;
+}
+
+.help code,
+.help pre {
+    font-family: Menlo, Consolas, monospace;
+    font-size: 13px;
+    background: #2e2e35;
+    border-radius: 3px;
+}
+
+.help code {
+    padding: 1px 4px;
+}
+
+.help pre {
+    padding: 8px;
+    overflow-x: auto;
+}
+
+.help table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 0 0 12px 0;
+}
+
+.help th,
+.help td {
+    text-align: left;
+    vertical-align: top;
+    padding: 5px 8px;
+    border-bottom: 1px solid #3a3a43;
+}
+
+.help th {
+    color: #858590;
+    font-weight: normal;
+}
+
+.help-retry {
+    display: block;
+    width: 160px;
+    margin: 0 auto;
+}
+
+/* Très petit écran (iPhone 4S en portrait) : quatre onglets, l'état de la liaison réduit à sa
+ * pastille de couleur. */
+@media (max-width: 400px) {
+    .tab {
+        padding: 0 7px;
+    }
+    .link {
+        width: 14px;
+        height: 14px;
+        padding: 0;
+        font-size: 0;
+        border-radius: 7px;
+        margin-left: 4px;
+    }
+}

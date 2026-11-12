@@ -106,7 +106,7 @@
             loading = false;
             if (want !== sel) { next(0); return; }
             img.style.display = 'none';
-            U.text(msg, 'Fenêtre « ' + selName() + ' » introuvable ou réduite sur le PC. Nouvel essai…');
+            U.text(msg, OS.t('Fenêtre', 'Window') + ' « ' + selName() + ' » ' + OS.t('introuvable, réduite ou capture non autorisée sur le PC (voir son Journal). Nouvel essai…', 'not found, minimised or capture not allowed on the PC (see its Log). Retrying…'));
             msg.style.display = 'block';
             next(2000);
         };
@@ -118,27 +118,25 @@
     function setBackground(on) {
         background = !!on;
         save('arriere-plan', background);
-        U.text(modeBtn, background ? 'Clic : arrière-plan' : 'Clic : premier plan');
+        U.text(modeBtn, background ? OS.t('Clic : arrière-plan', 'Click: background') : OS.t('Clic : premier plan', 'Click: foreground'));
         drawHint();
     }
 
     function setFit(on) {
         fit = !!on;
         save('ajuster', fit);
-        U.text(fitBtn, fit ? 'Taille réelle' : 'Ajuster');
+        U.text(fitBtn, fit ? OS.t('Taille réelle', 'Actual size') : OS.t('Ajuster', 'Fit'));
         layout();
     }
 
     function drawHint() {
         var t = '';
         if (background) {
-            t = 'Clics en arrière-plan : la fenêtre ne passe pas devant. Si elle ne réagit pas ' +
-                '(DirectX, certaines applis Qt ou .NET), passez en premier plan.';
+            t = OS.t('Clics en arrière-plan : la fenêtre ne passe pas devant. Si elle ne réagit pas (DirectX, certaines applis Qt ou .NET), passez en premier plan.', 'Background clicks: the window does not come to the front. If it does not react (DirectX, some Qt or .NET apps), switch to foreground.');
         } else if (local) {
-            t = 'Premier plan sur le PC lui-même : chaque clic passe la fenêtre devant le navigateur. ' +
-                'Échap ou « Fermer » pour revenir.';
+            t = OS.t('Premier plan sur le PC lui-même : chaque clic passe la fenêtre devant le navigateur. Échap ou « Fermer » pour revenir.', 'Foreground on the PC itself: each click brings the window in front of the browser. Esc or “Close” to come back.');
         } else {
-            t = 'Clics en premier plan : la fenêtre passe devant sur le PC et la souris bouge.';
+            t = OS.t('Clics en premier plan : la fenêtre passe devant sur le PC et la souris bouge.', 'Foreground clicks: the window comes to the front on the PC and the mouse moves.');
         }
         U.text(hint, t);
         layout();
@@ -217,7 +215,7 @@
         bar.style.display = 'block';
         view.style.display = 'block';
         img.style.display = 'none';
-        U.text(msg, 'Chargement…');
+        U.text(msg, OS.t('Chargement…', 'Loading…'));
         msg.style.display = 'block';
         drawHint();
         next(0);
@@ -238,25 +236,25 @@
 
     function refreshFree() {
         U.empty(freeList);
-        freeList.appendChild(U.el('div', 'empty small', 'Recherche des fenêtres…'));
+        freeList.appendChild(U.el('div', 'empty small', OS.t('Recherche des fenêtres…', 'Looking for windows…')));
         OS.transport.get('/windows', function (r) {
             U.empty(freeList);
             if (!r) {
-                freeList.appendChild(U.el('div', 'empty small', 'Liste indisponible (PC injoignable ?).'));
+                freeList.appendChild(U.el('div', 'empty small', OS.t('Liste indisponible (PC injoignable ?).', 'List unavailable (PC unreachable?).')));
                 return;
             }
             if (!r.available) {
-                freeList.appendChild(U.el('div', 'empty small', 'Capture des fenêtres non disponible sur ce système.'));
+                freeList.appendChild(U.el('div', 'empty small', OS.t('Capture des fenêtres non disponible sur ce système.', 'Window capture is not available on this system.')));
                 return;
             }
             if (!r.list.length) {
-                freeList.appendChild(U.el('div', 'empty small', 'Aucune fenêtre ouverte trouvée.'));
+                freeList.appendChild(U.el('div', 'empty small', OS.t('Aucune fenêtre ouverte trouvée.', 'No open window found.')));
                 return;
             }
             U.each(r.list, function (w) {
                 var b = U.el('div', 'win-item' + (w.min ? ' min' : ''));
                 b.appendChild(U.el('div', 'win-item-title', w.title));
-                b.appendChild(U.el('div', 'win-item-exe', w.exe + (w.min ? ' · réduite : à rouvrir sur le PC' : '')));
+                b.appendChild(U.el('div', 'win-item-exe', w.exe + (w.min ? ' · ' + OS.t('réduite : à rouvrir sur le PC', 'minimised: restore it on the PC') : '')));
                 U.tap(b, function () { choose({ h: w.id, name: w.title }); });
                 freeList.appendChild(b);
             });
@@ -297,7 +295,7 @@
         U.empty(shortcuts);
         buttons = [];
         if (windows.length) {
-            shortcuts.appendChild(U.el('div', 'list-title', 'Raccourcis'));
+            shortcuts.appendChild(U.el('div', 'list-title', OS.t('Raccourcis', 'Shortcuts')));
             U.each(windows, function (w, wi) {
                 var b = button(w.name, 'seg', function () { choose({ w: wi, z: -1 }); });
                 shortcuts.appendChild(b);
@@ -308,7 +306,7 @@
         }
         freeBox.style.display = freeAllowed ? 'block' : 'none';
         if (!windows.length && !freeAllowed) {
-            shortcuts.appendChild(U.el('div', 'empty', 'Aucune fenêtre dans les réglages d’OldStar.'));
+            shortcuts.appendChild(U.el('div', 'empty', OS.t('Aucune fenêtre dans les réglages d’OldStar.', 'No window in OldStar settings.')));
         }
         close();
     }
@@ -316,7 +314,7 @@
     OS.tabs = OS.tabs || [];
     OS.tabs.push({
         id: 'fenetres',
-        label: 'Fenêtres',
+        label: OS.t('Fenêtres', 'Windows'),
         init: function (p) {
             pane = p;
             U.setClass(pane, 'fenetres', true);
@@ -328,8 +326,8 @@
             listBox.appendChild(shortcuts);
             freeBox = U.el('div', 'win-free');
             var fh = U.el('div', 'win-row');
-            fh.appendChild(U.el('div', 'list-title grow', 'Choisir une fenêtre ouverte du PC'));
-            fh.appendChild(button('Actualiser', '', refreshFree));
+            fh.appendChild(U.el('div', 'list-title grow', OS.t('Choisir une fenêtre ouverte du PC', 'Pick an open PC window')));
+            fh.appendChild(button(OS.t('Actualiser', 'Refresh'), '', refreshFree));
             freeBox.appendChild(fh);
             freeList = U.el('div', 'win-items');
             freeBox.appendChild(freeList);
@@ -339,17 +337,17 @@
             /* Barre du haut de la vue : jamais recouverte par l'image. */
             bar = U.el('div', 'win-bar');
             var row = U.el('div', 'win-row');
-            row.appendChild(button('◀ Fermer', 'close-btn big-close', close));
+            row.appendChild(button(OS.t('◀ Fermer', '◀ Close'), 'close-btn big-close', close));
             title = U.el('div', 'win-title', '');
             row.appendChild(title);
             bar.appendChild(row);
             var tools = U.el('div', 'win-row');
             modeBtn = button('', '', function () { setBackground(!background); });
             fitBtn = button('', '', function () { setFit(!fit); });
-            tools.appendChild(button('Plein écran', 'accent', enterFull));
+            tools.appendChild(button(OS.t('Plein écran', 'Full screen'), 'accent', enterFull));
             tools.appendChild(modeBtn);
             tools.appendChild(fitBtn);
-            tools.appendChild(U.el('div', 'win-note', 'Défiler : glisser à deux doigts (molette sur PC)'));
+            tools.appendChild(U.el('div', 'win-note', OS.t('Défiler : glisser à deux doigts (molette sur PC)', 'Scroll: two-finger slide (mouse wheel on PC)')));
             bar.appendChild(tools);
             hint = U.el('div', 'win-hint', '');
             bar.appendChild(hint);

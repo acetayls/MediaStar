@@ -831,7 +831,7 @@ pub fn peaks_background(peaks: impl Fn(f64, f64, usize) -> Vec<f32>) -> impl FnO
 /// (`jinglestar-icone-petite.svg`), grille de pads avec un casque sur le pad central.
 pub fn logo_mark(ui: &mut Ui, height: f32) -> Response {
     let (rect, resp) = ui.allocate_exact_size(vec2(height, height), Sense::hover());
-    logo_small(ui.painter(), rect, false);
+    logo_small(ui.painter(), rect, Symbol::Headphones);
     resp
 }
 
@@ -839,13 +839,49 @@ pub fn logo_mark(ui: &mut Ui, height: f32) -> Response {
 /// (`cuestar-icone-petite.svg`), grille de pads avec un triangle « lecture » sur le pad central.
 pub fn logo_mark_play(ui: &mut Ui, height: f32) -> Response {
     let (rect, resp) = ui.allocate_exact_size(vec2(height, height), Sense::hover());
-    logo_small(ui.painter(), rect, true);
+    logo_small(ui.painter(), rect, Symbol::Play);
     resp
 }
 
+/// Logo de SweepStar dans la barre du haut : la petite variante de l'icône
+/// (`sweepstar-icone-petite.svg`), grille de pads avec une réponse impulsionnelle sur le pad central.
+pub fn logo_mark_impulse(ui: &mut Ui, height: f32) -> Response {
+    let (rect, resp) = ui.allocate_exact_size(vec2(height, height), Sense::hover());
+    logo_small(ui.painter(), rect, Symbol::Impulse);
+    resp
+}
+
+/// Logo d'OldStar dans la barre du haut : la petite variante de l'icône
+/// (`oldstar-icone-petite.svg`), grille de pads avec un fader et un signal sans fil sur le pad central.
+pub fn logo_mark_fader(ui: &mut Ui, height: f32) -> Response {
+    let (rect, resp) = ui.allocate_exact_size(vec2(height, height), Sense::hover());
+    logo_small(ui.painter(), rect, Symbol::Fader);
+    resp
+}
+
+/// Logo de MediaStar dans la barre du haut : la petite variante de l'icône
+/// (`mediastar-icone-petite.svg`), quatre tuiles aux symboles des modules et l'étoile au centre.
+pub fn logo_mark_media(ui: &mut Ui, height: f32) -> Response {
+    let (rect, resp) = ui.allocate_exact_size(vec2(height, height), Sense::hover());
+    logo_media_small(ui.painter(), rect);
+    resp
+}
+
+/// Symbole du pad central des logos.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Symbol {
+    Headphones,
+    Play,
+    Impulse,
+    Fader,
+}
+
+/// Réponse impulsionnelle du logo de SweepStar (repère de 100 unités, un point sur trois du SVG).
+const IMPULSE: &[(f32, f32)] = &[(8.0, 6.4e+01), (2e+01, 6.4e+01), (2.6e+01, 1e+01), (3.2e+01, 8.6e+01), (3.2e+01, 4.3e+01), (3.4e+01, 4.6e+01), (3.5e+01, 5.2e+01), (3.6e+01, 5.9e+01), (3.7e+01, 6.5e+01), (3.8e+01, 7.1e+01), (3.9e+01, 7.5e+01), (4e+01, 7.7e+01), (4.1e+01, 7.6e+01), (4.3e+01, 7.5e+01), (4.4e+01, 7.2e+01), (4.5e+01, 6.8e+01), (4.6e+01, 6.4e+01), (4.7e+01, 6.1e+01), (4.8e+01, 5.8e+01), (4.9e+01, 5.7e+01), (5e+01, 5.7e+01), (5.2e+01, 5.8e+01), (5.3e+01, 5.9e+01), (5.4e+01, 6.1e+01), (5.5e+01, 6.3e+01), (5.6e+01, 6.5e+01), (5.7e+01, 6.7e+01), (5.8e+01, 6.8e+01), (6e+01, 6.8e+01), (6.1e+01, 6.8e+01), (6.2e+01, 6.7e+01), (6.3e+01, 6.6e+01), (6.4e+01, 6.5e+01), (6.5e+01, 6.4e+01), (6.6e+01, 6.3e+01), (6.7e+01, 6.2e+01), (6.9e+01, 6.2e+01), (7e+01, 6.2e+01), (7.1e+01, 6.2e+01), (7.2e+01, 6.3e+01), (7.3e+01, 6.3e+01), (7.4e+01, 6.4e+01), (7.5e+01, 6.5e+01), (7.7e+01, 6.5e+01), (7.8e+01, 6.5e+01), (7.9e+01, 6.5e+01), (8e+01, 6.5e+01), (8.1e+01, 6.5e+01), (8.2e+01, 6.4e+01), (8.3e+01, 6.4e+01), (8.4e+01, 6.4e+01), (8.6e+01, 6.3e+01), (8.7e+01, 6.3e+01), (8.8e+01, 6.3e+01), (8.9e+01, 6.3e+01), (9e+01, 6.3e+01), (9.1e+01, 6.4e+01), (9.2e+01, 6.4e+01)];
+
 /// Reproduit `*-icone-petite.svg` : l'icône de l'appli (carré de 1024 unités) dont la grille
 /// et le pad central sont agrandis de 28 % autour du centre, pour rester lisibles en petit.
-fn logo_small(p: &egui::Painter, rect: Rect, play: bool) {
+fn logo_small(p: &egui::Painter, rect: Rect, symbol: Symbol) {
     const FOND: Color32 = Color32::from_rgb(0x22, 0x22, 0x28);
     const CASE: Color32 = Color32::from_rgb(0x2c, 0x2c, 0x33);
     const LISERE: Color32 = Color32::from_rgb(0x1e, 0x1e, 0x23);
@@ -887,13 +923,42 @@ fn logo_small(p: &egui::Painter, rect: Rect, play: bool) {
     p.rect_filled(carre(337.0, 337.0, 350.0), CornerRadius::same(r(59.5 * k)), PAD);
 
     // Symbole : repère de 100 unités placé en (372, 372) à l'échelle 2,8.
-    let sym = |x: f32, y: f32| at(372.0 + x * 2.8, 372.0 + y * 2.8);
-    let s = 2.8 * k * u;
-    if play {
+    draw_symbol(p, symbol, &|x, y| at(372.0 + x * 2.8, 372.0 + y * 2.8), 2.8 * k * u, ENCRE);
+}
+
+/// Dessine le symbole d'un module dans son repère de 100 unités : `sym` place un point du
+/// repère, `s` est la taille d'une unité en points.
+fn draw_symbol(p: &egui::Painter, symbol: Symbol, sym: &dyn Fn(f32, f32) -> Pos2, s: f32, ink: Color32) {
+    let r = |v: f32| v.round().clamp(0.0, 255.0) as u8;
+    if symbol == Symbol::Fader {
+        // Fader : glissière de 8 unités, bouton de 26 × 16 ; signal : point et trois arcs.
+        p.line_segment([sym(20.0, 12.0), sym(20.0, 88.0)], Stroke::new(8.0 * s, ink));
+        for y in [12.0, 88.0] {
+            p.circle_filled(sym(20.0, y), 4.0 * s, ink);
+        }
+        p.rect_filled(Rect::from_min_max(sym(7.0, 32.0), sym(33.0, 48.0)), CornerRadius::same(r(3.5 * s)), ink);
+        p.circle_filled(sym(70.0, 80.0), 6.0 * s, ink);
+        for radius in [15.0f32, 27.0, 39.0] {
+            let pts: Vec<Pos2> = (0..=12)
+                .map(|i| {
+                    let a = std::f32::consts::PI * (1.25 + 0.5 * i as f32 / 12.0);
+                    sym(70.0 + radius * a.cos(), 80.0 + radius * a.sin())
+                })
+                .collect();
+            for end in [pts[0], pts[pts.len() - 1]] {
+                p.circle_filled(end, 5.0 * s, ink);
+            }
+            p.add(Shape::line(pts, Stroke::new(10.0 * s, ink)));
+        }
+    } else if symbol == Symbol::Impulse {
+        // Tracé de 10 unités de large, extrémités arrondies.
+        let pts: Vec<Pos2> = IMPULSE.iter().map(|&(x, y)| sym(x, y)).collect();
+        p.add(Shape::line(pts, Stroke::new(10.0 * s, ink)));
+    } else if symbol == Symbol::Play {
         // Triangle à coins arrondis par un trait de 12 : on l'approche par un triangle plein un peu agrandi.
         let c = (31.0 + 85.0 + 31.0) / 3.0;
         let grow = |x: f32, y: f32| sym(c + (x - c) * 1.17, 50.0 + (y - 50.0) * 1.17);
-        p.add(Shape::convex_polygon(vec![grow(31.0, 19.0), grow(85.0, 50.0), grow(31.0, 81.0)], ENCRE, Stroke::NONE));
+        p.add(Shape::convex_polygon(vec![grow(31.0, 19.0), grow(85.0, 50.0), grow(31.0, 81.0)], ink, Stroke::NONE));
     } else {
         // Arceau : demi-cercle de rayon 33,5 centré en (50, 52), prolongé jusqu'à y = 62, trait de 13.
         let mut pts = vec![sym(16.5, 62.0)];
@@ -902,11 +967,57 @@ fn logo_small(p: &egui::Painter, rect: Rect, play: bool) {
             pts.push(sym(50.0 + 33.5 * a.cos(), 52.0 + 33.5 * a.sin()));
         }
         pts.push(sym(83.5, 62.0));
-        p.add(Shape::line(pts, Stroke::new(13.0 * s, ENCRE)));
+        p.add(Shape::line(pts, Stroke::new(13.0 * s, ink)));
         // Écouteurs.
         for x in [10.0, 65.0] {
-            p.rect_filled(Rect::from_min_max(sym(x, 50.0), sym(x + 25.0, 88.0)), CornerRadius::same(r(9.0 * 2.8 * k)), ENCRE);
+            p.rect_filled(Rect::from_min_max(sym(x, 50.0), sym(x + 25.0, 88.0)), CornerRadius::same(r(9.0 * s)), ink);
         }
+    }
+}
+
+/// Reproduit `mediastar-icone-petite.svg` : quatre tuiles à bandeau de couleur portant le
+/// symbole de chaque module, et l'étoile sur le pad orange du centre.
+fn logo_media_small(p: &egui::Painter, rect: Rect) {
+    const FOND: Color32 = Color32::from_rgb(0x22, 0x22, 0x28);
+    const CASE: Color32 = Color32::from_rgb(0x2c, 0x2c, 0x33);
+    const LISERE: Color32 = Color32::from_rgb(0x1e, 0x1e, 0x23);
+    const PAD: Color32 = Color32::from_rgb(0xed, 0xa8, 0x3a);
+    const ENCRE: Color32 = Color32::from_rgb(0x20, 0x20, 0x26);
+    let u = rect.height() / 1024.0;
+    let r = |v: f32| (v * u).round().clamp(0.0, 255.0) as u8;
+    let k = 1.28;
+    let at = |x: f32, y: f32| rect.min + vec2((512.0 + (x - 512.0) * k) * u, (512.0 + (y - 512.0) * k) * u);
+
+    p.rect_filled(rect, CornerRadius::same(r(230.0)), FOND);
+    let tiles = [
+        (180.8, 180.8, Color32::from_rgb(0x4a, 0x8f, 0xdb), Symbol::Headphones),
+        (527.2, 180.8, Color32::from_rgb(0x4f, 0xae, 0x58), Symbol::Play),
+        (180.8, 527.2, Color32::from_rgb(0x9b, 0x6b, 0xd3), Symbol::Fader),
+        (527.2, 527.2, Color32::from_rgb(0x3f, 0xb8, 0xaf), Symbol::Impulse),
+    ];
+    for (x, y, color, symbol) in tiles {
+        let rad = r(50.0 * k);
+        p.rect_filled(Rect::from_min_max(at(x, y), at(x + 316.0, y + 316.0)), CornerRadius::same(rad), CASE);
+        p.rect_filled(Rect::from_min_max(at(x, y), at(x + 316.0, y + 52.0)), CornerRadius { nw: rad, ne: rad, sw: 0, se: 0 }, color);
+        // Symbole dans la couleur du bandeau : repère de 100 unités à l'échelle 1,75.
+        let (ox, oy) = (x + 70.5, y + 96.5);
+        draw_symbol(p, symbol, &|sx, sy| at(ox + sx * 1.75, oy + sy * 1.75), 1.75 * k * u, color);
+    }
+    p.rect_filled(Rect::from_min_max(at(392.0, 392.0), at(632.0, 632.0)), CornerRadius::same(r(58.0 * k)), LISERE);
+    p.rect_filled(Rect::from_min_max(at(410.0, 410.0), at(614.0, 614.0)), CornerRadius::same(r(44.0 * k)), PAD);
+    // Étoile à cinq branches, repère de 100 unités placé en (437, 437) à l'échelle 1,5.
+    let star = |x: f32, y: f32| at(437.0 + x * 1.5, 437.0 + y * 1.5);
+    let centre = star(50.0, 52.0);
+    let pts: Vec<Pos2> = (0..10)
+        .map(|i| {
+            let a = -std::f32::consts::FRAC_PI_2 + i as f32 * std::f32::consts::PI / 5.0;
+            let len = if i % 2 == 0 { 41.0 } else { 16.5 } * 1.5 * k * u;
+            centre + vec2(a.cos(), a.sin()) * len
+        })
+        .collect();
+    // Étoile non convexe : un triangle par branche autour du centre.
+    for i in 0..10 {
+        p.add(Shape::convex_polygon(vec![centre, pts[i], pts[(i + 1) % 10]], ENCRE, Stroke::NONE));
     }
 }
 

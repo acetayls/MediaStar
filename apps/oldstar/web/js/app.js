@@ -120,7 +120,30 @@
 
     /* ---------- Messages du serveur ---------- */
 
+    /* Onglets cachés selon les réglages (Console quand il n'y a pas de console). */
+    function applyVisibility(d) {
+        var first = '', activeOk = false;
+        U.each(OS.tabs, function (t) {
+            var on = t.visible ? t.visible(d) : true;
+            t.button.style.display = on ? '' : 'none';
+            if (on && !first) { first = t.id; }
+            if (on && t.id === active) { activeOk = true; }
+        });
+        if (!activeOk && first) {
+            var keep = '';
+            try { keep = window.localStorage.getItem('oldstar.onglet') || ''; } catch (e) { keep = ''; }
+            selectTab(first);
+            /* On garde le choix enregistré : l'onglet revient si la console revient. */
+            try { if (keep) { window.localStorage.setItem('oldstar.onglet', keep); } } catch (e2) { /* rien */ }
+        }
+    }
+
     function onSnap(d) {
+        /* Langue changée dans OldStar : la page se recharge dans la nouvelle langue. */
+        if (d.lang && d.lang !== OS.lang) {
+            window.location.reload();
+            return;
+        }
         snap = d;
         params = {};
         oscValues = {};
@@ -131,6 +154,7 @@
         U.each(OS.tabs, function (t) {
             if (t.build) { t.build(d); }
         });
+        applyVisibility(d);
     }
 
     function onEvent(e) {
@@ -176,14 +200,14 @@
         }, false);
 
         buildTabs();
-        status('Connexion…', 'wait');
+        status(OS.t('Connexion…', 'Connecting…'), 'wait');
         OS.transport.connect({
             open: function (mode) {
-                status(mode === 'ws' ? 'En ligne' : 'En ligne (lent)', 'ok');
+                status(mode === 'ws' ? OS.t('En ligne', 'Online') : OS.t('En ligne (lent)', 'Online (slow)'), 'ok');
             },
             message: onMessage,
             close: function (reason) {
-                status('Hors ligne' + (reason ? ' : ' + reason : ''), 'bad');
+                status(OS.t('Hors ligne', 'Offline') + (reason ? ' : ' + reason : ''), 'bad');
             }
         });
     }

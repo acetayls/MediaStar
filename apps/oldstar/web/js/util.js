@@ -14,6 +14,10 @@ window.OS = OS;
     var U = {};
     OS.u = U;
 
+    /* Langue de la page, donnée par OldStar dans <html lang> : « fr » ou « en ». */
+    OS.lang = (document.documentElement.getAttribute('lang') || 'fr').substring(0, 2) === 'en' ? 'en' : 'fr';
+    OS.t = function (fr, en) { return OS.lang === 'en' ? en : fr; };
+
     /* ---------- DOM ---------- */
 
     U.el = function (tag, cls, text) {

@@ -32,6 +32,9 @@ use theme::*;
 use widgets::*;
 use star_ui::icons::{self, Icon};
 
+/// Largeur du bouton boucle à droite de chaque morceau de playlist.
+const LOOP_W: f32 = 24.0;
+
 /// Contrôleur partagé avec le thread de pilotage. L'interface le verrouille le temps de
 /// dessiner une image ; entre deux images, le thread de pilotage traite les événements du
 /// mixeur (fin de morceau, enchaînements) et les télécommandes (MIDI, OSC, consoles),
@@ -160,7 +163,7 @@ impl JingleStarApp {
             mode_draft: None,
             module_eq: None,
             settings: None,
-            help: star_ui::help::HelpWindow::new(AIDE_FR, HELP_EN).app("JingleStar"),
+            help: star_ui::help::HelpWindow::new(AIDE_FR, HELP_EN).app("JingleStar").version(crate::VERSION),
             remote: remote_view::RemoteWindow::default(),
             meters: [[-120.0; 2]; MAX_MODULES],
             last_frame: Instant::now(),
@@ -207,8 +210,8 @@ impl JingleStarApp {
 
     fn toolbar(&mut self, ui: &mut egui::Ui) {
         ui.horizontal_centered(|ui| {
-            // Le logo seul, discret : le nom du projet passe devant.
-            logo_mark(ui, 26.0).on_hover_text("JingleStar");
+            // Barre commune : logo, nom et version, puis le nom du projet.
+            star_ui::app_bar::identity(ui, star_ui::app_bar::Logo::Jingle, "JingleStar", false);
             ui.add_space(12.0);
             self.project_title(ui);
             ui.add_space(10.0);
@@ -252,17 +255,18 @@ impl JingleStarApp {
                 ui.add_space(8.0);
                 // Fenêtres flottantes : un clic les ouvre, ou les ramène devant si elles sont
                 // déjà ouvertes (passées derrière la fenêtre principale). On les ferme par leur croix.
-                if ui.selectable_label(self.help.open, tr("? Aide", "? Help")).on_hover_text("F1").clicked() {
+                // Boutons à icône seule (barre commune) : le nom est dans l'infobulle.
+                if star_ui::app_bar::icon_button(ui, Icon::Book, self.help.open, tr("Aide (F1)", "Help (F1)")).clicked() {
                     self.help.open_or_raise(ui.ctx());
                 }
-                if ui
-                    .selectable_label(self.remote.open, tr("Télécommandes", "Remote"))
-                    .on_hover_text(tr("Pilotage MIDI et console Yamaha : assignations et mode apprendre", "MIDI and Yamaha console control: mappings and learn mode"))
-                    .clicked()
-                {
+                let remote_tip = tr(
+                    "Télécommandes : pilotage MIDI et console Yamaha, assignations et mode apprendre",
+                    "Remote: MIDI and Yamaha console control, mappings and learn mode",
+                );
+                if star_ui::app_bar::icon_button(ui, Icon::Remote, self.remote.open, remote_tip).clicked() {
                     self.remote.open_or_raise(ui.ctx());
                 }
-                if ui.button((icons::atom(Icon::Gear), tr("Préférences", "Preferences"))).clicked() {
+                if star_ui::app_bar::icon_button(ui, Icon::Gear, false, tr("Préférences", "Preferences")).clicked() {
                     self.open_settings(ui.ctx());
                 }
                 ui.add_space(8.0);
@@ -1199,8 +1203,13 @@ impl JingleStarApp {
                         ui.label(RichText::new(format!("{} {txt}", tr("Gain", "Gain"))).monospace().color(col)).on_hover_text(tip);
                     }
                 }
+                let looping = rt.current.is_some_and(|i| self.ctrl.track_loops(m, i));
                 ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-                    ui.label(RichText::new(format!("-{}", fmt_time((len - t).max(0.0)))).monospace().color(TEXT_DIM));
+                    if looping {
+                        ui.label(RichText::new(tr("BOUCLE", "LOOP")).monospace().color(ACCENT));
+                    } else {
+                        ui.label(RichText::new(format!("-{}", fmt_time((len - t).max(0.0)))).monospace().color(TEXT_DIM));
+                    }
                 });
             });
         });
@@ -1324,7 +1333,30 @@ impl JingleStarApp {
                 let tg = self.ctrl.track_gain(m, i);
                 let manual = matches!(tg, TrackGain::Manual(_));
                 let (gtxt, gcol, gtip, gdb) = gain_label(&tg);
-                let (resp, anchor) = track_row(ui, &format!("{:>3}  {}", i + 1, name), color, is_cur, Some(&gtxt));
+                // Ligne du morceau, puis à droite son bouton boucle (comme les cues de CueStar).
+                let loops = self.ctrl.track_loops(m, i);
+                let label = format!("{:>3}  {}", i + 1, name);
+                let (resp, anchor, loop_r) = ui.horizontal(|ui| {
+                    ui.spacing_mut().item_spacing.x = 0.0;
+                    let w = ui.available_width();
+                    let row = Rect::from_min_size(ui.cursor().min, vec2((w - LOOP_W).max(20.0), 20.0));
+                    let (resp, anchor) = ui.scope_builder(UiBuilder::new().max_rect(row), |ui| track_row(ui, &label, color, is_cur, Some(&gtxt))).inner;
+                    let (loop_r, _) = ui.allocate_exact_size(vec2(LOOP_W, 20.0), egui::Sense::hover());
+                    (resp, anchor, loop_r)
+                }).inner;
+                let lresp = ui.interact(loop_r, ui.make_persistent_id(("track_loop", m, i)), egui::Sense::click());
+                let lc = if loops { ACCENT } else if lresp.hovered() || resp.hovered() { TEXT_DIM } else { BORDER };
+                loop_icon(ui.painter(), Rect::from_center_size(loop_r.center(), vec2(16.0, 9.0)), lc);
+                if lresp
+                    .on_hover_text(if loops {
+                        tr("En boucle (clic : une seule fois)", "Looping (click: play once)")
+                    } else {
+                        tr("Lire ce morceau en boucle", "Loop this track")
+                    })
+                    .clicked()
+                {
+                    self.ctrl.set_track_looping(m, i, !loops);
+                }
                 // Gain du morceau : double-clic pour le régler à la main.
                 let gid = ui.make_persistent_id(("track_gain", m, i));
                 if let Some(db) = db_value_shown(ui, gid, anchor, egui::Align2::RIGHT_CENTER, gdb, -60.0, -60.0..=20.0, FontId::monospace(11.0), gcol, gtxt, Some(gtip)) {
@@ -1339,6 +1371,11 @@ impl JingleStarApp {
                 resp.context_menu(|ui| {
                     if ui.button(tr("Lire", "Play")).clicked() {
                         self.ctrl.playlist_play(m, i);
+                        ui.close();
+                    }
+                    let loop_txt = if loops { tr("Lire une seule fois", "Play once") } else { tr("Lire en boucle", "Loop") };
+                    if ui.button(loop_txt).clicked() {
+                        self.ctrl.set_track_looping(m, i, !loops);
                         ui.close();
                     }
                     if manual && ui.button(tr("Revenir au gain automatique", "Back to automatic gain")).clicked() {
@@ -1803,10 +1840,7 @@ impl JingleStarApp {
             self.help.toggle();
         }
 
-        egui::Panel::top("toolbar")
-            .exact_size(48.0)
-            .frame(egui::Frame::new().fill(PANEL).inner_margin(egui::Margin::symmetric(12, 6)))
-            .show(ui, |ui| self.toolbar(ui));
+        star_ui::app_bar::show(ui, |ui| self.toolbar(ui));
         egui::Panel::bottom("status")
             .exact_size(26.0)
             .frame(egui::Frame::new().fill(PANEL).inner_margin(egui::Margin::symmetric(12, 4)))

@@ -8,4 +8,9 @@ fn main() {
         println!("cargo:rerun-if-changed=build.rs");
         star_build::build_info();
     }
+    // macOS : ScreenCaptureKit lié en « faible » pour que l'appli démarre aussi avant macOS 12.3
+    // (la capture passe alors par CGWindowListCreateImage).
+    if std::env::var("CARGO_CFG_TARGET_OS").as_deref() == Ok("macos") {
+        println!("cargo:rustc-link-arg=-Wl,-weak_framework,ScreenCaptureKit");
+    }
 }

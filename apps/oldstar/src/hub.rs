@@ -222,18 +222,19 @@ impl Hub {
             .map(|t| {
                 json!({
                     "name": t.name,
-                    "buttons": t.buttons.iter().map(|b| json!({ "label": b.label, "style": b.style, "wide": b.wide })).collect::<Vec<_>>(),
-                    "feedback": t.feedback.iter().map(|f| json!({ "a": f.address, "label": f.label })).collect::<Vec<_>>(),
+                    "buttons": t.buttons.iter().map(|b| json!({ "label": default_label(&b.label), "style": b.style, "wide": b.wide })).collect::<Vec<_>>(),
+                    "feedback": t.feedback.iter().map(|f| json!({ "a": f.address, "label": default_label(&f.label) })).collect::<Vec<_>>(),
                 })
             })
             .collect();
         let windows: Vec<Value> = cfg
             .windows
             .iter()
-            .map(|w| json!({ "name": w.name, "fps": w.fps, "zones": w.zones.iter().map(|z| json!({ "name": z.name, "w": z.w, "h": z.h })).collect::<Vec<_>>() }))
+            .map(|w| json!({ "name": default_label(&w.name), "fps": w.fps, "zones": w.zones.iter().map(|z| json!({ "name": default_label(&z.name), "w": z.w, "h": z.h })).collect::<Vec<_>>() }))
             .collect();
         json!({
             "seq": s.seq,
+            "lang": if cfg.language == star_core::i18n::Lang::En { "en" } else { "fr" },
             // Bloc « yamaha » : la console choisie, quelle qu'elle soit (la page ne fait pas la
             // différence ; la M32 est traduite en paramètres Yamaha par midas.rs).
             "yamaha": match cfg.console {
@@ -246,6 +247,7 @@ impl Hub {
                     "meters": cfg.meters().0,
                     "meter_fps": cfg.meters().1,
                 }),
+                crate::config::ConsoleKind::None => json!({ "kind": "none", "enabled": false, "connected": false, "model": "", "error": "", "channels": 0, "mixes": 0, "meters": false, "meter_fps": 1 }),
                 crate::config::ConsoleKind::M32 => json!({
                     "kind": "m32",
                     "enabled": true,
@@ -284,5 +286,25 @@ impl Hub {
         }
         self.generation.fetch_add(1, Ordering::Relaxed);
         self.push(json!({ "e": "cfg" }));
+    }
+}
+
+/// Libellés des boutons et retours par défaut (écrits en français dans oldstar.json) : en
+/// anglais si l'interface l'est. Un libellé changé à la main reste tel quel.
+fn default_label(label: &str) -> &str {
+    if !star_core::i18n::is_en() {
+        return label;
+    }
+    match label {
+        "En attente" => "Standby",
+        "À l'écran" => "On screen",
+        "Reste (s)" => "Remaining (s)",
+        "◀ Cue préc." => "◀ Prev cue",
+        "Cue suiv. ▶" => "Next cue ▶",
+        "Noir" => "Black",
+        "Tout arrêter" => "Stop all",
+        "Bloc-notes" => "Notepad",
+        "Haut gauche" => "Top left",
+        other => other,
     }
 }

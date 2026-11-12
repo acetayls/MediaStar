@@ -1,0 +1,35 @@
+[package]
+name = "mediastar"
+version = "0.0.1"
+description = "Suite MediaStar : JingleStar, CueStar, OldStar et SweepStar dans un seul exécutable (Windows, macOS, Linux)"
+authors = ["Pierrick"]
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+# Les modules, chacun avec sa propre version (jinglestar::VERSION, cuestar::VERSION, oldstar::VERSION, sweepstar::VERSION).
+jinglestar = { path = "../jinglestar" }
+cuestar = { path = "../cuestar" }
+oldstar = { path = "../oldstar" }
+sweepstar = { path = "../sweepstar" }
+star-core.workspace = true
+star-ui.workspace = true
+eframe.workspace = true
+egui.workspace = true
+# Réglages de l'accueil (langue).
+serde = { version = "1", features = ["derive"] }
+
+[build-dependencies]
+# Icône et métadonnées de l'exécutable Windows, version de build.
+star-build.workspace = true
+
+[features]
+# Support ASIO de JingleStar et SweepStar sous Windows (SDK ASIO de Steinberg, voir apps/jinglestar/README.md).
+asio = ["jinglestar/asio", "sweepstar/asio"]
+
+# Pour un paquet .app macOS avec `cargo bundle --release`.
+[package.metadata.bundle]
+name = "MediaStar"
+identifier = "com.acetayls.MediaStar"
+icon = ["assets/icons/mediastar.icns", "assets/icons/mediastar-1024.png"]
+category = "public.app-category.video"

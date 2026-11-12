@@ -4,3 +4,7 @@
 /mpv/
 # Dossier de build des essais (à côté de target/ quand CueStar tourne depuis target/release)
 /target-essai
+# Dossier de build de vérification de SweepStar (star-measure)
+/target-sweepstar
+# Dossiers de build des fils de travail (CARGO_TARGET_DIR à part)
+/target-*

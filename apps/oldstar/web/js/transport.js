@@ -74,7 +74,7 @@
         try {
             sock = new window.WebSocket(wsUrl());
         } catch (e) {
-            wsFailed('WebSocket refusé');
+            wsFailed(OS.t('WebSocket refusé', 'WebSocket refused'));
             return;
         }
         ws = sock;
@@ -95,10 +95,10 @@
             if (ws !== sock) { return; }
             ws = null;
             if (opened) {
-                setMode('', 'connexion coupée');
+                setMode('', OS.t('connexion coupée', 'connection lost'));
                 later(startWs, 1000);
             } else {
-                wsFailed('connexion impossible');
+                wsFailed(OS.t('connexion impossible', 'cannot connect'));
             }
         };
         sock.onerror = function () { /* onclose suit toujours */ };
@@ -139,7 +139,7 @@
                 pollXhr = null;
                 if (gen !== pollGen) { return; }
                 if (status !== 200) {
-                    if (current) { setMode('', 'serveur injoignable'); }
+                    if (current) { setMode('', OS.t('serveur injoignable', 'server unreachable')); }
                     later(loop, 2000);
                     return;
                 }

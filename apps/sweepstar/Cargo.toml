@@ -1,0 +1,40 @@
+[package]
+name = "sweepstar"
+version = "0.0.1"
+description = "Mesure acoustique : sweep, réponse impulsionnelle, délai, RTA (Windows, macOS, Linux)"
+authors = ["Pierrick"]
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+star-core.workspace = true
+star-ui.workspace = true
+star-measure.workspace = true
+eframe.workspace = true
+egui.workspace = true
+rfd = "0.17"
+cpal = "0.18"
+crossbeam-channel = "0.5"
+# Playlist (repris de JingleStar) : décodage des fichiers et rééchantillonnage.
+symphonia = { version = "0.5", features = ["all"] }
+rubato = "0.16"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# Dossier Documents, pour les mesures enregistrées.
+directories = "6"
+anyhow = "1"
+
+[build-dependencies]
+# Icône et métadonnées de l'exécutable Windows, version de build.
+star-build.workspace = true
+
+# Pour un paquet .app macOS avec `cargo bundle --release`.
+[package.metadata.bundle]
+name = "SweepStar"
+identifier = "com.acetayls.SweepStar"
+icon = ["assets/icons/sweepstar.icns", "assets/icons/sweepstar-1024.png"]
+category = "public.app-category.utilities"
+
+[features]
+# Support ASIO sous Windows (nécessite le SDK ASIO de Steinberg, comme JingleStar).
+asio = ["cpal/asio"]

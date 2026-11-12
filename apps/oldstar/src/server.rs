@@ -27,6 +27,7 @@ const FILES: &[(&str, &str, &str)] = &[
     ("/js/console.js", "application/javascript; charset=utf-8", include_str!("../web/js/console.js")),
     ("/js/applis.js", "application/javascript; charset=utf-8", include_str!("../web/js/applis.js")),
     ("/js/fenetres.js", "application/javascript; charset=utf-8", include_str!("../web/js/fenetres.js")),
+    ("/js/aide.js", "application/javascript; charset=utf-8", include_str!("../web/js/aide.js")),
     ("/js/app.js", "application/javascript; charset=utf-8", include_str!("../web/js/app.js")),
 ];
 
@@ -198,11 +199,22 @@ fn connection(hub: &Arc<Hub>, frames: &Arc<Frames>, stream: TcpStream) -> Result
             let body = json!({ "available": crate::capture::AVAILABLE, "free": free, "list": list });
             io(respond(&stream, 200, "application/json", body.to_string().as_bytes()))
         }
+        // Onglet Aide de la page : le manuel du PC, en HTML dans du JSON (`?en` : en anglais).
+        ("GET", "/aide") => {
+            let body = json!({ "html": crate::aide_web::html(req.query.contains_key("en")) });
+            io(respond(&stream, 200, "application/json", body.to_string().as_bytes()))
+        }
         // Icônes de la page (onglet du navigateur, écran d'accueil de l'iPad).
         ("GET", "/favicon.png" | "/apple-touch-icon.png" | "/apple-touch-icon-precomposed.png") => {
             io(respond(&stream, 200, "image/png", include_bytes!("../assets/icons/oldstar-256.png")))
         }
         ("GET", "/favicon.ico") => io(respond(&stream, 200, "image/x-icon", include_bytes!("../assets/icons/oldstar.ico"))),
+        // Page : servie dans la langue des réglages (la page la lit dans <html lang>).
+        ("GET", "/" | "/index.html") => {
+            let lang = if hub.cfg().language == star_core::i18n::Lang::En { "en" } else { "fr" };
+            let page = include_str!("../web/index.html").replacen("<html lang=\"fr\">", &format!("<html lang=\"{lang}\">"), 1);
+            io(respond(&stream, 200, "text/html; charset=utf-8", page.as_bytes()))
+        }
         ("GET", path) => match FILES.iter().find(|f| f.0 == path) {
             Some((_, ctype, body)) => io(respond(&stream, 200, ctype, body.as_bytes())),
             None => io(respond(&stream, 404, "text/plain; charset=utf-8", "introuvable".as_bytes())),

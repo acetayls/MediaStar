@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleName</key>
+	<string>MediaStar</string>
+	<key>CFBundleDisplayName</key>
+	<string>MediaStar</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.acetayls.MediaStar</string>
+	<key>CFBundleExecutable</key>
+	<string>mediastar</string>
+	<key>CFBundleIconFile</key>
+	<string>MediaStar</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleShortVersionString</key>
+	<string>@VERSION@</string>
+	<key>CFBundleVersion</key>
+	<string>@VERSION@</string>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>fr</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>@MINOS@</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.video</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSSupportsAutomaticGraphicsSwitching</key>
+	<true/>
+	<!-- CueStar, JingleStar, OldStar : OSC, consoles et tablettes du réseau local. -->
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>MediaStar reçoit des commandes OSC, dialogue avec les consoles du réseau local et sert la page des tablettes (OldStar).</string>
+	<!-- SweepStar : entrée micro pour les mesures. -->
+	<key>NSMicrophoneUsageDescription</key>
+	<string>SweepStar enregistre le micro de mesure (sweep, RTA, transfert).</string>
+	<!-- OldStar : image des fenêtres montrées sur la tablette. -->
+	<key>NSScreenCaptureUsageDescription</key>
+	<string>OldStar montre sur la tablette l'image des fenêtres choisies (Lake, éditeur de console…).</string>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>OldStar fait passer devant la fenêtre dans laquelle la tablette clique.</string>
+</dict>
+</plist>

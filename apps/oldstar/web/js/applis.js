@@ -25,8 +25,8 @@
 
     function fmt(v) {
         if (v === null || v === undefined || v === '') { return '–'; }
-        if (v === true) { return 'oui'; }
-        if (v === false) { return 'non'; }
+        if (v === true) { return OS.t('oui', 'yes'); }
+        if (v === false) { return OS.t('non', 'no'); }
         return String(v);
     }
 
@@ -73,7 +73,7 @@
     OS.tabs = OS.tabs || [];
     OS.tabs.push({
         id: 'applis',
-        label: 'Applis',
+        label: OS.t('Applis', 'Apps'),
         init: function (p) {
             pane = p;
             U.setClass(pane, 'applis', true);
@@ -90,7 +90,7 @@
             bigs = [];
             var targets = snap.targets || [];
             if (!targets.length) {
-                pane.appendChild(U.el('div', 'empty', 'Aucune appli dans les réglages d’OldStar.'));
+                pane.appendChild(U.el('div', 'empty', OS.t('Aucune appli dans les réglages d’OldStar.', 'No app in OldStar settings.')));
                 return;
             }
             var alive = snap.osc_alive || [];

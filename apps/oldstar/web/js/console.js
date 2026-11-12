@@ -20,9 +20,9 @@
 
     function statusText() {
         if (!cfg) { return ''; }
-        if (!cfg.enabled) { return 'Console désactivée dans les réglages'; }
-        if (cfg.connected) { return 'Console connectée' + (cfg.model ? ' : ' + cfg.model : ''); }
-        return 'Console hors ligne' + (cfg.error ? ' (' + cfg.error + ')' : '');
+        if (!cfg.enabled) { return OS.t('Console désactivée dans les réglages', 'Console disabled in settings'); }
+        if (cfg.connected) { return OS.t('Console connectée', 'Console connected') + (cfg.model ? ' : ' + cfg.model : ''); }
+        return OS.t('Console hors ligne', 'Console offline') + (cfg.error ? ' (' + cfg.error + ')' : '');
     }
 
     function drawStatus() {
@@ -85,7 +85,7 @@
         st.appendChild(useSend ? onButton(IN + '/ToMix/On', ch, sof, 'ON', 'strips') : onButton(base + '/Fader/On', ch, 0, 'ON', 'strips'));
         if (useSend) { U.setClass(st, 'sof', true); }
         if (isInput) {
-            var sel = U.el('div', 'btn sel-btn', 'EQ / Envois');
+            var sel = U.el('div', 'btn sel-btn', OS.t('EQ / Envois', 'EQ / Sends'));
             U.tap(sel, function () { openDetail(ch); });
             st.appendChild(sel);
         }
@@ -141,7 +141,7 @@
     function openSofPick() {
         if (sof >= 0) { setSof(-1); return; }
         U.empty(sofPick);
-        sofPick.appendChild(U.el('div', 'list-title', 'Envois vers quel mix ?'));
+        sofPick.appendChild(U.el('div', 'list-title', OS.t('Envois vers quel mix ?', 'Sends to which mix?')));
         var i;
         for (i = 0; i < cfg.mixes; i++) {
             (function (m) {
@@ -150,7 +150,7 @@
                 sofPick.appendChild(b);
             }(i));
         }
-        var c = U.el('div', 'btn seg', 'Annuler');
+        var c = U.el('div', 'btn seg', OS.t('Annuler', 'Cancel'));
         U.tap(c, function () { sofPick.style.display = 'none'; layoutStrips(); });
         sofPick.appendChild(c);
         sofPick.style.display = 'block';
@@ -177,7 +177,7 @@
         OS.watch(IN + '/Label/Name', ch, 0, function (v) {
             U.text(title, 'CH ' + (ch + 1) + (v ? ' : ' + v : ''));
         }, g);
-        var close = U.el('div', 'btn close-btn', 'Fermer');
+        var close = U.el('div', 'btn close-btn', OS.t('Fermer', 'Close'));
         U.tap(close, closeDetail);
         top.appendChild(title);
         top.appendChild(close);
@@ -193,7 +193,7 @@
         /* Envois */
         var sends = U.el('div', 'section');
         var sh = U.el('div', 'section-head');
-        sh.appendChild(U.el('div', 'section-title', 'Envois vers les mix'));
+        sh.appendChild(U.el('div', 'section-title', OS.t('Envois vers les mix', 'Sends to mixes')));
         sends.appendChild(sh);
         var m;
         for (m = 0; m < cfg.mixes; m++) {
@@ -240,13 +240,14 @@
     OS.tabs.push({
         id: 'console',
         label: 'Console',
+        visible: function (snap) { return !(snap.yamaha && snap.yamaha.kind === 'none'); },
         init: function (p) {
             pane = p;
             U.setClass(pane, 'console', true);
             head = U.el('div', 'bar');
             info = U.el('div', 'info', '');
             var seg = U.el('div', 'segs');
-            seg.appendChild(viewButton('in', 'Entrées'));
+            seg.appendChild(viewButton('in', OS.t('Entrées', 'Inputs')));
             seg.appendChild(viewButton('mix', 'Mix'));
             sofBtn = U.el('div', 'btn seg sof-btn', 'SENDS ON FADER');
             U.tap(sofBtn, openSofPick);
@@ -256,7 +257,7 @@
             pane.appendChild(head);
             sofBar = U.el('div', 'sof-bar');
             sofBar.appendChild(U.el('div', 'sof-text', ''));
-            var back = U.el('div', 'btn sof-back', '◀ Retour aux faders');
+            var back = U.el('div', 'btn sof-back', OS.t('◀ Retour aux faders', '◀ Back to faders'));
             U.tap(back, function () { setSof(-1); });
             sofBar.appendChild(back);
             sofBar.style.display = 'none';

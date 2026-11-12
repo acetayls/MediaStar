@@ -1,4 +1,5 @@
-//! Fenêtres Windows : recherche par titre, capture (même cachée derrière d'autres) et clics.
+//! Fenêtres du PC : recherche par titre, capture (même cachée derrière d'autres) et clics.
+//! Windows ci-dessous ; macOS dans `capture_mac.rs` ; ailleurs, pas de capture.
 //!
 //! La capture passe par `PrintWindow(PW_CLIENTONLY | PW_RENDERFULLCONTENT)` : la fenêtre se
 //! dessine elle-même dans une image en mémoire, y compris le contenu DirectX/DWM. Une fenêtre
@@ -134,11 +135,17 @@ pub fn find(m: &Match) -> Option<isize> {
 #[cfg(windows)]
 pub use win::*;
 
-#[cfg(not(windows))]
+#[cfg(target_os = "macos")]
+#[path = "capture_mac.rs"]
+mod mac;
+#[cfg(target_os = "macos")]
+pub use mac::*;
+
+#[cfg(not(any(windows, target_os = "macos")))]
 mod other {
     use super::Frame;
     use super::WinInfo;
-    /// Capture et clics : seulement sous Windows pour l'instant.
+    /// Capture et clics : seulement sous Windows et macOS pour l'instant.
     pub const AVAILABLE: bool = false;
     pub fn dpi_aware() {}
     pub fn list() -> Vec<WinInfo> {
@@ -151,13 +158,13 @@ mod other {
         None
     }
     pub fn capture(_h: isize) -> Result<Frame, String> {
-        Err("capture disponible seulement sous Windows".into())
+        Err("capture disponible seulement sous Windows et macOS".into())
     }
     pub fn input(_h: isize, _mode: &str, _kind: &str, _x: i32, _y: i32, _wheel: i32) -> Result<(), String> {
-        Err("clics disponibles seulement sous Windows".into())
+        Err("clics disponibles seulement sous Windows et macOS".into())
     }
 }
-#[cfg(not(windows))]
+#[cfg(not(any(windows, target_os = "macos")))]
 pub use other::*;
 
 #[cfg(windows)]

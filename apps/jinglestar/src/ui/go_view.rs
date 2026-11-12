@@ -84,7 +84,7 @@ impl JingleStarApp {
                         });
                         ui.end_row();
 
-                        sound_editor::sound_rows(ui, &mut c2.sound, false);
+                        sound_editor::sound_rows(ui, &mut c2.sound, true);
 
                         ui.label(tr("À la fin", "When it ends"));
                         ui.horizontal(|ui| {
@@ -374,8 +374,24 @@ impl JingleStarApp {
                     action = Some((i, CueAction::Follow(if chained { CueFollow::Stop } else { CueFollow::Continue })));
                 }
 
-                // À droite : arrêt et temps restant s'il sonne, puis le volume.
+                // À droite : boucle, arrêt et temps restant s'il sonne, puis le volume.
                 let mut right = rect.right() - 4.0;
+                let looping = c.sound.looping;
+                let loop_r = Rect::from_center_size(pos2(right - 10.0, rect.center().y), vec2(20.0, 16.0));
+                let lresp = ui.interact(loop_r, ui.make_persistent_id(("cue-loop", m, i)), Sense::click());
+                let lc = if looping { ACCENT } else if lresp.hovered() || resp.hovered() { TEXT_DIM } else { BORDER };
+                loop_icon(&p, Rect::from_center_size(loop_r.center(), vec2(16.0, 9.0)), lc);
+                if lresp
+                    .on_hover_text(if looping {
+                        tr("En boucle jusqu'à son arrêt (clic : une seule fois)", "Looping until stopped (click: play once)")
+                    } else {
+                        tr("Lire ce cue en boucle", "Loop this cue")
+                    })
+                    .clicked()
+                {
+                    action = Some((i, CueAction::Loop(!looping)));
+                }
+                right = loop_r.left() - 6.0;
                 if let Some((pp, l)) = pos {
                     let stop_r = Rect::from_center_size(pos2(right - 11.0, rect.center().y), vec2(22.0, 20.0));
                     right = stop_r.left() - 6.0;
@@ -386,8 +402,12 @@ impl JingleStarApp {
                     if sresp.on_hover_text(tr("Arrêter ce cue", "Stop this cue")).clicked() {
                         action = Some((i, CueAction::Stop));
                     }
-                    let remaining = fmt_tenths(((l.saturating_sub(pp)) as f64 / rate).max(0.0));
-                    let g = p.layout_no_wrap(format!("-{remaining}"), FontId::monospace(11.0), GO);
+                    let remaining = if looping {
+                        tr("BOUCLE", "LOOP").to_string()
+                    } else {
+                        format!("-{}", fmt_tenths(((l.saturating_sub(pp)) as f64 / rate).max(0.0)))
+                    };
+                    let g = p.layout_no_wrap(remaining, FontId::monospace(11.0), GO);
                     p.galley(pos2(right - g.size().x, rect.center().y - g.size().y / 2.0), g.clone(), GO);
                     right -= g.size().x + 8.0;
                 } else if self.ctrl.cue_loading(m, i) {
@@ -551,6 +571,7 @@ impl JingleStarApp {
             Some((i, CueAction::Volume(db))) => self.ctrl.set_cue_volume(m, i, db),
             Some((i, CueAction::Rename(name))) => self.ctrl.rename_cue(m, i, name),
             Some((i, CueAction::Follow(f))) => self.ctrl.update_cue(m, i, |c| c.follow = f),
+            Some((i, CueAction::Loop(l))) => self.ctrl.update_cue(m, i, |c| c.sound.looping = l),
             Some((i, CueAction::Edit)) => self.cue_editor = Some((m, i)),
             Some((i, CueAction::Go)) => {
                 self.ctrl.set_standby(m, i);
@@ -569,6 +590,7 @@ enum CueAction {
     Volume(f32),
     Rename(String),
     Follow(CueFollow),
+    Loop(bool),
     Edit,
     Go,
 }

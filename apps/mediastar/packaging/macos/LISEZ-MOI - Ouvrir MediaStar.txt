@@ -1,0 +1,64 @@
+OUVRIR MEDIASTAR SUR MAC (version non signée)
+=============================================
+
+Prenez l'image qui correspond à votre Mac :
+  - « apple-silicon » : Mac M1, M2, M3, M4… (menu Pomme > À propos de ce Mac : « Puce Apple »)
+  - « intel »         : Mac à processeur Intel
+
+1. Glissez MediaStar dans le dossier Applications.
+
+2. Lancez MediaStar une première fois. macOS le bloque, car cette version
+   n'est pas signée par un compte développeur Apple.
+
+3. macOS 14 (Sonoma) et antérieurs :
+   clic droit (ou Ctrl + clic) sur MediaStar dans Applications > Ouvrir,
+   puis encore Ouvrir dans la fenêtre qui s'affiche.
+
+   macOS 15 (Sequoia) et suivants (le clic droit > Ouvrir ne suffit plus) :
+   Réglages Système > Confidentialité et sécurité, tout en bas :
+   cliquez « Ouvrir quand même », puis saisissez le mot de passe
+   administrateur.
+
+C'est à faire une seule fois par version.
+
+Autre solution, dans le Terminal (Applications > Utilitaires > Terminal) :
+    xattr -dr com.apple.quarantine /Applications/MediaStar.app
+puis lancez MediaStar normalement.
+
+Au premier usage, macOS peut aussi demander l'accès au réseau local
+(CueStar, JingleStar, OldStar), au micro (SweepStar), à l'enregistrement
+de l'écran et à l'accessibilité (fenêtres d'OldStar) : acceptez, ou
+autorisez MediaStar plus tard dans Réglages Système > Confidentialité
+et sécurité.
+
+
+OPENING MEDIASTAR ON A MAC (unsigned build)
+===========================================
+
+Pick the image that matches your Mac:
+  - "apple-silicon": M1, M2, M3, M4… Macs (Apple menu > About This Mac: "Chip Apple")
+  - "intel":         Macs with an Intel processor
+
+1. Drag MediaStar to the Applications folder.
+
+2. Launch MediaStar once. macOS blocks it, because this build is not
+   signed with an Apple developer account.
+
+3. macOS 14 (Sonoma) and earlier:
+   right-click (or Control-click) MediaStar in Applications > Open,
+   then Open again in the dialog.
+
+   macOS 15 (Sequoia) and later (right-click > Open no longer works):
+   System Settings > Privacy & Security, at the bottom:
+   click "Open Anyway", then enter an administrator password.
+
+This is needed only once per version.
+
+Alternatively, in Terminal (Applications > Utilities > Terminal):
+    xattr -dr com.apple.quarantine /Applications/MediaStar.app
+then launch MediaStar as usual.
+
+On first use, macOS may also ask for local network access (CueStar,
+JingleStar, OldStar), the microphone (SweepStar), screen recording and
+accessibility (OldStar windows): accept, or allow MediaStar later in
+System Settings > Privacy & Security.

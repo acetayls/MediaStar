@@ -2,6 +2,13 @@
 
 ## 0.1.4 — en cours
 
+### Barre du haut
+
+- **Barre du haut commune à la suite** : logo et nom « JingleStar » (« Star » en jaune) avant
+  le nom du projet, comme dans CueStar, SweepStar et OldStar. Aide, Télécommandes et Préférences
+  deviennent des boutons à icône seule (livre, télécommande, engrenage), avec leur nom en
+  infobulle. La version est maintenant affichée dans la fenêtre d'aide.
+
 ### Faders
 
 - **Touches + et −** : elles montent et baissent aussi le volume du module de 1 dB quand la
@@ -32,8 +39,21 @@
 - Le bouton **Préférences** reste allumé tant que la fenêtre est ouverte, comme Aide et
   Télécommandes.
 
+### Playlist
+
+- **Lire un morceau en boucle**, comme dans CueStar : chaque morceau a son bouton boucle à droite
+  de la liste (ou « Lire en boucle » dans son menu clic droit). Un morceau en boucle se répète
+  jusqu'à Stop, Suivant ou le lancement d'un autre morceau ; « BOUCLE » remplace le temps restant.
+  Décocher la boucle pendant la lecture laisse le morceau aller au bout, puis la playlist enchaîne
+  normalement. Réglage enregistré avec le projet.
+
 ### Cuelist
 
+- **Lire un cue en boucle** : bouton boucle à droite de chaque cue, ou « En boucle » dans ses
+  réglages (avec les points de boucle de la forme d'onde, comme un jingle). Le cue tourne jusqu'à
+  son arrêt (bouton Arrêter du cue ou Stop), pendant que les GO suivants lancent les autres cues ;
+  il n'enchaîne donc pas. Décocher la boucle pendant la lecture le laisse aller au bout, puis
+  il enchaîne s'il est réglé ainsi.
 - **Avancement du cue en cours bien visible** : une barre verte pleine en bas de la ligne et une
   tête de lecture qui avance, par-dessus le nom du cue. En mode édition, le cadre du nom ne cache
   plus l'avancement.

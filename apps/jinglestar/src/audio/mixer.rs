@@ -54,6 +54,8 @@ pub struct Queued {
     pub id: u64,
     /// Durée du fondu enchaîné en images ; 0 = enchaînement en fin de fichier.
     pub crossfade: usize,
+    /// Le morceau se répète en entier jusqu'à son arrêt (il ne finit jamais de lui-même).
+    pub looping: bool,
 }
 
 /// Son à lancer sur un autre emplacement, à l'image près, à la fin naturelle d'une voix
@@ -629,7 +631,8 @@ impl Mixer {
             let other = PLAYLIST_SLOTS[1 - i];
             let st = &mut self.modules[m];
             let Some(v) = st.voices[slot].as_mut() else { continue };
-            if v.fade_left.is_some() || v.paused {
+            // Un morceau en boucle ne finit pas : pas de fondu vers le suivant.
+            if v.fade_left.is_some() || v.paused || v.region.looping.is_some() {
                 continue;
             }
             let remaining = v.region.end.saturating_sub(v.pos);
@@ -640,6 +643,7 @@ impl Mixer {
             v.fade_left = Some(v.fade_len);
             let q = st.next.take().unwrap();
             let mut region = Region::full(&q.buffer);
+            region.looping = q.looping.then_some((0, q.buffer.frames));
             region.fade_in = xfade.min(q.buffer.frames);
             let (id, len) = (q.id, q.buffer.frames);
             self.retire(m, other, EqCoeffs::flat());
@@ -736,7 +740,8 @@ impl Mixer {
                             let natural = is_playlist_slot(slot) && v.fade_left.is_none();
                             match st.next.take().filter(|_| natural) {
                                 Some(q) => {
-                                    let region = Region::full(&q.buffer);
+                                    let mut region = Region::full(&q.buffer);
+                                    region.looping = q.looping.then_some((0, q.buffer.frames));
                                     let old = std::mem::replace(v, Voice::new(q.id, q.buffer, q.gain, region, ramps));
                                     // Pause demandée juste avant la fin : le suivant reste en pause.
                                     (v.paused, v.pause_gain) = (old.paused, old.pause_gain);
@@ -1054,7 +1059,7 @@ mod tests {
         let b = ramp(10);
         let slot = PLAYLIST_SLOTS[0];
         tx.send(Command::Play { module: 0, slot, id: 1, region: Region::full(&a), buffer: a, gain: 1.0, eq: EqCoeffs::flat() }).unwrap();
-        tx.send(Command::QueueNext { module: 0, next: Some(Queued { buffer: b, gain: 1.0, id: 2, crossfade: 0 }) }).unwrap();
+        tx.send(Command::QueueNext { module: 0, next: Some(Queued { buffer: b, gain: 1.0, id: 2, crossfade: 0, looping: false }) }).unwrap();
         let mut out = vec![0.0; 2 * 15];
         mx.process(&mut out);
         assert!(matches!(ev.try_recv(), Ok(Event::Advanced { id: 2, .. })));
@@ -1115,7 +1120,7 @@ mod tests {
         let b = Arc::new(AudioBuffer::from_planar(vec![0.5; 100], vec![0.5; 100], 1000));
         let slot = PLAYLIST_SLOTS[0];
         tx.send(Command::Play { module: 0, slot, id: 1, region: Region::full(&a), buffer: a, gain: 1.0, eq: EqCoeffs::flat() }).unwrap();
-        tx.send(Command::QueueNext { module: 0, next: Some(Queued { buffer: b, gain: 1.0, id: 2, crossfade: 40 }) }).unwrap();
+        tx.send(Command::QueueNext { module: 0, next: Some(Queued { buffer: b, gain: 1.0, id: 2, crossfade: 40, looping: false }) }).unwrap();
         let mut out = vec![0.0; 2 * 64];
         // Premier bloc : 64 images, le fondu n'a pas encore commencé (reste 100 > 40).
         mx.process(&mut out);

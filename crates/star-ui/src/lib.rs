@@ -3,6 +3,7 @@
 //!
 //! Destinée à sortir un jour dans son propre dépôt : elle ne connaît pas les applis.
 
+pub mod app_bar;
 pub mod eq_view;
 pub mod dialogs;
 pub mod floating;

@@ -111,6 +111,9 @@ pub struct PlaylistConfig {
     pub normalize: NormalizeSettings,
     /// Gains réglés à la main (dB) : ils remplacent le gain d'équilibrage du morceau.
     pub manual_gains: std::collections::HashMap<PathBuf, f32>,
+    /// Morceaux lus en boucle : ils se répètent jusqu'à Stop, Suivant ou un autre morceau.
+    #[serde(skip_serializing_if = "std::collections::HashSet::is_empty")]
+    pub looped: std::collections::HashSet<PathBuf>,
 }
 
 impl Default for PlaylistConfig {
@@ -124,6 +127,7 @@ impl Default for PlaylistConfig {
             crossfade_secs: 3.0,
             normalize: NormalizeSettings::default(),
             manual_gains: Default::default(),
+            looped: Default::default(),
         }
     }
 }
@@ -520,6 +524,7 @@ mod tests {
         p.modules[1].notes = "1. Ouverture\n2. Applaudissements".into();
         let back: Project = serde_json::from_str(&serde_json::to_string(&p).unwrap()).unwrap();
         assert_eq!(back.modules[0].playlist.manual_gains.get(Path::new("/musique/01 Morceau.wav")), Some(&-4.5));
+        assert!(back.modules[0].playlist.looped.is_empty());
         assert_eq!(back.modules[1].mode, ModuleMode::Text);
         assert_eq!(back.modules[1].notes, p.modules[1].notes);
     }

@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleName</key>
+	<string>OldStar</string>
+	<key>CFBundleDisplayName</key>
+	<string>OldStar</string>
+	<!-- Identifiant stable : c'est à lui que macOS rattache les autorisations
+	     (Enregistrement de l'écran, Accessibilité, réseau local). -->
+	<key>CFBundleIdentifier</key>
+	<string>fr.mediastar.OldStar</string>
+	<key>CFBundleExecutable</key>
+	<string>oldstar</string>
+	<key>CFBundleIconFile</key>
+	<string>OldStar</string>
+	<key>CFBundlePackageType</key>
+	<string>APPL</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleShortVersionString</key>
+	<string>@VERSION@</string>
+	<key>CFBundleVersion</key>
+	<string>@VERSION@</string>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>fr</string>
+	<key>LSMinimumSystemVersion</key>
+	<string>11.0</string>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.utilities</string>
+	<key>NSHighResolutionCapable</key>
+	<true/>
+	<key>NSSupportsAutomaticGraphicsSwitching</key>
+	<true/>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>OldStar sert la page des tablettes sur le réseau local et pilote la console et les applis Star en OSC.</string>
+	<key>NSScreenCaptureUsageDescription</key>
+	<string>OldStar montre sur la tablette l'image des fenêtres choisies (Lake, éditeur de console…).</string>
+	<key>NSAppleEventsUsageDescription</key>
+	<string>OldStar fait passer devant la fenêtre dans laquelle la tablette clique.</string>
+</dict>
+</plist>

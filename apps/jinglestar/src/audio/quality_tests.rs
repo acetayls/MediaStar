@@ -627,7 +627,7 @@ fn gapless_playlist_is_sample_continuous() {
     let b = buffer(whole[7_777..].to_vec(), whole[7_777..].to_vec());
     let mut rig = Rig::new(2);
     rig.play(PLAYLIST_SLOTS[0], &a, 1.0, Region::full(&a), EqCoeffs::flat());
-    rig.send(Command::QueueNext { module: 0, next: Some(Queued { buffer: b, gain: 1.0, id: 9, crossfade: 0 }) });
+    rig.send(Command::QueueNext { module: 0, next: Some(Queued { buffer: b, gain: 1.0, id: 9, crossfade: 0, looping: false }) });
     let d = rig.latency();
     let out = rig.render(20_000 + d);
     assert_eq!(channel(&out, 2, 0)[d..], whole[..]);
@@ -641,7 +641,7 @@ fn crossfade_is_smooth_and_keeps_level() {
     let b = sine(100.0, 0.5, 48_000);
     let mut rig = Rig::new(2);
     rig.play(PLAYLIST_SLOTS[0], &a, 1.0, Region::full(&a), EqCoeffs::flat());
-    rig.send(Command::QueueNext { module: 0, next: Some(Queued { buffer: b, gain: 1.0, id: 9, crossfade: 9_600 }) });
+    rig.send(Command::QueueNext { module: 0, next: Some(Queued { buffer: b, gain: 1.0, id: 9, crossfade: 9_600, looping: false }) });
     let out = rig.render(90_000);
     assert_no_click(&out, 2, "fondu enchaîné");
     assert!(peak(&out) < 0.55, "pas de bosse de niveau : {}", peak(&out));
@@ -688,10 +688,10 @@ fn empty_tracks_in_playlist_do_not_loop_forever() {
     let a = sine(100.0, 0.5, 1_000);
     let mut rig = Rig::new(2);
     rig.play(PLAYLIST_SLOTS[0], &empty, 1.0, Region::full(&empty), EqCoeffs::flat());
-    rig.send(Command::QueueNext { module: 0, next: Some(Queued { buffer: empty.clone(), gain: 1.0, id: 5, crossfade: 0 }) });
+    rig.send(Command::QueueNext { module: 0, next: Some(Queued { buffer: empty.clone(), gain: 1.0, id: 5, crossfade: 0, looping: false }) });
     rig.render(512);
     rig.play(PLAYLIST_SLOTS[1], &a, 1.0, Region::full(&a), EqCoeffs::flat());
-    rig.send(Command::QueueNext { module: 0, next: Some(Queued { buffer: empty, gain: 1.0, id: 6, crossfade: 48_000 }) });
+    rig.send(Command::QueueNext { module: 0, next: Some(Queued { buffer: empty, gain: 1.0, id: 6, crossfade: 48_000, looping: false }) });
     let out = rig.render(5_000);
     assert_finite(&out);
 }
@@ -830,7 +830,7 @@ fn process_never_allocates() {
             rig.send(Command::Seek { module: m, slot: 0, frame: 20_000 + round * 100 });
             rig.send(Command::SetPaused { module: m, slot: PLAYLIST_SLOTS[0], paused: round.is_multiple_of(2) });
             rig.send(Command::Play { module: m, slot: PLAYLIST_SLOTS[0], id: 2, buffer: short.clone(), gain: 1.0, region: Region::full(&short), eq: EqCoeffs::flat() });
-            rig.send(Command::QueueNext { module: m, next: Some(Queued { buffer: short.clone(), gain: 1.0, id: 3, crossfade: 100 }) });
+            rig.send(Command::QueueNext { module: m, next: Some(Queued { buffer: short.clone(), gain: 1.0, id: 3, crossfade: 100, looping: false }) });
         }
     };
     let mut out = vec![0f32; 8 * 1024];

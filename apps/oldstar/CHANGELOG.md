@@ -6,6 +6,34 @@ Première version d'OldStar : une télécommande qui s'ouvre dans le navigateur 
 tablette ou d'un vieux téléphone, sans rien installer dessus. Le PC qui fait tourner OldStar sert
 la page sur le réseau local.
 
+### Barre du haut
+
+- **Barre du haut commune à la suite** : logo d'OldStar, nom (« Star » en jaune) et onglets
+  Connexion, Journal, Paramètres en contrôle segmenté, aux mêmes tailles que dans les autres
+  applis.
+
+### Langue et console facultative
+
+- **OldStar en anglais ou en français**, au choix dans **Paramètres → Langue** : fenêtre du PC,
+  page de la tablette (onglets, boutons, messages) et aide. Anglais par défaut. Le changement
+  s'applique dès l'enregistrement ; les tablettes connectées se rechargent seules dans la
+  nouvelle langue. Les libellés par défaut des boutons CueStar et JingleStar et des raccourcis
+  de fenêtres suivent la langue ; ceux modifiés à la main restent tels quels. Le Journal reste
+  en français. `--lang en` ou `--lang fr` choisit la langue pour un lancement.
+- **Aucune console** : nouveau choix dans **Paramètres → Console**, pour n'utiliser que les
+  onglets Applis et Fenêtres. OldStar ne cherche alors aucune console et l'onglet Console
+  disparaît de la tablette. Aussi au lancement : `--console aucune`.
+
+### Aide
+
+- **Aide** complète d'OldStar, en français et en anglais : prise en main, fenêtre du PC, page de
+  la tablette onglet par onglet, essai sans console, en cas de problème.
+- Sur le PC : bouton **Aide** (livre) dans la barre du haut, ou touche **F1**. La version
+  d'OldStar (« OldStar v0.0.1 ») est dans le titre de la fenêtre d'aide et en haut à droite.
+- Sur la tablette : onglet **Aide**, avec la même aide et la version d'OldStar. Sur les très
+  petits écrans (iPhone 4S), l'état de la liaison se réduit à sa pastille de couleur pour
+  laisser la place aux quatre onglets.
+
 ### Sur le PC
 
 - **Fenêtre OldStar** : l'adresse à taper sur la tablette, en grand, avec son **QR code** à
@@ -26,7 +54,7 @@ la page sur le réseau local.
 - **Icône OldStar** sur l'exécutable, la fenêtre et la barre des tâches, et sur la page web
   (onglet du navigateur, et icône de l'écran d'accueil quand on ajoute la page sur l'iPad).
 - Un seul fichier exécutable, sans DLL à côté ; fonctionne sous Windows, macOS et Linux
-  (la capture des fenêtres reste propre à Windows).
+  (la capture des fenêtres marche sous Windows et macOS).
 
 ### Appareils pris en charge
 
@@ -106,4 +134,11 @@ la page sur le réseau local.
   certaines applis Qt ou .NET) : il faut alors le premier plan.
 - Un gros bouton **◀ Fermer** reste toujours en haut, hors de l'image, et la touche Échap
   coupe les clics puis revient à la liste : on ne reste plus coincé dans une fenêtre.
-- La capture des fenêtres n'existe que sous Windows ; sur Mac et Linux, l'onglet l'indique.
+- **Capture des fenêtres sur Mac** (Intel et Apple Silicon) : image des fenêtres par
+  ScreenCaptureKit (macOS 14 et plus, ancienne méthode avant), clics, double-clics, clic droit,
+  glisser et molette, au premier plan ou en arrière-plan. macOS demande deux autorisations au
+  premier usage, dans Réglages Système › Confidentialité et sécurité : **Enregistrement de
+  l'écran** (puis relancer OldStar) et **Accessibilité** ; le Journal le rappelle. Une fenêtre
+  réduite dans le Dock ou posée sur un autre bureau est signalée comme réduite. Paquet
+  `OldStar.app` (Intel, Apple Silicon ou universel) et image disque préparés.
+- Sous Linux, pas de capture des fenêtres : l'onglet l'indique.

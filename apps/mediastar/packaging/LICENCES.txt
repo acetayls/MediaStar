@@ -1,0 +1,13 @@
+MediaStar
+=========
+
+MediaStar (JingleStar, CueStar, OldStar et SweepStar réunis) est sous licence MIT,
+comme chacune de ces applis (texte de la licence : LICENCE-CueStar.txt, le même pour toute la suite).
+Code source : https://github.com/acetayls/mediastar
+
+MediaStar livre libmpv et MediaInfo, utilisés par le module CueStar : leurs licences et
+leur provenance sont décrites dans TIERS.txt, et les licences des crates Rust dans
+crates-rust.txt.
+
+MediaStar (JingleStar, CueStar, OldStar and SweepStar together) is MIT licensed.
+Bundled third-party components (libmpv, MediaInfo) are described in TIERS.txt.

@@ -1,0 +1,228 @@
+name: Build MediaStar
+
+# MediaStar = JingleStar, CueStar, OldStar et SweepStar dans un seul exécutable.
+# Ce workflow ne part qu'à la demande (onglet Actions → Build MediaStar → Run workflow).
+# Comme CueStar, chaque paquet embarque libmpv et MediaInfo (module CueStar) :
+#   Windows                : installeur (Inno Setup) et zip portable, libmpv-2.dll (shinchiro)
+#                            et MediaInfo.dll (mediaarea.net) à côté de mediastar.exe
+#   macOS Intel            : MediaStar-<version>-macos-intel.dmg (x86_64-apple-darwin)
+#   macOS Apple Silicon    : MediaStar-<version>-macos-apple-silicon.dmg (aarch64-apple-darwin)
+#   Les .dmg contiennent MediaStar.app (libmpv et libmediainfo Homebrew dans Contents/Frameworks)
+#   et, tant que l'app n'est pas notarisée, « LISEZ-MOI - Ouvrir MediaStar.txt » (Gatekeeper).
+# Les scripts sont dans apps/mediastar/packaging et se lancent aussi à la main.
+on:
+  workflow_dispatch:
+    inputs:
+      cible:
+        description: "Plateformes à construire"
+        type: choice
+        default: tout
+        options:
+          - tout
+          - windows
+          - macos
+          - macos-intel
+          - macos-apple-silicon
+      release:
+        description: "Tag de la release GitHub à créer et remplir (ex. mediastar-v0.0.1) ; vide = simple build"
+        required: false
+        default: ""
+      mpv_windows:
+        description: "Tag du build shinchiro/mpv-winbuild-cmake pour Windows (ex. 20251102) ; vide = le dernier"
+        required: false
+        default: ""
+      mediainfo_windows:
+        description: "Version de MediaInfo DLL pour Windows (ex. 26.10) ; vide = la dernière"
+        required: false
+        default: ""
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    if: inputs.cible == 'tout' || inputs.cible == 'windows'
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Tests
+        run: cargo test -p mediastar
+      - name: Build release
+        run: cargo build --release -p mediastar
+      - name: Récupérer libmpv-2.dll (shinchiro, mpv-dev x86_64)
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          MPV_TAG: ${{ inputs.mpv_windows }}
+        run: |
+          mkdir -p mpv _mpv
+          # Le build « x86_64 » de base (pas « v3 », qui exige un processeur récent).
+          gh release download $MPV_TAG --repo shinchiro/mpv-winbuild-cmake \
+            --pattern 'mpv-dev-x86_64-[0-9]*.7z' --dir _mpv
+          ARCHIVE="$(ls _mpv/*.7z | head -1)"
+          7z e -y -o_mpv "$ARCHIVE" libmpv-2.dll -r
+          mv _mpv/libmpv-2.dll mpv/
+          basename "$ARCHIVE" > mpv/mpv-build.txt
+          echo "libmpv : $(cat mpv/mpv-build.txt)"
+      - name: Récupérer MediaInfo.dll (mediaarea.net, Windows x64)
+        shell: bash
+        env:
+          MI_VERSION: ${{ inputs.mediainfo_windows }}
+        run: |
+          if [ -n "$MI_VERSION" ]; then
+            VERSIONS="$MI_VERSION"
+          else
+            # Les dernières versions publiées, la plus récente d'abord : le binaire d'un tag
+            # tout juste posé peut ne pas être encore en ligne.
+            VERSIONS="$(git ls-remote --tags https://github.com/MediaArea/MediaInfoLib 'v*' \
+              | sed -n 's|.*refs/tags/v\([0-9][0-9.]*\)$|\1|p' | sort -V | tail -3 | sort -rV)"
+          fi
+          mkdir -p _mi
+          MI_VERSION=""
+          for v in $VERSIONS; do
+            if curl -fsSL -o _mi/mi.zip \
+              "https://mediaarea.net/download/binary/libmediainfo0/$v/MediaInfo_DLL_${v}_Windows_x64_WithoutInstaller.zip"; then
+              MI_VERSION="$v"; break
+            fi
+            echo "MediaInfo $v indisponible, version précédente"
+          done
+          [ -n "$MI_VERSION" ] || { echo "Aucune MediaInfo DLL téléchargée (essayé : $VERSIONS)"; exit 1; }
+          echo "MediaInfo : $MI_VERSION"
+          7z e -y -o_mi _mi/mi.zip MediaInfo.dll -r
+          mv _mi/MediaInfo.dll mpv/
+          echo "MediaInfo DLL $MI_VERSION (Windows x64, mediaarea.net)" > mpv/mediainfo-version.txt
+      - name: Inno Setup
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe")) { choco install innosetup -y --no-progress }
+      - name: Installeur et zip portable
+        shell: pwsh
+        run: apps\mediastar\packaging\windows\package.ps1 -Mpv mpv\libmpv-2.dll -MediaInfo mpv\MediaInfo.dll -Out dist
+      - name: Vérifier le contenu du paquet
+        shell: bash
+        run: |
+          # Les bibliothèques sont posées à côté de mediastar.exe, où le module CueStar les cherche en premier.
+          test -f dist/stage-windows/mediastar.exe
+          test -f dist/stage-windows/libmpv-2.dll
+          test -f dist/stage-windows/MediaInfo.dll
+          test -f dist/stage-windows/licences/TIERS.txt
+          test -f dist/stage-windows/licences/LICENCES.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: mediastar-windows
+          path: |
+            dist/*.exe
+            dist/*.zip
+      - name: Publier dans la release
+        if: inputs.release != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.release }}
+          name: MediaStar ${{ inputs.release }}
+          target_commitish: ${{ github.sha }}
+          files: |
+            dist/*.exe
+            dist/*.zip
+
+  macos:
+    # Un runner par architecture : Homebrew ne fournit libmpv que pour celle de la machine.
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-15
+            target: aarch64-apple-darwin
+            arch: apple-silicon
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+            arch: intel
+    if: >-
+      inputs.cible == 'tout' || inputs.cible == 'macos' ||
+      inputs.cible == 'macos-intel' || inputs.cible == 'macos-apple-silicon'
+    runs-on: ${{ matrix.os }}
+    env:
+      # Choix d'une seule architecture : l'autre entrée de la matrice s'arrête tout de suite.
+      ACTIVE: ${{ inputs.cible == 'tout' || inputs.cible == 'macos' || inputs.cible == format('macos-{0}', matrix.arch) }}
+      # Signature et notarisation : actives seulement si ces secrets existent (compte Apple Developer).
+      # Sans eux : signature ad hoc et LISEZ-MOI Gatekeeper dans le .dmg.
+      MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+      MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+      MACOS_SIGN_IDENTITY: ${{ secrets.MACOS_SIGN_IDENTITY }}
+      APPLE_ID: ${{ secrets.APPLE_ID }}
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+      APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+    steps:
+      - name: Architecture non demandée
+        if: env.ACTIVE != 'true'
+        run: echo "${{ matrix.arch }} non demandé (cible ${{ inputs.cible }}), rien à faire"
+      - uses: actions/checkout@v4
+        if: env.ACTIVE == 'true'
+      - uses: dtolnay/rust-toolchain@stable
+        if: env.ACTIVE == 'true'
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        if: env.ACTIVE == 'true'
+        with:
+          key: mediastar-${{ matrix.target }}
+      - name: libmpv, libmediainfo et dylibbundler (Homebrew)
+        if: env.ACTIVE == 'true'
+        run: brew install mpv libmediainfo dylibbundler
+      - name: Tests
+        if: env.ACTIVE == 'true'
+        run: cargo test -p mediastar
+      - name: Build release
+        if: env.ACTIVE == 'true'
+        run: cargo build --release -p mediastar --target ${{ matrix.target }}
+      - name: Certificat Developer ID
+        if: env.ACTIVE == 'true' && env.MACOS_CERT_P12 != ''
+        run: |
+          KEYCHAIN="$RUNNER_TEMP/signature.keychain-db"
+          echo "$MACOS_CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p ci "$KEYCHAIN"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p ci "$KEYCHAIN"
+          security import "$RUNNER_TEMP/cert.p12" -P "$MACOS_CERT_PASSWORD" -A -t cert -f pkcs12 -k "$KEYCHAIN"
+          security set-key-partition-list -S apple-tool:,apple: -k ci "$KEYCHAIN"
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+      - name: Bundle .app et .dmg
+        if: env.ACTIVE == 'true'
+        run: apps/mediastar/packaging/macos/bundle.sh ${{ matrix.target }} dist
+      - name: Vérifier le paquet
+        if: env.ACTIVE == 'true'
+        run: |
+          APP=dist/MediaStar.app
+          test -f "$APP/Contents/Frameworks/libmpv.2.dylib"
+          test -f "$APP/Contents/Frameworks/libmediainfo.0.dylib"
+          lipo -info "$APP/Contents/MacOS/mediastar"
+          # Plus aucune référence à Homebrew dans les bibliothèques embarquées.
+          ! otool -L "$APP"/Contents/Frameworks/*.dylib | grep -E '/opt/homebrew|/usr/local/(opt|Cellar)'
+          # ScreenCaptureKit lié en faible (OldStar) : MediaStar démarre aussi avant macOS 12.3.
+          otool -l "$APP/Contents/MacOS/mediastar" | grep -B2 -A3 ScreenCaptureKit | grep -q LC_LOAD_WEAK_DYLIB \
+            || ! otool -L "$APP/Contents/MacOS/mediastar" | grep -q ScreenCaptureKit
+          # Contenu du .dmg : l'app, le raccourci Applications et, sans notarisation, le LISEZ-MOI.
+          DMG="$(ls dist/*.dmg)"
+          MNT="$(mktemp -d)"
+          hdiutil attach -nobrowse -readonly -mountpoint "$MNT" "$DMG"
+          ls -la "$MNT"
+          test -d "$MNT/MediaStar.app"
+          test -L "$MNT/Applications"
+          if [ -z "$APPLE_ID" ] || [ -z "$MACOS_SIGN_IDENTITY" ]; then
+            test -f "$MNT/LISEZ-MOI - Ouvrir MediaStar.txt"
+          fi
+          hdiutil detach "$MNT"
+      - uses: actions/upload-artifact@v4
+        if: env.ACTIVE == 'true'
+        with:
+          name: mediastar-macos-${{ matrix.arch }}
+          path: dist/*.dmg
+      - name: Publier dans la release
+        if: env.ACTIVE == 'true' && inputs.release != ''
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ inputs.release }}
+          name: MediaStar ${{ inputs.release }}
+          target_commitish: ${{ github.sha }}
+          files: dist/*.dmg

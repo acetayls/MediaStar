@@ -14,7 +14,7 @@ use std::time::{Duration, Instant};
 
 use crate::audio::buffer::db_to_gain;
 use crate::audio::mixer::{Command, FollowOn, JINGLE_SLOTS};
-use crate::project::{Cue, CueFollow, ModuleMode, SoundSettings};
+use crate::project::{Cue, CueFollow, ModuleMode};
 
 use super::{collect_audio, sound_region, Controller};
 
@@ -186,8 +186,9 @@ impl Controller {
     }
 
     fn cue_voice(&self, cue: &Cue, slot: usize, id: u64, buf: std::sync::Arc<crate::audio::buffer::AudioBuffer>) -> FollowOn {
-        // Pas de boucle pour les cues pour l'instant : un cue joue toujours une fois.
-        let region = sound_region(&SoundSettings { looping: false, ..cue.sound.clone() }, &buf);
+        // Un cue en boucle tourne jusqu'à son arrêt : il ne finit jamais de lui-même,
+        // donc n'enchaîne pas (boucle décochée pendant la lecture : il va au bout, puis enchaîne).
+        let region = sound_region(&cue.sound, &buf);
         FollowOn { slot, id, gain: db_to_gain(cue.sound.volume_db), region, eq: cue.sound.eq.coeffs(self.rate()), buffer: buf }
     }
 
@@ -514,6 +515,20 @@ impl Controller {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn looping_cue_plays_its_loop() {
+        let mut p = crate::project::Project::default();
+        p.modules[0].mode = ModuleMode::Go;
+        p.modules[0].cues = vec![Cue::new("/show/a.wav".into())];
+        p.modules[0].cues[0].sound.looping = true;
+        let c = Controller::with_project(p, None, || {});
+        let buf = std::sync::Arc::new(crate::audio::buffer::AudioBuffer::from_planar(vec![0.1; 480], vec![0.1; 480], 48_000));
+        let cue = c.project.modules[0].cues[0].clone();
+        assert_eq!(c.cue_voice(&cue, 0, 1, buf.clone()).region.looping, Some((0, 480)), "le cue entier tourne en boucle");
+        let once = Cue { sound: crate::project::SoundSettings { looping: false, ..cue.sound.clone() }, ..cue };
+        assert_eq!(c.cue_voice(&once, 0, 1, buf).region.looping, None);
+    }
 
     #[test]
     fn moving_a_cue_renumbers_the_others() {

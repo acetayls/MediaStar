@@ -8,9 +8,12 @@ use std::path::{Path, PathBuf};
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct Config {
+    /// Langue de la fenêtre du PC et de la page des tablettes : « en » ou « fr ».
+    pub language: star_core::i18n::Lang,
     /// Port HTTP de la page iPad (et du WebSocket, même port).
     pub http_port: u16,
-    /// Console pilotée : « yamaha » (CL/QL) ou « m32 » (Midas M32 / Behringer X32), une seule à la fois.
+    /// Console pilotée : « yamaha » (CL/QL), « m32 » (Midas M32 / Behringer X32) ou « none »
+    /// (aucune : seulement les onglets Applis et Fenêtres), une seule à la fois.
     pub console: ConsoleKind,
     pub yamaha: YamahaConfig,
     pub m32: M32Config,
@@ -67,6 +70,7 @@ impl DragConfig {
 impl Default for Config {
     fn default() -> Self {
         Self {
+            language: star_core::i18n::Lang::En,
             http_port: 8080,
             console: ConsoleKind::Yamaha,
             yamaha: YamahaConfig::default(),
@@ -85,6 +89,7 @@ impl Config {
         match self.console {
             ConsoleKind::Yamaha => (self.yamaha.meters.mode != MeterMode::Off, self.yamaha.meters.fps.clamp(1, 30)),
             ConsoleKind::M32 => (self.m32.meters, self.m32.meter_fps.clamp(1, 30)),
+            ConsoleKind::None => (false, 1),
         }
     }
 }
@@ -95,6 +100,18 @@ pub enum ConsoleKind {
     #[default]
     Yamaha,
     M32,
+    /// Pas de console : OldStar ne sert qu'aux applis et aux fenêtres.
+    None,
+}
+
+impl ConsoleKind {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Yamaha => "Yamaha CL/QL",
+            Self::M32 => "Midas M32 / X32",
+            Self::None => star_core::i18n::tr("Aucune", "None"),
+        }
+    }
 }
 
 impl std::str::FromStr for ConsoleKind {
@@ -103,7 +120,8 @@ impl std::str::FromStr for ConsoleKind {
         match s.to_ascii_lowercase().as_str() {
             "yamaha" | "cl" | "ql" => Ok(Self::Yamaha),
             "m32" | "x32" | "midas" | "behringer" => Ok(Self::M32),
-            other => Err(format!("console inconnue : {other} (yamaha ou m32)")),
+            "none" | "aucune" | "non" | "no" => Ok(Self::None),
+            other => Err(format!("console inconnue : {other} (yamaha, m32 ou aucune)")),
         }
     }
 }
