@@ -2,6 +2,12 @@
 
 ## 0.0.2 — en cours
 
+- **OldStar : suivi des micros HF** : nouvel onglet **Micros** sur la tablette, une carte par
+  micro avec son nom, sa fréquence, la pile, la HF des deux antennes, le niveau audio et les
+  alertes (pile faible, HF faible, saturation, interférence…). Récepteurs Sennheiser EM 300/500 G3
+  et EM 2000/2050, Shure Axient Digital AD4D et AD4Q, à ajouter dans **Paramètres → Micros HF**.
+  Essai sans matériel : `mediastar --old --simulateur-micros`.
+
 ## 0.0.1 — 12/11/2026
 
 - **Nouvel exécutable MediaStar** : il regroupe JingleStar, CueStar, OldStar et SweepStar. Chaque module
