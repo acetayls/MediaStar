@@ -34,7 +34,9 @@
 - **Rotation : l'aperçu montre ce que verra la salle**. Une vidéo tournée par son fichier (vidéo
   de téléphone, par exemple) apparaissait de travers dans l'aperçu alors que la sortie était
   droite ; l'aperçu applique maintenant la même rotation que la sortie. La rotation réglée dans le
-  cue s'y ajoute, sur l'aperçu comme sur la sortie.
+  cue s'y ajoute, sur l'aperçu, sur les vignettes de la frise et sur la sortie.
+- **Points calés sur les images** : l'entrée, la sortie et la boucle tombent toujours au début
+  d'une image, qu'on glisse une poignée, tape un timecode ou utilise Entrée ici / Sortie ici.
 - **Remarques par cue** : un commentaire libre pour chaque cue (top, consigne, réglage…), jamais
   à l'antenne. Volet **REMARQUES** sous l'aperçu du cue en attente, champ dans les réglages du
   cue, et rappel en gris après le nom dans la conduite (en entier au survol). Enregistré avec le

@@ -24,8 +24,9 @@ pub fn is_audio(p: &Path) -> bool {
 }
 
 /// Fond de l'éditeur : vignettes de la vidéo côte à côte sur la partie visible, assombries
-/// pendant les fondus (le noir que verra la salle).
-fn strip_background(tiles: Vec<Option<egui::TextureHandle>>, duration: f64) -> impl FnOnce(&WaveView) {
+/// pendant les fondus (le noir que verra la salle). Vignettes tournées de `rot` degrés, comme
+/// l'aperçu et la sortie.
+fn strip_background(tiles: Vec<Option<egui::TextureHandle>>, duration: f64, rot: u16) -> impl FnOnce(&WaveView) {
     move |w: &WaveView| {
         let p = w.painter;
         let r = w.rect;
@@ -39,9 +40,9 @@ fn strip_background(tiles: Vec<Option<egui::TextureHandle>>, duration: f64) -> i
             match tiles.get(i).and_then(|t| t.as_ref()) {
                 Some(tex) => {
                     let full = Rect::from_min_size(cell.min, vec2(tile_w, r.height()));
-                    let uv_w = (cell.width() / tile_w).clamp(0.0, 1.0);
-                    p.image(tex.id(), cell, Rect::from_min_max(pos2(0.0, 0.0), pos2(uv_w, 1.0)), Color32::WHITE);
-                    let _ = full;
+                    let clip = p.with_clip_rect(cell.intersect(p.clip_rect()));
+                    clip.rect_filled(cell, CornerRadius::ZERO, Color32::BLACK);
+                    paint_texture(&clip, tex, full, rot);
                 }
                 None => {
                     p.rect_filled(cell.shrink(1.0), CornerRadius::same(2), PANEL_HI);
@@ -284,6 +285,15 @@ pub fn fmt_tc(t: f64, fps: f64) -> String {
     format!("{:02}:{:02}:{:02}{sep}{f:02}", secs / 3600, (secs / 60) % 60, secs % 60)
 }
 
+/// Instant ramené au début de l'image la plus proche (sans dépasser `duration`).
+pub fn snap_frame(t: f64, fps: f64, duration: f64) -> f64 {
+    if fps <= 1.0 || !t.is_finite() {
+        return t;
+    }
+    let s = (t * fps).round() / fps;
+    if duration > 0.0 && s > duration { duration } else { s.max(0.0) }
+}
+
 /// Lit un timecode saisi : « HH:MM:SS:FF » (image dans la seconde), ou « [[HH:]MM:]SS[.ss] »
 /// (secondes, éventuellement décimales).
 pub fn parse_tc(s: &str, fps: f64) -> Option<f64> {
@@ -472,17 +482,19 @@ pub fn clip_editor(ui: &mut Ui, id_salt: impl std::hash::Hash + std::fmt::Debug 
     let shown = preview.shows(path);
     let duration = preview.state.duration;
     let before = (clip.sound.start, clip.sound.end);
+    let points_before = (clip.sound.start, clip.sound.end, clip.sound.loop_start, clip.sound.loop_end);
     let mut seek_to = None;
     if shown && duration > 0.0 {
         if !audio {
             preview.request_strip(&ctx, path, STRIP_COUNT);
         }
         let tiles: Vec<Option<egui::TextureHandle>> = if audio { Vec::new() } else { preview.strip_textures(&ctx).to_vec() };
+        let rot = (clip.rotation() + preview.state.rotate) % 360;
         let playhead = Some(preview.state.time);
         let s = &mut clip.sound;
         let (st, ls, le, end) = s.markers(duration);
         let mut mk = Markers { start: st, loop_start: ls, loop_end: le, end };
-        if waveform_editor(ui, strip_background(tiles, duration), duration, &mut mk, s.looping, &mut s.fade_in, &mut s.fade_out, playhead, &mut seek_to) {
+        if waveform_editor(ui, strip_background(tiles, duration, rot), duration, &mut mk, s.looping, &mut s.fade_in, &mut s.fade_out, playhead, &mut seek_to) {
             set_markers(s, &mk);
         }
     } else {
@@ -513,6 +525,16 @@ pub fn clip_editor(ui: &mut Ui, id_salt: impl std::hash::Hash + std::fmt::Debug 
     }
     if let Some(m) = mark {
         m.apply(clip, duration);
+    }
+    // Points calés sur les images : un point déplacé tombe toujours au début d'une image.
+    let fps = preview.state.fps;
+    let s = &mut clip.sound;
+    if fps > 1.0 && (s.start, s.end, s.loop_start, s.loop_end) != points_before {
+        let snap = |t: f64| snap_frame(t, fps, duration);
+        s.start = snap(s.start);
+        s.end = s.end.map(snap);
+        s.loop_start = s.loop_start.map(snap);
+        s.loop_end = s.loop_end.map(snap);
     }
 
     // Volume, juste au-dessus de l'égaliseur.
@@ -554,5 +576,8 @@ mod tests {
         let t = parse_tc("00:00:10:07", 29.97).unwrap();
         assert_eq!(fmt_tc(t, 29.97), "00:00:10:07");
         assert!(parse_tc("abc", 25.0).is_none());
+        assert_eq!(snap_frame(1.019, 25.0, 10.0), 1.0);
+        assert_eq!(snap_frame(1.021, 25.0, 10.0), 1.04);
+        assert_eq!(snap_frame(9.999, 25.0, 9.99), 9.99);
     }
 }
