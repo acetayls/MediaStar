@@ -143,24 +143,32 @@ pub fn fmt_frames(t: f64, fps: f64) -> String {
 }
 
 /// Barre de déplacement de l'aperçu, avec les points d'entrée et de sortie de l'élément,
-/// puis le temps à l'image près, les boutons lecture, image précédente et suivante, et
-/// « Entrée ici » / « Sortie ici » qui calent le point sur l'image affichée (si `marks` ; dans
-/// l'éditeur du cue, ces boutons sont avec les points).
+/// puis le temps à l'image près et les boutons lecture, image précédente et suivante.
+/// `trimmed` : la barre ne couvre que la partie jouée du cue (de l'entrée à la sortie), et le
+/// temps se compte depuis l'entrée ; sinon, tout le fichier.
 /// Glisser : saut aux images clés (fluide) ; au relâché, position exacte.
-pub fn scrub_bar(ui: &mut Ui, id: impl std::hash::Hash, preview: &mut Preview, path: &Path, clip: &Clip, marks: bool) -> Option<Mark> {
-    let mut mark = None;
+pub fn scrub_bar(ui: &mut Ui, id: impl std::hash::Hash, preview: &mut Preview, path: &Path, clip: &Clip, trimmed: bool) {
     let ctx = ui.ctx().clone();
     let len = if preview.state.path.as_deref() == Some(path) { preview.state.duration } else { 0.0 };
-    let mut t = if len > 0.0 { preview.state.time.clamp(0.0, len) } else { 0.0 };
+    let (st, end) = if len > 0.0 {
+        let (st, _, _, end) = clip.sound.markers(len);
+        (st, end)
+    } else {
+        (0.0, 0.0)
+    };
+    // Bornes de la barre.
+    let (a, b) = if trimmed && end > st { (st, end) } else { (0.0, len) };
+    let span = (b - a).max(1e-6);
+    let mut t = if len > 0.0 { preview.state.time.clamp(a, b.max(a)) } else { 0.0 };
     let (hit, bar) = ui.allocate_exact_size(vec2(ui.available_width(), 16.0), Sense::click_and_drag());
     let r = Rect::from_center_size(hit.center(), vec2(hit.width(), 6.0));
-    let frac_at = |x: f32| ((x - r.left()) / r.width()).clamp(0.0, 1.0) as f64;
-    let x_at = |t: f64| r.left() + r.width() * (t / len.max(1e-6)).clamp(0.0, 1.0) as f32;
+    let t_at = |x: f32| a + ((x - r.left()) / r.width()).clamp(0.0, 1.0) as f64 * span;
+    let x_at = |t: f64| r.left() + r.width() * ((t - a) / span).clamp(0.0, 1.0) as f32;
     let p = ui.painter();
     p.rect_filled(r, CornerRadius::same(3), PANEL_HI);
     if len > 0.0 {
         if let Some(pos) = bar.interact_pointer_pos() {
-            let to = frac_at(pos.x) * len;
+            let to = t_at(pos.x);
             if bar.dragged() {
                 preview.seek(&ctx, to, false);
                 t = to;
@@ -175,8 +183,6 @@ pub fn scrub_bar(ui: &mut Ui, id: impl std::hash::Hash, preview: &mut Preview, p
         }
         let p = ui.painter();
         // Partie jouée de l'élément, entre ses poignées.
-        let s = &clip.sound;
-        let (st, _, _, end) = s.markers(len);
         p.rect_filled(Rect::from_x_y_ranges(x_at(st)..=x_at(end), r.y_range()), CornerRadius::same(3), GO.gamma_multiply(0.35));
         for (x, c) in [(x_at(st), GO), (x_at(end), STOP)] {
             p.line_segment([pos2(x, hit.top()), pos2(x, hit.bottom())], Stroke::new(2.0, c));
@@ -206,28 +212,13 @@ pub fn scrub_bar(ui: &mut Ui, id: impl std::hash::Hash, preview: &mut Preview, p
             preview.step(&ctx, false);
         }
         let fps = preview.state.fps;
-        ui.label(RichText::new(fmt_frames(t, fps)).monospace().color(TEXT))
+        ui.label(RichText::new(fmt_frames(t - a, fps)).monospace().color(TEXT))
             .on_hover_text(if fps > 1.0 { format!("{} {fps:.3} {}", tr("minutes:secondes.image, à", "minutes:seconds.frame, at"), tr("images/s", "fps")) } else { tr("Cadence inconnue : temps au centième", "Unknown frame rate: time in hundredths").to_string() });
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
-            ui.label(RichText::new(format!("-{}", fmt_time((len - t).max(0.0)))).monospace().color(TEXT_DIM));
-            if len > 0.0 && marks {
-                if ui.add(egui::Button::new(RichText::new(tr("Sortie ici ]", "Out here ]")).color(STOP)).small())
-                    .on_hover_text(tr("Le point de sortie se cale sur l'image affichée (touche O)", "Set the out point on the frame shown (O key)"))
-                    .clicked()
-                {
-                    mark = Some(Mark::Out(t));
-                }
-                if ui.add(egui::Button::new(RichText::new(tr("[ Entrée ici", "[ In here")).color(GO)).small())
-                    .on_hover_text(tr("Le point d'entrée se cale sur l'image affichée (touche I)", "Set the in point on the frame shown (I key)"))
-                    .clicked()
-                {
-                    mark = Some(Mark::In(t));
-                }
-            }
+            ui.label(RichText::new(format!("-{}", fmt_time((b - t).max(0.0)))).monospace().color(TEXT_DIM));
         });
     });
     let _ = id;
-    mark
 }
 
 /// Raccourcis de l'aperçu dans la fenêtre d'édition (hors saisie de texte) : ← → image par
@@ -385,9 +376,11 @@ fn points_rows(ui: &mut Ui, id_salt: impl std::hash::Hash + std::fmt::Debug + Co
         ui.label("");
         ui.horizontal(|ui| {
             ui.label(RichText::new(format!("{} {}", tr("Durée", "Duration"), fmt_tc(mk.end - mk.start, fps))).monospace().color(TEXT_DIM));
-            if ui.small_button(tr("Réinitialiser les points", "Reset points")).clicked() {
+            if ui.small_button(tr("Réinitialiser les points", "Reset points")).on_hover_text(tr("Tout le fichier, sans boucle ni fondus", "The whole file, no loop or fades")).clicked() {
                 mark = None;
                 mk = Markers { start: 0.0, loop_start: 0.0, loop_end: duration, end: duration };
+                s.fade_in = 0.0;
+                s.fade_out = 0.0;
             }
         });
         ui.end_row();
@@ -463,15 +456,29 @@ pub fn clip_editor(ui: &mut Ui, id_salt: impl std::hash::Hash + std::fmt::Debug 
         ui.add_space(6.0);
     }
 
-    // Aperçu centré : l'image à la position de la tête de lecture.
-    let w = ui.available_width().min(420.0);
-    ui.vertical_centered(|ui| {
-        let (rect, _) = ui.allocate_exact_size(vec2(w, w * 9.0 / 16.0), Sense::hover());
-        preview_image(ui, preview, path, rect, None, clip.rotation());
-    });
-    if let Some(e) = &preview.state.missing {
-        ui.label(RichText::new(format!("{} ({e})", tr("Aperçu indisponible", "Preview unavailable"))).small().color(METER_MID));
+    // Volume, avant les volets (une image n'a pas de son).
+    if !image {
+        egui::Grid::new(("clip-volume", id_salt)).num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
+            ui.label("Volume");
+            ui.spacing_mut().slider_width = (ui.available_width() - 80.0).max(160.0);
+            ui.add(egui::Slider::new(&mut clip.sound.volume_db, -40.0..=10.0).suffix(" dB").step_by(0.5));
+            ui.end_row();
+        });
+        ui.add_space(4.0);
     }
+
+    // Aperçu centré, dans un volet : l'image à la position de la tête de lecture.
+    ui.separator();
+    egui::CollapsingHeader::new(tr("Aperçu", "Preview")).id_salt(("clip-preview-zone", id_salt)).default_open(true).show(ui, |ui| {
+        let w = ui.available_width().min(420.0);
+        ui.vertical_centered(|ui| {
+            let (rect, _) = ui.allocate_exact_size(vec2(w, w * 9.0 / 16.0), Sense::hover());
+            preview_image(ui, preview, path, rect, None, clip.rotation());
+        });
+        if let Some(e) = &preview.state.missing {
+            ui.label(RichText::new(format!("{} ({e})", tr("Aperçu indisponible", "Preview unavailable"))).small().color(METER_MID));
+        }
+    });
     if image {
         return;
     }
@@ -479,7 +486,7 @@ pub fn clip_editor(ui: &mut Ui, id_salt: impl std::hash::Hash + std::fmt::Debug 
     // Frise avec ses poignées, puis dessous la barre de déplacement (verte entre l'entrée et
     // la sortie), et les points : dans un volet qu'on peut replier, comme l'égaliseur. Les
     // raccourcis clavier restent actifs volet replié.
-    ui.add_space(6.0);
+    ui.separator();
     let shown = preview.shows(path);
     let duration = preview.state.duration;
     let before = (clip.sound.start, clip.sound.end);
@@ -506,9 +513,7 @@ pub fn clip_editor(ui: &mut Ui, id_salt: impl std::hash::Hash + std::fmt::Debug 
         if let Some(t) = seek_to {
             preview.seek(&ctx, t, true);
         }
-        if let Some(m) = scrub_bar(ui, ("clip-scrub", id_salt), preview, path, clip, false) {
-            mark = Some(m);
-        }
+        scrub_bar(ui, ("clip-scrub", id_salt), preview, path, clip, false);
         ui.label(
             RichText::new(tr(
                 "← → image par image · Maj + ← → une seconde · K lecture/pause · I entrée · O sortie",
@@ -542,14 +547,7 @@ pub fn clip_editor(ui: &mut Ui, id_salt: impl std::hash::Hash + std::fmt::Debug 
         s.loop_end = s.loop_end.map(snap);
     }
 
-    // Volume, juste au-dessus de l'égaliseur.
-    ui.add_space(6.0);
-    egui::Grid::new(("clip-volume", id_salt)).num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
-        ui.label("Volume");
-        ui.spacing_mut().slider_width = (ui.available_width() - 80.0).max(160.0);
-        ui.add(egui::Slider::new(&mut clip.sound.volume_db, -40.0..=10.0).suffix(" dB").step_by(0.5));
-        ui.end_row();
-    });
+    ui.separator();
     let eq = &mut clip.sound.eq;
     let eq_title = if eq.is_flat() { RichText::new(tr("Égaliseur", "Equalizer")) } else { RichText::new(tr("Égaliseur (actif)", "Equalizer (on)")).color(ACCENT) };
     let open_by_default = !eq.is_flat();

@@ -33,6 +33,12 @@
   **[ Entrée ici** et **Sortie ici ]** ; le volume, plus large, est juste au-dessus de
   l'égaliseur. La frise et les points sont dans un volet **Points d'entrée et de sortie** qu'on
   peut replier, comme l'égaliseur (les raccourcis clavier restent actifs).
+- **Réglages du cue, suite** : le volume passe tout en haut, avant les volets ; l'aperçu a aussi
+  son volet repliable ; un trait sépare chaque volet (Aperçu, Points d'entrée et de sortie,
+  Égaliseur). « Réinitialiser les points » enlève aussi les fondus.
+- **Cue en attente** : plus de boutons Entrée ici / Sortie ici sous son aperçu, et la barre de
+  lecture ne couvre que la partie jouée du cue (de son entrée à sa sortie), temps compté depuis
+  l'entrée.
 - **Rotation : l'aperçu montre ce que verra la salle**. Une vidéo tournée par son fichier (vidéo
   de téléphone, par exemple) apparaissait de travers dans l'aperçu alors que la sortie était
   droite ; l'aperçu applique maintenant la même rotation que la sortie. La rotation réglée dans le

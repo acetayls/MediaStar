@@ -738,14 +738,8 @@ impl Cuelist {
                         ui.painter().text(rect.center(), Align2::CENTER_CENTER, txt, FontId::proportional(14.0), TEXT_DIM);
                     }
                     if self.preview.state.missing.is_none() && !super::media_editor::is_image(p) && self.editor.is_none() {
-                        // « Entrée ici » / « Sortie ici » : le point du cue en attente se cale sur
-                        // l'image affichée.
-                        if let Some(m) = super::media_editor::scrub_bar(ui, "cl-next-scrub", &mut self.preview, p, clip, true) {
-                            let d = self.preview.state.duration;
-                            if let Some(c) = self.cues.get_mut(self.standby) {
-                                m.apply(&mut c.clip, d);
-                            }
-                        }
+                        // Barre de la partie jouée du cue (de son entrée à sa sortie).
+                        super::media_editor::scrub_bar(ui, "cl-next-scrub", &mut self.preview, p, clip, true);
                     }
                     ui.horizontal(|ui| {
                         if clip.sound.looping {
