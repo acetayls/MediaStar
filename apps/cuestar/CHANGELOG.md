@@ -26,6 +26,15 @@
 
 ### Cuelist
 
+- **Réglages du cue réorganisés** : la lecture (une fois ou en boucle) suit la transition
+  d'entrée ; l'aperçu est centré ; la barre de déplacement (verte entre l'entrée et la sortie)
+  passe sous la frise ; l'entrée et son fondu, la boucle, la sortie et son fondu sont rassemblés,
+  en timecode **HH:MM:SS:II** (on peut aussi taper MM:SS ou des secondes), avec les boutons
+  **[ Entrée ici** et **Sortie ici ]** ; le volume est juste au-dessus de l'égaliseur.
+- **Rotation : l'aperçu montre ce que verra la salle**. Une vidéo tournée par son fichier (vidéo
+  de téléphone, par exemple) apparaissait de travers dans l'aperçu alors que la sortie était
+  droite ; l'aperçu applique maintenant la même rotation que la sortie. La rotation réglée dans le
+  cue s'y ajoute, sur l'aperçu comme sur la sortie.
 - **Remarques par cue** : un commentaire libre pour chaque cue (top, consigne, réglage…), jamais
   à l'antenne. Volet **REMARQUES** sous l'aperçu du cue en attente, champ dans les réglages du
   cue, et rappel en gris après le nom dans la conduite (en entier au survol). Enregistré avec le

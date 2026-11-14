@@ -68,6 +68,9 @@ pub enum PreviewEvent {
         /// Images par seconde (0 : inconnue).
         #[serde(default)]
         fps: f64,
+        /// Rotation demandée par le fichier (métadonnées), que l'aperçu applique au dessin.
+        #[serde(default)]
+        rotate: u16,
     },
     /// `seq` : dernière demande servie (saut, pas, ouverture).
     Position {
@@ -141,6 +144,9 @@ impl SwPlayer {
             ("sid", "no"),
             ("audio", "no"),
             ("hwdec", "no"),
+            // Image brute (le rendu logiciel de mpv ne sait pas la tourner) : la rotation du
+            // fichier et celle du cue sont appliquées au dessin, comme mpv le fait sur la sortie.
+            ("video-rotate", "no"),
             ("idle", "yes"),
             ("keep-open", "always"),
             ("pause", "yes"),
@@ -342,7 +348,8 @@ pub fn run() {
         if loaded {
             let image = live.m.get_property("current-tracks/video/image").as_deref() == Some("yes");
             let fps = live.get_f64("container-fps").or_else(|| live.get_f64("estimated-vf-fps")).filter(|f| f.is_finite() && *f > 1.0).unwrap_or(0.0);
-            send_event(&PreviewEvent::Opened { path: current.clone().unwrap_or_default(), duration: live.get_f64("duration").unwrap_or(0.0), image, fps });
+            let rotate = live.get_f64("current-tracks/video/demux-rotation").map(|r| (r.round() as i64).rem_euclid(360) as u16 / 90 * 90).unwrap_or(0);
+            send_event(&PreviewEvent::Opened { path: current.clone().unwrap_or_default(), duration: live.get_f64("duration").unwrap_or(0.0), image, fps, rotate });
         }
         if failed {
             send_event(&PreviewEvent::Error { message: format!("aperçu impossible ({})", current.clone().unwrap_or_default()) });
@@ -453,6 +460,9 @@ pub struct PreviewState {
     pub image: bool,
     /// Images par seconde du média (0 : inconnue).
     pub fps: f64,
+    /// Rotation demandée par le fichier (métadonnées) : mpv l'applique sur la sortie, l'aperçu
+    /// la dessine lui-même.
+    pub rotate: u16,
     pub time: f64,
     pub paused: bool,
     pub error: Option<String>,
@@ -594,11 +604,12 @@ impl Preview {
                     self.state.available = false;
                     self.state.missing = Some(detail);
                 }
-                PreviewEvent::Opened { path, duration, image, fps } => {
+                PreviewEvent::Opened { path, duration, image, fps, rotate } => {
                     if self.state.path.as_deref() == Some(Path::new(&path)) {
                         self.state.duration = duration;
                         self.state.image = image;
                         self.state.fps = fps;
+                        self.state.rotate = rotate;
                         self.state.error = None;
                     }
                 }
@@ -624,6 +635,7 @@ impl Preview {
         self.state.path = Some(path.to_path_buf());
         self.state.duration = 0.0;
         self.state.fps = 0.0;
+        self.state.rotate = 0;
         self.state.time = at;
         self.state.image = false;
         self.state.error = None;

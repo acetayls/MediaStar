@@ -740,7 +740,7 @@ impl Cuelist {
                     if self.preview.state.missing.is_none() && !super::media_editor::is_image(p) && self.editor.is_none() {
                         // « Entrée ici » / « Sortie ici » : le point du cue en attente se cale sur
                         // l'image affichée.
-                        if let Some(m) = super::media_editor::scrub_bar(ui, "cl-next-scrub", &mut self.preview, p, clip) {
+                        if let Some(m) = super::media_editor::scrub_bar(ui, "cl-next-scrub", &mut self.preview, p, clip, true) {
                             let d = self.preview.state.duration;
                             if let Some(c) = self.cues.get_mut(self.standby) {
                                 m.apply(&mut c.clip, d);
@@ -1113,6 +1113,14 @@ impl Cuelist {
                     }
                 });
                 ui.end_row();
+                if c.path.as_deref().is_some_and(|p| !super::media_editor::is_image(p)) {
+                    ui.label(tr("Lecture", "Playback"));
+                    ui.horizontal(|ui| {
+                        ui.radio_value(&mut c.clip.sound.looping, false, tr("Une fois", "Once"));
+                        ui.radio_value(&mut c.clip.sound.looping, true, tr("En boucle", "Loop"));
+                    });
+                    ui.end_row();
+                }
                 ui.label("À la fin");
                 ui.horizontal(|ui| {
                     ui.radio_value(&mut c.follow, CueFollow::Stop, "Arrêter (attendre le GO)");
