@@ -203,6 +203,11 @@ pub fn shortcuts(ui: &mut Ui) {
         ("Ctrl+O", "Ouvrir un projet"),
         ("Ctrl+N", "Nouveau projet"),
         ("Ctrl+B / I / U", "Texte : gras / italique / souligné"),
+        ("← / →", "Réglages d'un cue : image précédente / suivante de l'aperçu"),
+        ("Maj+← / →", "Réglages d'un cue : une seconde avant / après"),
+        ("K", "Réglages d'un cue : lecture / pause de l'aperçu"),
+        ("I / O", "Réglages d'un cue : point d'entrée / de sortie sur l'image affichée"),
+        ("Ctrl+molette", "Présentation : taille des vignettes"),
     ];
     egui::Grid::new("shortcuts").num_columns(2).spacing([16.0, 6.0]).striped(true).show(ui, |ui| {
         for (k, d) in rows {

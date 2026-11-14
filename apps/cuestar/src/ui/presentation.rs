@@ -1,7 +1,9 @@
-//! Module Présentation : diffuse une présentation PowerPoint (.pptx) ou un PDF sur la sortie.
+//! Module Présentation : diffuse un PDF sur la sortie, une page par diapositive.
+//! (PowerPoint n'est plus pris en charge : sans ses animations ni ses transitions, il n'avait
+//! pas d'intérêt ; il suffit d'exporter la présentation en PDF.)
 //!
-//! Les diapositives sont dessinées par la crate star-pptx (Rust pur, sans LibreOffice), et les
-//! pages PDF par star-pdf (hayro, Rust pur), dans un fil d'exécution à part, à la résolution de l'écran de sortie. Chaque diapositive devient
+//! Les pages PDF sont dessinées par star-pdf (hayro, Rust pur), dans un fil d'exécution à part,
+//! à la résolution de l'écran de sortie. Chaque diapositive devient
 //! une image PNG dans un dossier temporaire, envoyée à la sortie comme une photo du Lecteur
 //! (`Command::Load`) : le protocole ne change pas. La diapositive suivante est préparée
 //! d'avance, pour un passage immédiat.
@@ -32,45 +34,48 @@ enum Action {
     StartHere,
 }
 
-const PPTX_EXT: &[&str] = &["pptx", "ppsx", "potx", "pptm", "ppsm", "potm"];
 const PDF_EXT: &[&str] = &["pdf"];
+/// Fichiers PowerPoint : refusés avec un message (à exporter en PDF).
+const PPTX_EXT: &[&str] = &["pptx", "ppsx", "potx", "pptm", "ppsm", "potm", "ppt", "pps", "key", "odp"];
+const PPTX_REFUSED: &str = "PowerPoint n'est plus pris en charge : exportez la présentation en PDF (dans PowerPoint : Fichier > Exporter > PDF), puis ouvrez le PDF.";
+
+fn ext_in(p: &Path, list: &[&str]) -> bool {
+    p.extension().map(|e| e.to_string_lossy().to_lowercase()).is_some_and(|e| list.contains(&e.as_str()))
+}
 
 fn is_deck_file(p: &Path) -> bool {
-    p.extension().map(|e| e.to_string_lossy().to_lowercase()).is_some_and(|e| PPTX_EXT.contains(&e.as_str()) || PDF_EXT.contains(&e.as_str()))
+    ext_in(p, PDF_EXT)
 }
 
-/// Présentation ouverte : PowerPoint ou PDF (une page = une diapositive).
-enum Deck {
-    Pptx(star_pptx::Presentation),
-    Pdf(star_pdf::Document),
+fn is_powerpoint(p: &Path) -> bool {
+    ext_in(p, PPTX_EXT)
 }
+
+/// Présentation ouverte : un PDF, une page = une diapositive.
+struct Deck(star_pdf::Document);
 
 impl Deck {
     fn open(path: &Path) -> Result<Deck, String> {
-        let pdf = path.extension().is_some_and(|e| e.eq_ignore_ascii_case("pdf"));
-        if pdf {
-            star_pdf::Document::open(path).map(Deck::Pdf).map_err(|e| e.to_string())
-        } else {
-            star_pptx::Presentation::open(path).map(Deck::Pptx).map_err(|e| e.to_string())
+        if is_powerpoint(path) {
+            return Err(PPTX_REFUSED.into());
         }
+        star_pdf::Document::open(path).map(Deck).map_err(|e| e.to_string())
     }
 
     fn slides(&self) -> Vec<SlideInfo> {
-        match self {
-            Deck::Pptx(p) => (0..p.slide_count()).map(|i| SlideInfo { title: p.slide_title(i), hidden: p.is_hidden(i) }).collect(),
-            Deck::Pdf(d) => (0..d.page_count()).map(|_| SlideInfo { title: None, hidden: false }).collect(),
-        }
+        (0..self.0.page_count()).map(|_| SlideInfo { title: None, hidden: false }).collect()
     }
 
     fn render(&self, index: usize, w: u32, h: u32) -> Result<image::RgbaImage, String> {
-        match self {
-            Deck::Pptx(p) => p.render_slide(index, w, h).map_err(|e| e.to_string()),
-            Deck::Pdf(d) => d.render_page(index, w, h).map_err(|e| e.to_string()),
-        }
+        self.0.render_page(index, w, h).map_err(|e| e.to_string())
     }
 }
-/// Taille des vignettes de la liste.
-const THUMB: (u32, u32) = (320, 180);
+/// Largeur des vignettes dessinées, en pixels : la plus petite qui reste nette à la taille
+/// d'affichage choisie (zoom de la liste).
+const THUMB_STEPS: [u32; 3] = [320, 640, 1280];
+/// Largeur d'affichage des vignettes (points), réglable.
+const THUMB_MIN: f32 = 120.0;
+const THUMB_MAX: f32 = 900.0;
 
 struct SlideInfo {
     title: Option<String>,
@@ -83,7 +88,8 @@ enum Job {
     Open { gen: u64, path: PathBuf },
     /// Diapositive pour la sortie, dans une boîte `w × h` pixels.
     Slide { gen: u64, index: usize, w: u32, h: u32 },
-    Thumb { gen: u64, index: usize },
+    /// Vignette de `w` pixels de large.
+    Thumb { gen: u64, index: usize, w: u32 },
 }
 
 enum Done {
@@ -91,7 +97,7 @@ enum Done {
     Failed { gen: u64, message: String },
     Slide { gen: u64, index: usize, w: u32, h: u32, path: PathBuf },
     SlideFailed { gen: u64, index: usize, message: String },
-    Thumb { gen: u64, index: usize, image: egui::ColorImage },
+    Thumb { gen: u64, index: usize, w: u32, image: egui::ColorImage },
 }
 
 #[derive(Default)]
@@ -188,15 +194,15 @@ fn worker_loop(queue: Arc<(Mutex<Queue>, Condvar)>, tx: Sender<Done>, ctx: egui:
                     Err(message) => Done::SlideFailed { gen, index, message },
                 }
             }
-            Job::Thumb { gen, index } => {
+            Job::Thumb { gen, index, w } => {
                 let Some((g, p, _)) = &deck else { continue };
                 if *g != gen {
                     continue;
                 }
-                match p.render(index, THUMB.0, THUMB.1) {
+                match p.render(index, w, w * 9 / 16) {
                     Ok(img) => {
                         let size = [img.width() as usize, img.height() as usize];
-                        Done::Thumb { gen, index, image: egui::ColorImage::from_rgba_unmultiplied(size, img.as_raw()) }
+                        Done::Thumb { gen, index, w, image: egui::ColorImage::from_rgba_unmultiplied(size, img.as_raw()) }
                     }
                     Err(message) => Done::SlideFailed { gen, index, message },
                 }
@@ -257,6 +263,13 @@ pub struct Presentation {
     selected: usize,
     transition: Transition,
     worker: Option<Worker>,
+    /// Largeur d'affichage des vignettes (zoom de la liste, Ctrl + molette).
+    thumb_w: f32,
+    /// Largeur en pixels des vignettes demandées au rendu, et de celles reçues par diapositive.
+    thumb_px: u32,
+    thumb_got: HashMap<usize, u32>,
+    /// Choix du fichier, sans bloquer la régie.
+    dialogs: star_ui::dialogs::Dialogs<()>,
 }
 
 impl Default for Presentation {
@@ -275,6 +288,10 @@ impl Default for Presentation {
             selected: 0,
             transition: Transition { kind: TransitionKind::Cut, secs: 0.5 },
             worker: None,
+            thumb_w: 192.0,
+            thumb_px: THUMB_STEPS[0],
+            thumb_got: HashMap::new(),
+            dialogs: Default::default(),
         }
     }
 }
@@ -287,6 +304,7 @@ impl Presentation {
         self.error = None;
         self.slides.clear();
         self.thumbs.clear();
+        self.thumb_got.clear();
         self.rendered.clear();
         self.requested.clear();
         self.want = None;
@@ -400,7 +418,7 @@ impl Presentation {
                     self.request(first, size, true);
                     if let Some(w) = &self.worker {
                         for i in 0..self.slides.len() {
-                            w.push(Job::Thumb { gen, index: i }, false);
+                            w.push(Job::Thumb { gen, index: i, w: self.thumb_px }, false);
                         }
                     }
                 }
@@ -420,9 +438,11 @@ impl Presentation {
                     }
                     self.error = Some(format!("diapositive {} : {message}", index + 1));
                 }
-                Done::Thumb { gen, index, image } if gen == self.gen => {
-                    let tex = ctx.load_texture(format!("pptx-{gen}-{index}"), image, egui::TextureOptions::LINEAR);
+                // Une vignette plus petite arrivée après une plus grande ne la remplace pas.
+                Done::Thumb { gen, index, w, image } if gen == self.gen && self.thumb_got.get(&index).is_none_or(|g| *g <= w) => {
+                    let tex = ctx.load_texture(format!("diapo-{gen}-{index}"), image, egui::TextureOptions::LINEAR);
                     self.thumbs.insert(index, tex);
+                    self.thumb_got.insert(index, w);
                 }
                 _ => {}
             }
@@ -518,22 +538,40 @@ impl Presentation {
         }
     }
 
+    /// Boîte de choix du PDF, ouverte sans bloquer la régie : sous Wayland, la boîte bloquante
+    /// figeait la fenêtre, et un second clic sur « Choisir… » la plantait.
     fn pick_file(&mut self, ctx: &egui::Context) {
-        let mut dlg = rfd::FileDialog::new().add_filter("Présentation (PowerPoint, PDF)", &[PPTX_EXT, PDF_EXT].concat()).add_filter("Présentation PowerPoint", PPTX_EXT).add_filter("PDF", PDF_EXT);
-        if let Some(dir) = self.path.as_ref().and_then(|p| p.parent()) {
-            dlg = dlg.set_directory(dir);
-        }
-        if let Some(p) = dlg.pick_file() {
-            self.open(ctx, p);
+        self.dialogs.show(ctx, (), star_ui::dialogs::Kind::Open(star_ui::dialogs::Filter::new("PDF", PDF_EXT)));
+    }
+
+    /// Zoom de la liste : vignettes plus nettes quand elles grandissent.
+    fn set_thumb_width(&mut self, w: f32, ppp: f32) {
+        self.thumb_w = w.clamp(THUMB_MIN, THUMB_MAX);
+        let need = self.thumb_w * ppp;
+        let px = THUMB_STEPS.iter().copied().find(|s| *s as f32 >= need * 0.9).unwrap_or(THUMB_STEPS[THUMB_STEPS.len() - 1]);
+        if px > self.thumb_px {
+            self.thumb_px = px;
+            if let Some(w) = &self.worker {
+                for i in 0..self.slides.len() {
+                    w.push(Job::Thumb { gen: self.gen, index: i, w: px }, false);
+                }
+            }
         }
     }
 
     pub fn ui(&mut self, ui: &mut egui::Ui, out: &mut OutputLink, typing: bool) {
         let ctx = ui.ctx().clone();
-        // Un fichier .pptx ou .pdf glissé sur l'onglet est ouvert.
-        let dropped: Option<PathBuf> = ctx.input(|i| i.raw.dropped_files.iter().map(|f| f.path().to_path_buf()).find(|p| is_deck_file(p)));
-        if let Some(p) = dropped {
-            self.open(&ctx, p);
+        if let Some(((), files)) = self.dialogs.take() {
+            if let Some(p) = files.into_iter().next() {
+                self.open(&ctx, p);
+            }
+        }
+        // Un PDF glissé sur l'onglet est ouvert ; un PowerPoint est refusé avec un message.
+        let dropped: Vec<PathBuf> = ctx.input(|i| i.raw.dropped_files.iter().map(|f| f.path().to_path_buf()).collect());
+        if let Some(p) = dropped.iter().find(|p| is_deck_file(p)) {
+            self.open(&ctx, p.clone());
+        } else if dropped.iter().any(|p| is_powerpoint(p)) {
+            self.error = Some(PPTX_REFUSED.into());
         }
         let on_air = self.on_air(out);
         let ready = !self.slides.is_empty();
@@ -637,10 +675,15 @@ impl Presentation {
                 ui.horizontal(|ui| {
                     let txt = self.path.as_ref().map(|p| p.display().to_string()).unwrap_or_else(|| "aucun".into());
                     ui.add(egui::Label::new(RichText::new(txt).color(if self.path.is_some() { TEXT } else { TEXT_DIM })).truncate());
-                    if ui.button("Choisir…").on_hover_text("Ouvrir une présentation PowerPoint (.pptx) ou un PDF, ou la glisser ici").clicked() {
+                    let picking = self.dialogs.open.is_some();
+                    if ui
+                        .add_enabled(!picking, egui::Button::new(if picking { "Choix en cours…" } else { "Choisir…" }))
+                        .on_hover_text("Ouvrir un PDF, ou le glisser ici")
+                        .clicked()
+                    {
                         self.pick_file(&ctx);
                     }
-                    if self.path.is_some() && ui.button("Relire").on_hover_text("Relit le fichier (après une modification dans PowerPoint)").clicked() {
+                    if self.path.is_some() && ui.button("Relire").on_hover_text("Relit le fichier (après une modification du PDF)").clicked() {
                         if let Some(p) = self.path.clone() {
                             self.open(&ctx, p);
                         }
@@ -679,17 +722,35 @@ impl Presentation {
                 ui.label(RichText::new(e).color(STOP));
             }
             ui.add_space(4.0);
-            ui.label(RichText::new("Sans animations ni transitions PowerPoint. Les diapositives masquées sont sautées par « Suivante ».").color(TEXT_DIM));
+            ui.label(RichText::new("Une page du PDF = une diapositive. PowerPoint : exportez la présentation en PDF.").color(TEXT_DIM));
             ui.label(RichText::new("Télécommande : Page suivante / précédente, B ou point pour le noir, F5 depuis le début, Maj+F5 depuis la sélection. Elle marche dans tous les onglets, et dans la fenêtre de sortie.").color(TEXT_DIM));
         });
 
         ui.add_space(10.0);
-        ui.label(RichText::new(format!("Diapositives ({})", self.slides.len())).strong());
-        egui::Frame::new().fill(SLOT_EMPTY).corner_radius(4).inner_margin(6).show(ui, |ui| {
+        let ppp = ctx.pixels_per_point();
+        ui.horizontal(|ui| {
+            ui.label(RichText::new(format!("Diapositives ({})", self.slides.len())).strong());
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                let mut w = self.thumb_w;
+                if ui.small_button("+").on_hover_text("Vignettes plus grandes (Ctrl + molette)").clicked() {
+                    w *= 1.25;
+                }
+                ui.add(egui::Slider::new(&mut w, THUMB_MIN..=THUMB_MAX).show_value(false).logarithmic(true))
+                    .on_hover_text("Taille des vignettes (Ctrl + molette sur la liste)");
+                if ui.small_button("−").on_hover_text("Vignettes plus petites (Ctrl + molette)").clicked() {
+                    w /= 1.25;
+                }
+                ui.label(RichText::new("Taille").color(TEXT_DIM));
+                if w != self.thumb_w {
+                    self.set_thumb_width(w, ppp);
+                }
+            });
+        });
+        let frame = egui::Frame::new().fill(SLOT_EMPTY).corner_radius(4).inner_margin(6).show(ui, |ui| {
             ui.set_min_size(ui.available_size());
             if self.slides.is_empty() {
                 ui.centered_and_justified(|ui| {
-                    let msg = if self.loading { "Ouverture…" } else { "Choisis une présentation PowerPoint (.pptx) ou un PDF, ou glisse-le ici" };
+                    let msg = if self.loading { "Ouverture…" } else { "Choisis un PDF, ou glisse-le ici" };
                     ui.label(RichText::new(msg).color(TEXT_DIM));
                 });
                 return;
@@ -705,6 +766,13 @@ impl Presentation {
                 });
             });
         });
+        // Ctrl + molette sur la liste : zoom des vignettes.
+        if frame.response.contains_pointer() {
+            let k = ctx.input(|i| if i.modifiers.command { i.zoom_delta() } else { 1.0 });
+            if k != 1.0 {
+                self.set_thumb_width(self.thumb_w * k, ppp);
+            }
+        }
     }
 
     fn label(&self, i: usize) -> String {
@@ -716,7 +784,7 @@ impl Presentation {
 
     /// Une vignette ; vrai si elle doit passer à l'antenne (double-clic).
     fn thumb_cell(&mut self, ui: &mut egui::Ui, i: usize, on_air: Option<usize>) -> bool {
-        let tw = 192.0;
+        let tw = self.thumb_w;
         let th = tw * 9.0 / 16.0;
         let (rect, resp) = ui.allocate_exact_size(vec2(tw, th + 20.0), Sense::click());
         if !ui.is_rect_visible(rect) {
@@ -783,40 +851,6 @@ mod tests {
     }
 
     #[test]
-    fn worker_opens_and_renders_slides_to_png() {
-        let path = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../crates/star-pptx/tests/fixtures/demo.pptx"));
-        let w = Worker::start(egui::Context::default());
-        w.push(Job::Open { gen: 1, path }, true);
-        let mut count = 0;
-        wait(&w, |d| match d {
-            Done::Opened { slides, .. } => {
-                count = slides.len();
-                assert!(slides[6].hidden);
-                assert_eq!(slides[0].title.as_deref(), Some("Présentation de démonstration"));
-                true
-            }
-            Done::Failed { message, .. } => panic!("{message}"),
-            _ => false,
-        });
-        assert_eq!(count, 9);
-        w.push(Job::Slide { gen: 1, index: 2, w: 640, h: 480 }, true);
-        // Un travail d'une ancienne génération est ignoré.
-        w.push(Job::Slide { gen: 0, index: 1, w: 640, h: 480 }, true);
-        wait(&w, |d| match d {
-            Done::Slide { index, path, .. } => {
-                assert_eq!(index, 2);
-                let img = image::open(&path).unwrap();
-                assert_eq!((img.width(), img.height()), (640, 360));
-                true
-            }
-            Done::SlideFailed { message, .. } => panic!("{message}"),
-            _ => false,
-        });
-        w.push(Job::Thumb { gen: 1, index: 0 }, false);
-        wait(&w, |d| matches!(d, Done::Thumb { index: 0, .. }));
-    }
-
-    #[test]
     fn worker_opens_a_pdf_one_slide_per_page() {
         let path = PathBuf::from(concat!(env!("CARGO_MANIFEST_DIR"), "/../../crates/star-pdf/tests/fixtures/demo.pdf"));
         let w = Worker::start(egui::Context::default());
@@ -832,6 +866,8 @@ mod tests {
             _ => false,
         });
         assert!(count >= 8, "{count} pages");
+        w.push(Job::Thumb { gen: 1, index: 0, w: 640 }, false);
+        wait(&w, |d| matches!(d, Done::Thumb { index: 0, w: 640, .. }));
         w.push(Job::Slide { gen: 1, index: 1, w: 1280, h: 720 }, true);
         wait(&w, |d| match d {
             Done::Slide { path, .. } => {
@@ -846,8 +882,10 @@ mod tests {
 
     #[test]
     fn deck_files_are_recognised() {
-        assert!(is_deck_file(Path::new("a.PPTX")));
-        assert!(is_deck_file(Path::new("b.pdf")));
+        assert!(!is_deck_file(Path::new("a.PPTX")));
+        assert!(is_powerpoint(Path::new("a.PPTX")));
+        assert!(is_deck_file(Path::new("b.PDF")));
         assert!(!is_deck_file(Path::new("c.mp4")));
+        assert!(Deck::open(Path::new("x.pptx")).is_err_and(|e| e.contains("PDF")));
     }
 }

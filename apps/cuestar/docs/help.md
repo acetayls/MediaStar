@@ -6,7 +6,7 @@ two separate programs: a busy control screen never delays a frame.
 
 Three modules share the screen: the **Cuelist** (a running order of media fired with GO, which
 can chain on their own), the **Slideshow** (Diaporama, a folder of photos and videos) and the
-**Presentation** (Présentation, a PowerPoint file). The **Text** panel sits alongside to keep the written running order in view.
+**Presentation** (Présentation, a PDF). The **Text** panel sits alongside to keep the written running order in view.
 
 ## Getting started
 
@@ -93,9 +93,19 @@ standby cue.
 
 On the right, the preview shows the cue the next GO will play, rotated as on the output. You can
 move around in it without touching the output: click or drag on the bar under the picture,
-**▶** plays the preview (silently), **⏮ / ⏭** step one frame back or forward. The in and out
-marks are drawn on the bar. **Aperçu** (above the running order) shows or hides it; the handle
-between the two sets its width.
+**▶** plays the preview (silently), **⏮ / ⏭** step one frame back or forward (quick presses
+are not lost). The time shows to the frame (minutes:seconds.frame). Once on the right frame,
+**[ In here** or **Out here ]** sets the cue's in or out point there. The in and out marks are
+drawn on the bar. **Aperçu** (above the running order) shows or hides it; the handle between
+the two sets its width.
+
+Under the preview, **REMARQUES** (notes): a free comment for the standby cue (cue, instruction,
+setting…), never on air. It also shows in grey after the cue's name in the running order, in
+full on hover, and can be edited in the cue's settings.
+
+The **transition** set under GO is the **entry** transition of the standby cue: it plays when
+that cue starts. After GO, these buttons therefore set the next cue. A cue with its own fade in
+(in its settings) always starts from black, whatever the transition; this is shown next to it.
 
 ### Right-click on a cue
 
@@ -111,8 +121,8 @@ A cue with settings (rotation, points, fades, sound) carries the **✎** mark.
 
 ## Editing an item
 
-Right-click a cue → **Réglages…**. At the top: its name, its media, its **transition** and what
-happens **at the end** (wait for GO, or go on to the next cue). The rest follows JingleStar's
+Right-click a cue → **Réglages…**. At the top: its name, its **notes**, its media, its **entry
+transition** and what happens **at the end** (wait for GO, or go on to the next cue). The rest follows JingleStar's
 jingle editor. Settings are saved with the project.
 
 - **Rotation**: 0°, 90°, 180° or 270° clockwise, for this file only (a portrait video, a screen
@@ -122,8 +132,11 @@ jingle editor. Settings are saved with the project.
   picture and sound together.
 - **Strip**: thumbnails of the media over its whole length. Drag the **in** and **out** handles
   to trim the start and the end; fades show as a veil on the strip. While dragging, the preview
-  shows the picture at that point.
-- **Preview**: the same navigation as the standby preview, to check an in point to the frame.
+  shows the exact picture at that point.
+- **Preview**: the same navigation as the standby preview, with **[ In here** and **Out here ]**,
+  to set a point to the frame. With the keyboard (outside text fields): **← / →** frame by
+  frame, **Shift + ← / →** one second, **K** play / pause, **I** sets the in point and **O** the
+  out point on the frame shown.
 - **Equalizer**: low cut (12 or 24 dB/oct), low shelf, two bell bands, high shelf, as in
   JingleStar. The sound's waveform shows behind the curve.
 - If the cue is on air, volume, equalizer, fades, loop and rotation change at once, without
@@ -157,6 +170,10 @@ Plays a folder of photos and videos.
 - **Dossier** (folder): the folder to play; **Relire** picks up added or removed files.
 - **Include subfolders**, **photo duration**, **fit** (whole picture with black bars, fill the
   screen by cropping, or automatic) and **videos with sound** (played in full).
+- **Fondu entre photos** (fade between photos): a crossfade of the chosen length when a photo
+  makes way for the next media (unticked: cut). After a video, the change stays a cut.
+- **Liste / Vignettes** (above the media): the file list, or their thumbnails. Double-click a
+  media to jump to it (unless shuffled).
 - **Space** plays or pauses, **← / →** go to the previous / next media.
 - **Aléatoire** reshuffles on every round, **Tout boucler** starts over.
 
@@ -164,13 +181,14 @@ Changes apply at once, without restarting the slideshow.
 
 ## The Presentation
 
-Shows a PowerPoint presentation (**.pptx**) or a **PDF** on the output, without PowerPoint:
-CueStar draws each slide (or each PDF page) itself at the output resolution.
+Shows a **PDF** on the output, one page per slide: CueStar draws each page itself at the output
+resolution. A PowerPoint presentation can be exported to PDF (in PowerPoint: File > Export >
+PDF); PowerPoint files are no longer read directly.
 
-- **Choisir…** (choose) or drop a .pptx or .pdf file; **Relire** reloads the file after a change in
-  PowerPoint.
+- **Choisir…** (choose) or drop a PDF; **Relire** reloads the file after a change.
 - The **thumbnails** show every slide: click to select, double-click to show it on the output.
-  Hidden slides are skipped.
+  **Taille** (size: slider, **+ / −**, or **Ctrl + wheel** over the list) makes them bigger to
+  read them better.
 - **LANCER** (go) shows the selected slide, then **SUIVANTE** (next, **Space** or **→**) and
   **←** move from slide to slide; **Aller à** (go to) jumps to a number. The next slide is
   prepared in advance.
@@ -184,9 +202,6 @@ CueStar draws each slide (or each PDF page) itself at the output resolution.
 black-screen button and F5 work in every tab as soon as a presentation is on screen, and also when
 the output window has focus.
 
-Text, bullets, shapes, pictures, tables, SmartArt and simple charts are drawn; animations are not:
-an embedded video shows as its preview picture.
-
 ## The Text panel
 
 The written running order, next to the current module: bold, italic, underline, strikethrough,
@@ -199,6 +214,10 @@ Mapping 4 coins):
 
 - **Output screen**: automatic (first secondary screen) or a given screen. Full screen is set
   with the **Plein écran** button in the top bar.
+- **Output FPS**: the output screen switches to this refresh rate when the output opens
+  (Windows, macOS, Linux X11). Under **Wayland** (KDE, GNOME…), the system does not let an
+  application do this: set the rate in the system's display settings, or open an X11 session.
+  The Preferences say so in place of the choice.
 - **Decoding**: automatic, GPU or CPU. **Fallback renderer** and **light rendering** for a small
   machine.
 - **Picture sync**: **Mélange d'images** (frame blending, recommended and chosen by default)
@@ -235,15 +254,18 @@ the same settings as JingleStar.
 
 ### Enable
 
-In **Télécommandes**, **OSC** tab, tick **Enable**, set the options, then click **Apply**:
+OSC control is **on out of the box**, listening on the network, with OSCQuery and the mDNS
+announcement: Companion (or another controller) finds CueStar and reads its state with no setup.
+In **Télécommandes**, **OSC** tab, you can turn it off or change the options, then click
+**Apply**:
 
 | Setting | Default | Role |
 |---|---|---|
-| Access | Local | **Local**: from this PC only; **Network**: from other machines |
+| Access | Network | **Local**: from this PC only; **Network**: from other machines |
 | Port (UDP) | 9000 | Port CueStar receives commands on |
 | Prefix | `/cuestar` | Start of every address |
-| OSCQuery | off, port 9001 | HTTP server describing the addresses and the current state |
-| Discovery | off | mDNS / Bonjour announcement for automatic discovery |
+| OSCQuery | on, port 9001 | HTTP server describing the addresses and the current state |
+| Discovery | on | mDNS / Bonjour announcement for automatic discovery |
 | Advertised name | CueStar | Name shown on the network |
 
 Once applied, the window shows the IP address and listening ports, or the error if a port is
@@ -293,7 +315,8 @@ every 2 to 3 s. CueStar sends it `media`, `paused`, `time`, `remaining`, `lecteu
 - `http://<ip>:9001/<path>?VALUE` returns one node's value.
 
 Read-only nodes also give the media on screen, the position, the remaining time, the number of
-items and cues, the playing item and the standby cue's name.
+items and cues, the playing item, the standby cue's name and notes (`cuelist/standby_comment`)
+and the last cue started (`cuelist/running`).
 
 ### Example
 
@@ -338,6 +361,11 @@ in a text field.
 | Edit an item, file information | Right-click the item |
 | Play an item or a cue | Double-click |
 | Move around in the preview | Click or drag on the bar under the picture |
+| Cue settings: previous / next frame | **Left / Right arrow** |
+| Cue settings: one second back / forward | **Shift + Left / Right arrow** |
+| Cue settings: play / pause the preview | **K** |
+| Cue settings: in / out on the frame shown | **I** / **O** |
+| Presentation: thumbnail size | **Ctrl + wheel** |
 | Search the help | Ctrl+F in the help window |
 
 ## Troubleshooting

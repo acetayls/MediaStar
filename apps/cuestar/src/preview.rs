@@ -26,21 +26,29 @@ pub const STRIP_W: u32 = 160;
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum PreviewCmd {
     /// Ouvre un média, en pause sur l'image à `at` secondes.
+    /// `seq` : numéro de la demande, rendu dans les positions une fois la demande servie.
     Open {
         path: String,
         at: f64,
+        #[serde(default)]
+        seq: u64,
     },
     Close,
     /// `exact` faux : saut à l'image clé la plus proche (fluide pendant un glisser).
     Seek {
         seconds: f64,
         exact: bool,
+        #[serde(default)]
+        seq: u64,
     },
     Play,
     Pause,
-    /// Image suivante ou précédente (en pause).
+    /// Image suivante ou précédente (en pause). Les pas demandés à la suite sont faits un par
+    /// un, chacun depuis l'image du précédent : aucun ne se perd.
     Step {
         back: bool,
+        #[serde(default)]
+        seq: u64,
     },
     /// Une image toutes les durée / `count` secondes, pour la frise de l'éditeur.
     Strip {
@@ -53,8 +61,21 @@ pub enum PreviewCmd {
 pub enum PreviewEvent {
     Ready { mpv: String },
     Missing { detail: String },
-    Opened { path: String, duration: f64, image: bool },
-    Position { time: f64, paused: bool },
+    Opened {
+        path: String,
+        duration: f64,
+        image: bool,
+        /// Images par seconde (0 : inconnue).
+        #[serde(default)]
+        fps: f64,
+    },
+    /// `seq` : dernière demande servie (saut, pas, ouverture).
+    Position {
+        time: f64,
+        paused: bool,
+        #[serde(default)]
+        seq: u64,
+    },
     StripInfo { path: String, duration: f64, count: usize },
     Error { message: String },
 }
@@ -191,12 +212,13 @@ impl SwPlayer {
         self.m.get_property(k).and_then(|s| s.parse().ok())
     }
 
-    /// Vide la file d'événements ; vrai si un fichier vient d'être chargé.
-    fn drain(&self) -> (bool, bool) {
-        let (mut loaded, mut failed) = (false, false);
+    /// Vide la file d'événements : fichier chargé, échec, image en place après un saut.
+    fn drain(&self) -> (bool, bool, bool) {
+        let (mut loaded, mut failed, mut restart) = (false, false, false);
         while let Some(ev) = self.m.next_event() {
             match ev.event_id {
                 mpv::EVENT_FILE_LOADED => loaded = true,
+                mpv::EVENT_PLAYBACK_RESTART => restart = true,
                 mpv::EVENT_END_FILE => {
                     let end = unsafe { &*(ev.data as *const mpv::RawEndFile) };
                     failed |= end.reason == mpv::END_FILE_ERROR;
@@ -204,8 +226,16 @@ impl SwPlayer {
                 _ => {}
             }
         }
-        (loaded, failed)
+        (loaded, failed, restart)
     }
+}
+
+/// Demande en cours dans le processus d'aperçu : servie quand mpv a l'image demandée.
+struct Waiting {
+    seq: u64,
+    since: Instant,
+    /// Vrai : servie à la prochaine image rendue (pas en avant) ; faux : à la fin du saut.
+    on_frame: bool,
 }
 
 impl Drop for SwPlayer {
@@ -253,12 +283,17 @@ pub fn run() {
     let mut current: Option<String> = None;
     let mut job: Option<StripJob> = None;
     let mut last_pos = Instant::now();
-    let mut sent_pos: Option<(f64, bool)> = None;
+    let mut sent_pos: Option<(f64, bool, u64)> = None;
+    // Demandes servies : les positions envoyées portent le numéro de la dernière, et la régie
+    // ignore celles d'avant sa dernière demande (plus de tête de lecture qui revient en arrière).
+    let mut seq_done: u64 = 0;
+    let mut waiting: Option<Waiting> = None;
+    let mut steps: std::collections::VecDeque<(bool, u64)> = std::collections::VecDeque::new();
     loop {
         match rx.recv_timeout(Duration::from_millis(8)) {
             Ok(None) | Err(RecvTimeoutError::Disconnected) => return,
             Ok(Some(cmd)) => match cmd {
-                PreviewCmd::Open { path, at } => {
+                PreviewCmd::Open { path, at, seq } => {
                     let _ = live.m.set_property("pause", "yes");
                     let _ = live.m.set_property("start", &format!("{:.3}", at.max(0.0)));
                     if let Err(e) = live.m.command(&["loadfile", &path, "replace"]) {
@@ -266,22 +301,29 @@ pub fn run() {
                     }
                     current = Some(path);
                     sent_pos = None;
+                    steps.clear();
+                    waiting = Some(Waiting { seq, since: Instant::now(), on_frame: false });
                 }
                 PreviewCmd::Close => {
                     let _ = live.m.command(&["stop"]);
                     current = None;
+                    steps.clear();
+                    waiting = None;
                 }
-                PreviewCmd::Seek { seconds, exact } => {
+                PreviewCmd::Seek { seconds, exact, seq } => {
+                    steps.clear();
                     let _ = live.m.command(&["seek", &format!("{:.3}", seconds.max(0.0)), if exact { "absolute+exact" } else { "absolute+keyframes" }]);
+                    waiting = Some(Waiting { seq, since: Instant::now(), on_frame: false });
                 }
                 PreviewCmd::Play => {
+                    steps.clear();
                     let _ = live.m.set_property("pause", "no");
                 }
                 PreviewCmd::Pause => {
                     let _ = live.m.set_property("pause", "yes");
                 }
-                PreviewCmd::Step { back } => {
-                    let _ = live.m.command(&[if back { "frame-back-step" } else { "frame-step" }]);
+                PreviewCmd::Step { back, seq } => {
+                    steps.push_back((back, seq));
                 }
                 PreviewCmd::Strip { path, count } => {
                     if let Some(s) = &strip {
@@ -296,30 +338,52 @@ pub fn run() {
         }
 
         // Aperçu : nouvel état du fichier, position, image.
-        let (loaded, failed) = live.drain();
+        let (loaded, failed, restart) = live.drain();
         if loaded {
             let image = live.m.get_property("current-tracks/video/image").as_deref() == Some("yes");
-            send_event(&PreviewEvent::Opened { path: current.clone().unwrap_or_default(), duration: live.get_f64("duration").unwrap_or(0.0), image });
+            let fps = live.get_f64("container-fps").or_else(|| live.get_f64("estimated-vf-fps")).filter(|f| f.is_finite() && *f > 1.0).unwrap_or(0.0);
+            send_event(&PreviewEvent::Opened { path: current.clone().unwrap_or_default(), duration: live.get_f64("duration").unwrap_or(0.0), image, fps });
         }
         if failed {
             send_event(&PreviewEvent::Error { message: format!("aperçu impossible ({})", current.clone().unwrap_or_default()) });
+        }
+        let frame = live.render_if_new(LIVE_W);
+        let new_frame = frame.is_some();
+        if let Some((w, h, rgba)) = frame {
+            send_frame(&FrameMsg { tag: 0, w, h, rgba });
+        }
+        // Demande servie : image en place après le saut, ou image suivante rendue ; au pire
+        // au bout de 2 s (fichier sans image, saut refusé).
+        if let Some(w) = &waiting {
+            let served = failed || (if w.on_frame { new_frame } else { restart }) || w.since.elapsed() > Duration::from_secs(2);
+            if served {
+                seq_done = seq_done.max(w.seq);
+                waiting = None;
+                sent_pos = None;
+                last_pos = Instant::now() - Duration::from_millis(40);
+            }
+        }
+        // Pas suivant, une fois le précédent servi.
+        if waiting.is_none() && current.is_some() {
+            if let Some((back, seq)) = steps.pop_front() {
+                let _ = live.m.set_property("pause", "yes");
+                let _ = live.m.command(&[if back { "frame-back-step" } else { "frame-step" }]);
+                waiting = Some(Waiting { seq, since: Instant::now(), on_frame: !back });
+            }
         }
         if current.is_some() && last_pos.elapsed() >= Duration::from_millis(40) {
             last_pos = Instant::now();
             let t = live.get_f64("time-pos").unwrap_or(0.0);
             let paused = live.m.get_property("pause").as_deref() != Some("no");
-            if sent_pos.is_none_or(|(st, sp)| (t - st).abs() > 0.001 || paused != sp) {
-                sent_pos = Some((t, paused));
-                send_event(&PreviewEvent::Position { time: t, paused });
+            if sent_pos.is_none_or(|(st, sp, sq)| (t - st).abs() > 0.001 || paused != sp || sq != seq_done) {
+                sent_pos = Some((t, paused, seq_done));
+                send_event(&PreviewEvent::Position { time: t, paused, seq: seq_done });
             }
-        }
-        if let Some((w, h, rgba)) = live.render_if_new(LIVE_W) {
-            send_frame(&FrameMsg { tag: 0, w, h, rgba });
         }
 
         // Frise : une vignette à la fois, sans gêner l'aperçu.
         if let (Some(s), Some(j)) = (&strip, &mut job) {
-            let (loaded, failed) = s.drain();
+            let (loaded, failed, _) = s.drain();
             if failed {
                 job = None;
                 continue;
@@ -387,6 +451,8 @@ pub struct PreviewState {
     pub path: Option<PathBuf>,
     pub duration: f64,
     pub image: bool,
+    /// Images par seconde du média (0 : inconnue).
+    pub fps: f64,
     pub time: f64,
     pub paused: bool,
     pub error: Option<String>,
@@ -408,6 +474,9 @@ pub struct Preview {
     last_seek: Option<(f64, bool)>,
     /// Position approchée pendant un glisser, à rendre exacte au relâché.
     pending_exact: Option<f64>,
+    /// Numéro de la dernière demande envoyée (saut, pas, ouverture) : les positions plus
+    /// anciennes sont ignorées.
+    seq: u64,
 }
 
 impl Default for Preview {
@@ -423,6 +492,7 @@ impl Default for Preview {
             started: false,
             last_seek: None,
             pending_exact: None,
+            seq: 0,
         }
     }
 }
@@ -524,15 +594,20 @@ impl Preview {
                     self.state.available = false;
                     self.state.missing = Some(detail);
                 }
-                PreviewEvent::Opened { path, duration, image } => {
+                PreviewEvent::Opened { path, duration, image, fps } => {
                     if self.state.path.as_deref() == Some(Path::new(&path)) {
                         self.state.duration = duration;
                         self.state.image = image;
+                        self.state.fps = fps;
                         self.state.error = None;
                     }
                 }
-                PreviewEvent::Position { time, paused } => {
-                    self.state.time = time;
+                PreviewEvent::Position { time, paused, seq } => {
+                    // Position d'avant la dernière demande : la tête de lecture ne saute pas
+                    // en arrière pendant qu'on cherche une image.
+                    if seq >= self.seq {
+                        self.state.time = time;
+                    }
                     self.state.paused = paused;
                 }
                 PreviewEvent::StripInfo { path, duration, count } => self.state.strip = Some((PathBuf::from(path), duration, count)),
@@ -548,12 +623,15 @@ impl Preview {
         }
         self.state.path = Some(path.to_path_buf());
         self.state.duration = 0.0;
+        self.state.fps = 0.0;
         self.state.time = at;
         self.state.image = false;
         self.state.error = None;
         self.last_seek = None;
         self.live_tex = None;
-        self.send(ctx, PreviewCmd::Open { path: path.to_string_lossy().into_owned(), at });
+        self.seq += 1;
+        let seq = self.seq;
+        self.send(ctx, PreviewCmd::Open { path: path.to_string_lossy().into_owned(), at, seq });
     }
 
     pub fn seek(&mut self, ctx: &egui::Context, seconds: f64, exact: bool) {
@@ -563,7 +641,9 @@ impl Preview {
         }
         self.last_seek = Some((seconds, exact));
         self.state.time = seconds;
-        self.send(ctx, PreviewCmd::Seek { seconds, exact });
+        self.seq += 1;
+        let seq = self.seq;
+        self.send(ctx, PreviewCmd::Seek { seconds, exact, seq });
     }
 
     /// À chaque image : un glisser terminé ramène l'aperçu sur l'image exacte.
@@ -582,7 +662,15 @@ impl Preview {
 
     pub fn step(&mut self, ctx: &egui::Context, back: bool) {
         self.last_seek = None;
-        self.send(ctx, PreviewCmd::Step { back });
+        self.pending_exact = None;
+        // Affichage tout de suite à l'image visée ; la position exacte suit.
+        if self.state.fps > 0.0 {
+            let d = 1.0 / self.state.fps;
+            self.state.time = (self.state.time + if back { -d } else { d }).clamp(0.0, self.state.duration.max(0.0));
+        }
+        self.seq += 1;
+        let seq = self.seq;
+        self.send(ctx, PreviewCmd::Step { back, seq });
     }
 
     /// Vrai si l'aperçu montre `path` et en connaît la durée.

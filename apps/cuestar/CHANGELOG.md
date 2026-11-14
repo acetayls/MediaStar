@@ -2,6 +2,60 @@
 
 ## 0.0.2 — en cours
 
+### Retours des essais sous Linux (KDE, Wayland)
+
+- **Caler un point d'entrée ou de sortie à l'image près** : l'aperçu ne saute plus en arrière
+  pendant qu'on cherche une image, et les appuis rapides sur image précédente / suivante ne se
+  perdent plus (chaque pas part de l'image du précédent). Le temps s'affiche à l'image près.
+  Nouveaux boutons **[ Entrée ici** et **Sortie ici ]** sous l'aperçu (du cue en attente et des
+  réglages du cue) : le point se cale sur l'image affichée. Dans les réglages du cue, au clavier :
+  ← → image par image, Maj + ← → une seconde, K lecture / pause, I et O pour l'entrée et la
+  sortie. En glissant une poignée de la frise, l'aperçu montre l'image exacte.
+- **Transitions Coupe, Noir et Fondu** : la transition réglée sous le GO est maintenant
+  présentée comme celle d'**entrée** du cue en attente (elle joue quand ce cue part ; après le GO,
+  les boutons règlent le cue suivant). Un cue qui a son propre fondu d'entrée part toujours du
+  noir : c'est désormais signalé à côté de la transition. Un fondu enchaîné après un cue terminé
+  par un fondu au noir ne fait plus réapparaître d'un coup sa dernière image : le cue suivant
+  monte depuis le noir.
+- **Plus de plantage en recliquant sur « Choisir… »** (Diaporama, Présentation, ajout de médias
+  et « Changer… » de la Cuelist) : la boîte de choix s'ouvre sans figer CueStar, qui continue de
+  se dessiner et d'être piloté ; le bouton attend la fermeture de la boîte.
+- **Fréquence de l'écran sous Wayland** : le système ne laisse pas une application la changer.
+  Les Préférences le disent clairement à la place du choix « FPS de sortie », avec où la régler
+  (paramètres d'affichage de KDE ou GNOME, ou session X11).
+
+### Cuelist
+
+- **Remarques par cue** : un commentaire libre pour chaque cue (top, consigne, réglage…), jamais
+  à l'antenne. Volet **REMARQUES** sous l'aperçu du cue en attente, champ dans les réglages du
+  cue, et rappel en gris après le nom dans la conduite (en entier au survol). Enregistré avec le
+  projet.
+
+### Diaporama
+
+- **Fondu entre photos** : fondu enchaîné réglable quand une photo laisse la place au média
+  suivant (sinon : coupe, comme avant).
+- **Vue en vignettes** : bouton **Liste / Vignettes** au-dessus des médias ; double-clic sur une
+  vignette pour y sauter.
+
+### Présentation
+
+- **PDF seulement** : PowerPoint n'est plus lu (sans ses animations ni ses transitions, il
+  n'avait pas d'intérêt). Exportez la présentation en PDF ; un fichier PowerPoint déposé est
+  refusé avec ce conseil.
+- **Zoom des vignettes** : curseur **Taille**, boutons **+ / −** ou **Ctrl + molette** sur la
+  liste ; les vignettes sont redessinées plus nettes quand elles grandissent.
+
+### Pilotage OSC
+
+- **OSC et OSCQuery allumés d'office** : écoute du réseau, OSCQuery (port 9001) et annonce mDNS
+  sont activés par défaut, pour que Companion trouve CueStar et lise son état sans réglage. Les
+  réglages d'une version précédente passent une fois à ces valeurs ; on peut ensuite tout couper
+  dans Télécommandes → OSC.
+- **OSCQuery plus complet** : remarques du cue en attente (`cuelist/standby_comment`) et dernier
+  cue lancé (`cuelist/running`), aussi envoyés aux abonnés ; `cuelist/loop` donne bien l'état du
+  bouclage de la conduite.
+
 ### Barre du haut
 
 - **Barre du haut commune à la suite** : logo et nom « CueStar » (« Star » en jaune) avant le nom

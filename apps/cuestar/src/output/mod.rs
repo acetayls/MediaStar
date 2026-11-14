@@ -807,7 +807,10 @@ impl OutputApp {
                 let item_in = (clip.sound.fade_in > 0.0).then_some(clip.sound.fade_in).filter(|_| self.out().can_fade());
                 let load = PendingLoad { path, paused, looping, hold, clip, signal_end };
                 let on_air = self.current.is_some();
-                let cross = item_in.is_none() && transition.kind == TransitionKind::Crossfade && transition.secs > 0.0 && self.out().decks() > 1 && on_air;
+                // Fondu enchaîné depuis une image déjà au noir (fondu de sortie du cue précédent) :
+                // c'est un fondu d'ouverture ; sinon la dernière image revenait d'un coup avant
+                // de s'effacer.
+                let cross = item_in.is_none() && transition.kind == TransitionKind::Crossfade && transition.secs > 0.0 && self.out().decks() > 1 && on_air && self.fade_level > 0.0;
                 let black = (item_in.is_some() || transition.kind != TransitionKind::Cut && transition.secs > 0.0) && self.out().can_fade() && !cross;
                 self.fade_in_audio = item_in.is_some();
                 // Média déjà préparé : coupe ou fondu enchaîné sans attendre l'ouverture du fichier.
@@ -834,7 +837,13 @@ impl OutputApp {
                 } else {
                     self.cancel_transitions();
                     self.fade_in_audio = item_in.is_some();
-                    let half = if transition.kind != TransitionKind::Cut { transition.secs / 2.0 } else { 0.0 };
+                    let half = match transition.kind {
+                        TransitionKind::Cut => 0.0,
+                        // Fondu enchaîné impossible (déjà au noir, rien à l'écran, un seul lecteur) :
+                        // ouverture sur toute la durée depuis le noir.
+                        TransitionKind::Crossfade if !on_air || self.fade_level <= 0.0 => transition.secs,
+                        _ => transition.secs / 2.0,
+                    };
                     let fade_in = item_in.unwrap_or(half);
                     if on_air && self.fade_level > 0.0 && half > 0.0 {
                         // Fondu sortant, puis chargement, puis fondu d'ouverture.
@@ -926,21 +935,21 @@ impl OutputApp {
                     self.m().set_property("volume", &format!("{value:.1}"))
                 }
             }
-            Command::Slideshow { items, photo_seconds, looping, shuffle, fit, video_sound } => {
+            Command::Slideshow { items, photo_seconds, looping, shuffle, fit, video_sound, fade } => {
                 if items.is_empty() {
                     Err("diaporama vide : aucun média dans le dossier".into())
                 } else {
                     self.cancel_transitions();
                     self.set_fade(1.0);
                     let _ = self.m().set_property("pause", "no");
-                    self.show = Some(Show::new(items, photo_seconds, looping, shuffle, fit, video_sound));
+                    self.show = Some(Show::new(items, photo_seconds, looping, shuffle, fit, video_sound, fade));
                     self.show_current();
                     Ok(())
                 }
             }
-            Command::SlideshowSettings { photo_seconds, looping, shuffle, video_sound } => {
+            Command::SlideshowSettings { photo_seconds, looping, shuffle, video_sound, fade } => {
                 if let Some(s) = &mut self.show {
-                    s.update(photo_seconds, looping, shuffle, video_sound);
+                    s.update(photo_seconds, looping, shuffle, video_sound, fade);
                     let video = s.current().map(slideshow::is_video).unwrap_or(false);
                     if video {
                         let _ = self.m().set_property("mute", if video_sound { "no" } else { "yes" });
@@ -1374,6 +1383,21 @@ impl OutputApp {
         let video = slideshow::is_video(&path);
         let sound = self.show.as_ref().map(|s| s.video_sound).unwrap_or(false);
         let (pos, len) = self.show.as_ref().map(|s| (s.pos, s.len())).unwrap_or((0, 0));
+        // Fondu enchaîné : seulement quand c'est une photo qui part (une vidéo finie n'a plus
+        // d'image à fondre) et avec le compositeur à deux lecteurs.
+        let fade = self.show.as_ref().map(|s| s.fade).unwrap_or(0.0);
+        let photo_out = self.current.as_deref().is_some_and(|c| !slideshow::is_video(c));
+        if fade > 0.0 && photo_out && self.out().decks() > 1 && self.fade_level > 0.0 {
+            self.finish_xfade();
+            let from = self.active;
+            self.before = None;
+            self.outgoing = Some(from);
+            self.active = (from + 1) % self.out().decks();
+            self.xfade_after = Some(fade);
+            let _ = self.out().deck(self.active).set_property("volume", "0");
+        } else {
+            self.finish_xfade();
+        }
         let a = self.active;
         self.stop_warming(a);
         let m = self.m();

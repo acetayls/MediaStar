@@ -93,10 +93,59 @@ pub fn preview_image(ui: &mut Ui, preview: &mut Preview, path: &Path, rect: Rect
     }
 }
 
+/// Point à caler sur l'image affichée par l'aperçu.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Mark {
+    In(f64),
+    Out(f64),
+}
+
+impl Mark {
+    /// Pose le point dans les réglages de l'élément (la sortie reste après l'entrée).
+    pub fn apply(self, clip: &mut Clip, duration: f64) {
+        let s = &mut clip.sound;
+        match self {
+            Mark::In(t) => {
+                s.start = t.max(0.0);
+                if s.end.is_some_and(|e| e <= s.start) {
+                    s.end = None;
+                }
+            }
+            Mark::Out(t) => {
+                if t > s.start {
+                    s.end = if duration > 0.0 && t >= duration - 1e-3 { None } else { Some(t) };
+                }
+            }
+        }
+    }
+}
+
+/// Temps à l'image près : « 1:23.12 » (secondes et numéro d'image dans la seconde), ou au
+/// centième si la cadence est inconnue.
+pub fn fmt_frames(t: f64, fps: f64) -> String {
+    let t = t.max(0.0);
+    if fps > 1.0 {
+        let per = fps.round().max(1.0) as u64;
+        let n = (t * fps + 1e-6).floor() as u64;
+        let (secs, f) = (n / per, n % per);
+        let h = secs / 3600;
+        if h > 0 {
+            format!("{h}:{:02}:{:02}.{f:02}", (secs / 60) % 60, secs % 60)
+        } else {
+            format!("{}:{:02}.{f:02}", secs / 60, secs % 60)
+        }
+    } else {
+        let cs = (t * 100.0).round() as u64;
+        format!("{}:{:02},{:02}", cs / 6000, (cs / 100) % 60, cs % 100)
+    }
+}
+
 /// Barre de déplacement de l'aperçu, avec les points d'entrée et de sortie de l'élément,
-/// puis le temps et les boutons lecture, image précédente et suivante.
+/// puis le temps à l'image près, les boutons lecture, image précédente et suivante, et
+/// « Entrée ici » / « Sortie ici » qui calent le point sur l'image affichée.
 /// Glisser : saut aux images clés (fluide) ; au relâché, position exacte.
-pub fn scrub_bar(ui: &mut Ui, id: impl std::hash::Hash, preview: &mut Preview, path: &Path, clip: &Clip) {
+pub fn scrub_bar(ui: &mut Ui, id: impl std::hash::Hash, preview: &mut Preview, path: &Path, clip: &Clip) -> Option<Mark> {
+    let mut mark = None;
     let ctx = ui.ctx().clone();
     let len = if preview.state.path.as_deref() == Some(path) { preview.state.duration } else { 0.0 };
     let mut t = if len > 0.0 { preview.state.time.clamp(0.0, len) } else { 0.0 };
@@ -150,15 +199,77 @@ pub fn scrub_bar(ui: &mut Ui, id: impl std::hash::Hash, preview: &mut Preview, p
         if small(ui, TransportIcon::Prev, "pv-back", tr("Image précédente", "Previous frame")) {
             preview.step(&ctx, true);
         }
-        if small(ui, TransportIcon::Next, "pv-fwd", tr("Image suivante", "Next frame")) {
+        if small(ui, TransportIcon::Next, "pv-fwd", tr("Image suivante (→)", "Next frame (→)")) {
             preview.step(&ctx, false);
         }
-        ui.label(RichText::new(fmt_time(t)).monospace().color(TEXT_DIM));
+        let fps = preview.state.fps;
+        ui.label(RichText::new(fmt_frames(t, fps)).monospace().color(TEXT))
+            .on_hover_text(if fps > 1.0 { format!("{} {fps:.3} {}", tr("minutes:secondes.image, à", "minutes:seconds.frame, at"), tr("images/s", "fps")) } else { tr("Cadence inconnue : temps au centième", "Unknown frame rate: time in hundredths").to_string() });
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             ui.label(RichText::new(format!("-{}", fmt_time((len - t).max(0.0)))).monospace().color(TEXT_DIM));
+            if len > 0.0 {
+                if ui.add(egui::Button::new(RichText::new(tr("Sortie ici ]", "Out here ]")).color(STOP)).small())
+                    .on_hover_text(tr("Le point de sortie se cale sur l'image affichée (touche O)", "Set the out point on the frame shown (O key)"))
+                    .clicked()
+                {
+                    mark = Some(Mark::Out(t));
+                }
+                if ui.add(egui::Button::new(RichText::new(tr("[ Entrée ici", "[ In here")).color(GO)).small())
+                    .on_hover_text(tr("Le point d'entrée se cale sur l'image affichée (touche I)", "Set the in point on the frame shown (I key)"))
+                    .clicked()
+                {
+                    mark = Some(Mark::In(t));
+                }
+            }
         });
     });
     let _ = id;
+    mark
+}
+
+/// Raccourcis de l'aperçu dans la fenêtre d'édition (hors saisie de texte) : ← → image par
+/// image, Maj + ← → une seconde, K lecture / pause, I et O calent l'entrée et la sortie.
+fn preview_keys(ui: &mut Ui, preview: &mut Preview, path: &Path) -> Option<Mark> {
+    let ctx = ui.ctx().clone();
+    if ctx.text_edit_focused() || !preview.shows(path) || preview.state.image {
+        return None;
+    }
+    let len = preview.state.duration;
+    let none = egui::Modifiers::NONE;
+    let shift = egui::Modifiers::SHIFT;
+    let (back, fwd, back_s, fwd_s, play, set_in, set_out) = ctx.input_mut(|i| {
+        (
+            i.count_and_consume_key(none, egui::Key::ArrowLeft),
+            i.count_and_consume_key(none, egui::Key::ArrowRight),
+            i.consume_key(shift, egui::Key::ArrowLeft),
+            i.consume_key(shift, egui::Key::ArrowRight),
+            i.consume_key(none, egui::Key::K),
+            i.consume_key(none, egui::Key::I),
+            i.consume_key(none, egui::Key::O),
+        )
+    });
+    for _ in 0..back {
+        preview.step(&ctx, true);
+    }
+    for _ in 0..fwd {
+        preview.step(&ctx, false);
+    }
+    if back_s || fwd_s {
+        let t = (preview.state.time + if back_s { -1.0 } else { 1.0 }).clamp(0.0, len.max(0.0));
+        preview.seek(&ctx, t, true);
+    }
+    if play {
+        let playing = !preview.state.paused;
+        preview.play(&ctx, !playing);
+    }
+    let t = preview.state.time.clamp(0.0, len.max(0.0));
+    if set_in {
+        Some(Mark::In(t))
+    } else if set_out {
+        Some(Mark::Out(t))
+    } else {
+        None
+    }
 }
 
 /// Corps de l'éditeur d'un élément : réglages, aperçu, frise avec ses poignées, égaliseur.
@@ -221,7 +332,19 @@ pub fn clip_editor(ui: &mut Ui, id_salt: impl std::hash::Hash + std::fmt::Debug 
     let (rect, _) = ui.allocate_exact_size(vec2(w, w * 9.0 / 16.0), Sense::hover());
     preview_image(ui, preview, path, rect, None, clip.rotation());
     if !image {
-        scrub_bar(ui, ("clip-scrub", id_salt), preview, path, clip);
+        let duration = preview.state.duration;
+        let keys = preview_keys(ui, preview, path);
+        if let Some(m) = scrub_bar(ui, ("clip-scrub", id_salt), preview, path, clip).or(keys) {
+            m.apply(clip, duration);
+        }
+        ui.label(
+            RichText::new(tr(
+                "← → image par image · Maj + ← → une seconde · K lecture/pause · I entrée · O sortie",
+                "← → frame by frame · Shift + ← → one second · K play/pause · I in · O out",
+            ))
+            .small()
+            .color(TEXT_DIM),
+        );
     }
     if let Some(e) = &preview.state.missing {
         ui.label(RichText::new(format!("{} ({e})", tr("Aperçu indisponible", "Preview unavailable"))).small().color(METER_MID));
@@ -245,13 +368,13 @@ pub fn clip_editor(ui: &mut Ui, id_salt: impl std::hash::Hash + std::fmt::Debug 
     if let Some(t) = sound_editor::sound_waveform_and_eq(ui, ("clip", id_salt), &mut clip.sound, wave, status, 48_000) {
         preview.seek(&ctx, t, true);
     }
-    // Une poignée déplacée : l'aperçu montre l'image à cet endroit.
-    let dragging = ui.input(|i| i.pointer.any_down());
+    // Une poignée déplacée : l'aperçu montre l'image exacte à cet endroit, même pendant le
+    // glisser (mpv ne garde que le dernier saut demandé), pour caler le point à l'image près.
     if clip.sound.start != before.0 {
-        preview.seek(&ctx, clip.sound.start, !dragging);
+        preview.seek(&ctx, clip.sound.start, true);
     } else if clip.sound.end != before.1 {
         if let Some(e) = clip.sound.end {
-            preview.seek(&ctx, e, !dragging);
+            preview.seek(&ctx, e, true);
         }
     }
 }

@@ -22,6 +22,8 @@ pub struct Show {
     pub shuffle: bool,
     pub fit: Fit,
     pub video_sound: bool,
+    /// Fondu enchaîné quand une photo laisse la place au média suivant (s, 0 : coupe).
+    pub fade: f64,
     /// Fin de la photo affichée (None : vidéo en cours, ou pause).
     pub deadline: Option<Instant>,
     /// Temps restant de la photo pendant une pause.
@@ -34,7 +36,7 @@ pub struct Show {
 }
 
 impl Show {
-    pub fn new(items: Vec<String>, photo_seconds: f64, looping: bool, shuffle: bool, fit: Fit, video_sound: bool) -> Self {
+    pub fn new(items: Vec<String>, photo_seconds: f64, looping: bool, shuffle: bool, fit: Fit, video_sound: bool, fade: f64) -> Self {
         let seed = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos() as u64).unwrap_or(1) | 1;
         let mut s = Self {
             order: (0..items.len()).collect(),
@@ -45,6 +47,7 @@ impl Show {
             shuffle,
             fit,
             video_sound,
+            fade: fade.clamp(0.0, 10.0),
             deadline: None,
             remaining: None,
             shown_since: None,
@@ -127,7 +130,8 @@ impl Show {
     }
 
     /// Réglages modifiés pendant la lecture : le média affiché reste à l'écran.
-    pub fn update(&mut self, photo_seconds: f64, looping: bool, shuffle: bool, video_sound: bool) {
+    pub fn update(&mut self, photo_seconds: f64, looping: bool, shuffle: bool, video_sound: bool, fade: f64) {
+        self.fade = fade.clamp(0.0, 10.0);
         let photo = Duration::from_secs_f64(photo_seconds.clamp(0.5, 3600.0));
         if photo != self.photo {
             // La photo affichée prend la nouvelle durée, comptée depuis son apparition.

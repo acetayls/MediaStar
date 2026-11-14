@@ -25,11 +25,22 @@ pub struct OscSettings {
     pub zeroconf: bool,
     /// Nom annoncé sur le réseau.
     pub name: String,
+    /// Version des réglages par défaut déjà appliqués à ce fichier (voir [`OscSettings::load`]).
+    #[serde(skip_serializing_if = "is_zero")]
+    pub rev: u32,
 }
+
+fn is_zero(v: &u32) -> bool {
+    *v == 0
+}
+
+/// Réglages par défaut en vigueur : OSC, écoute réseau, OSCQuery et annonce mDNS allumés, pour
+/// que Companion (ou une autre régie) trouve CueStar et lise son état sans réglage.
+const DEFAULTS_REV: u32 = 1;
 
 impl Default for OscSettings {
     fn default() -> Self {
-        Self { enabled: false, port: 9000, network: false, prefix: "/cuestar".into(), oscquery: false, oscquery_port: 9001, zeroconf: false, name: "CueStar".into() }
+        Self { enabled: true, port: 9000, network: true, prefix: "/cuestar".into(), oscquery: true, oscquery_port: 9001, zeroconf: true, name: "CueStar".into(), rev: 0 }
     }
 }
 
@@ -38,9 +49,28 @@ pub(crate) fn settings_path() -> Option<std::path::PathBuf> {
 }
 
 impl OscSettings {
-    /// Réglages OSC de cette machine.
+    /// Réglages OSC de cette machine. Une fois, les réglages d'avant CueStar 0.0.2 passent aux
+    /// nouveaux réglages par défaut (OSC, réseau, OSCQuery, mDNS allumés) ; ensuite les choix de
+    /// l'utilisateur sont gardés.
     pub fn load() -> Self {
-        settings_path().and_then(|p| star_core::prefs::load(&p)).unwrap_or_default()
+        let mut s: Self = settings_path().and_then(|p| star_core::prefs::load(&p)).unwrap_or_default();
+        if s.upgrade() {
+            s.save();
+        }
+        s
+    }
+
+    /// Applique les réglages par défaut d'une version plus récente ; vrai si quelque chose a changé.
+    fn upgrade(&mut self) -> bool {
+        if self.rev >= DEFAULTS_REV {
+            return false;
+        }
+        self.enabled = true;
+        self.network = true;
+        self.oscquery = true;
+        self.zeroconf = true;
+        self.rev = DEFAULTS_REV;
+        true
     }
     pub fn save(&self) {
         if let Some(p) = settings_path() {
@@ -126,6 +156,12 @@ pub struct CuelistState {
     /// Cue en attente, compté à partir de 1 (0 : conduite terminée).
     pub standby: usize,
     pub standby_name: String,
+    /// Commentaire du cue en attente.
+    pub standby_comment: String,
+    /// Dernier cue lancé, compté à partir de 1 (0 : aucun).
+    pub running: usize,
+    /// Conduite en boucle.
+    pub looping: bool,
     /// Dernier cue lancé.
     pub running_name: String,
 }
@@ -170,10 +206,12 @@ pub fn tree(prefix: &str, snap: &Snapshot) -> Value {
     let c = &snap.cuelist;
     add("cuelist/standby", leaf("i", ACCESS_RW, "Cue en attente (0 : conduite terminée)", Some(json!(c.standby)), Some(json!({ "MIN": 1, "MAX": c.cues.max(1) }))));
     add("cuelist/standby_name", read("s", "Nom du cue en attente", json!(c.standby_name)));
+    add("cuelist/standby_comment", read("s", "Commentaire du cue en attente", json!(c.standby_comment)));
+    add("cuelist/running", read("i", "Dernier cue lancé (0 : aucun)", json!(c.running)));
     add("cuelist/running_name", read("s", "Dernier cue lancé", json!(c.running_name)));
     add("cuelist/cues", read("i", "Nombre de cues", json!(c.cues)));
     add("cuelist/goto", idx("Lance tout de suite le cue n° i", c.cues));
-    add("cuelist/loop", flag("Boucler la conduite", snap.lecteur.looping));
+    add("cuelist/loop", flag("Boucler la conduite", c.looping));
     add("cuelist/transition", leaf("sf", ACCESS_WRITE, "Transition du cue en attente (cut, black, fade) et durée", None, None));
     for t in ["play", "pause", "toggle", "stop", "next", "prev"] {
         add(&format!("diaporama/{t}"), trigger_leaf(&format!("Diaporama : {t}")));
@@ -202,6 +240,8 @@ pub fn feedback(prefix: &str, snap: &Snapshot) -> Vec<OscMessage> {
         m("lecteur/playing", OscType::Int(snap.lecteur.playing as i32)),
         m("cuelist/standby", OscType::Int(snap.cuelist.standby as i32)),
         m("cuelist/standby_name", OscType::String(snap.cuelist.standby_name.clone())),
+        m("cuelist/standby_comment", OscType::String(snap.cuelist.standby_comment.clone())),
+        m("cuelist/running", OscType::Int(snap.cuelist.running as i32)),
         m("diaporama/index", OscType::Int(snap.slide.0 as i32)),
     ]
 }
@@ -293,12 +333,24 @@ mod tests {
     }
 
     #[test]
+    fn old_settings_get_the_new_defaults_once() {
+        let mut old: OscSettings = serde_json::from_str(r#"{"enabled": false, "network": false, "oscquery": false, "port": 9100}"#).unwrap();
+        assert!(old.upgrade());
+        assert!(old.enabled && old.network && old.oscquery && old.zeroconf && old.port == 9100);
+        // Choix fait ensuite par l'utilisateur : gardé.
+        old.network = false;
+        let back: OscSettings = serde_json::from_value(serde_json::to_value(&old).unwrap()).unwrap();
+        let mut back = back;
+        assert!(!back.upgrade() && !back.network);
+    }
+
+    #[test]
     fn oscquery_describes_help_and_state() {
         let snap = Snapshot {
             media: "intro.mp4".into(),
             time: 12.0,
             duration: 30.04,
-            cuelist: CuelistState { cues: 3, standby: 2, standby_name: "Pluie".into(), running_name: "Ouverture".into() },
+            cuelist: CuelistState { cues: 3, standby: 2, standby_name: "Pluie".into(), running_name: "Ouverture".into(), ..Default::default() },
             ..Default::default()
         };
         let root = tree("/cuestar", &snap);

@@ -24,12 +24,26 @@ pub struct Diaporama {
     files: Vec<PathBuf>,
     /// Dernier dépôt : message affiché au-dessus de la liste (médias ajoutés, fichiers ignorés).
     drop_note: Option<String>,
+    /// Choix du dossier, sans bloquer la régie (une boîte bloquante figeait la fenêtre sous
+    /// Wayland, et un second clic la plantait).
+    dialogs: star_ui::dialogs::Dialogs<()>,
+    /// Vignettes de la vue en vignettes.
+    thumbs: crate::thumb::Thumbs,
 }
 
 impl Default for Diaporama {
     fn default() -> Self {
-        Self { s: Settings::default(), files: Vec::new(), drop_note: None }
+        Self { s: Settings::default(), files: Vec::new(), drop_note: None, dialogs: Default::default(), thumbs: Default::default() }
     }
+}
+
+/// Vignettes fabriquées en même temps, au plus (une vidéo lance un petit processus).
+const THUMBS_AT_ONCE: usize = 4;
+/// Largeur d'une vignette de la vue en vignettes (points).
+const THUMB_W: f32 = 150.0;
+
+fn is_video(p: &Path) -> bool {
+    !super::media_editor::is_image(p) && is_media(p) && !p.extension().is_some_and(|e| e.eq_ignore_ascii_case("heic"))
 }
 
 fn is_media(p: &Path) -> bool {
@@ -130,12 +144,7 @@ impl Diaporama {
             _ => {}
         }
         if running && cmd.starts_with("settings/") {
-            out.send(Command::SlideshowSettings {
-                photo_seconds: self.s.photo_seconds,
-                looping: self.s.looping,
-                shuffle: self.s.shuffle,
-                video_sound: self.s.video_sound,
-            });
+            out.send(self.settings_cmd());
         }
     }
 
@@ -185,7 +194,7 @@ impl Diaporama {
             parts.push(plural(self.files.len().saturating_sub(before), "média", "ajouté"));
         }
         if decks > 0 {
-            parts.push("PowerPoint et PDF : à déposer dans l'onglet Présentation".into());
+            parts.push("PDF : à déposer dans l'onglet Présentation (PowerPoint : exporté en PDF)".into());
         }
         if ignored > 0 {
             parts.push(format!("{} (format non pris en charge)", plural(ignored, "fichier", "ignoré")));
@@ -201,12 +210,30 @@ impl Diaporama {
             shuffle: self.s.shuffle,
             fit: self.s.fit,
             video_sound: self.s.video_sound,
+            fade: self.s.fade,
         });
+    }
+
+    /// Réglages à appliquer au diaporama en cours.
+    fn settings_cmd(&self) -> Command {
+        Command::SlideshowSettings {
+            photo_seconds: self.s.photo_seconds,
+            looping: self.s.looping,
+            shuffle: self.s.shuffle,
+            video_sound: self.s.video_sound,
+            fade: self.s.fade,
+        }
     }
 
     pub fn ui(&mut self, ui: &mut egui::Ui, out: &mut OutputLink, typing: bool) {
         let ctx = ui.ctx().clone();
         self.handle_drops(&ctx);
+        if let Some(((), files)) = self.dialogs.take() {
+            if let Some(d) = files.into_iter().next() {
+                self.s.folder = Some(d);
+                self.rescan();
+            }
+        }
         let hovering = ctx.input(|i| !i.raw.hovered_files.is_empty());
         let running = out.state.slide.is_some();
         if !typing {
@@ -303,12 +330,7 @@ impl Diaporama {
             modes_changed = true;
         }
         if modes_changed && running {
-            out.send(Command::SlideshowSettings {
-                photo_seconds: self.s.photo_seconds,
-                looping: self.s.looping,
-                shuffle: self.s.shuffle,
-                video_sound: self.s.video_sound,
-            });
+            out.send(self.settings_cmd());
         }        ui.add_space(10.0);
 
         let before = (self.s.clone(), self.s.fit);
@@ -319,11 +341,9 @@ impl Diaporama {
                 ui.horizontal(|ui| {
                     let txt = self.s.folder.as_ref().map(|p| p.display().to_string()).unwrap_or_else(|| "aucun".into());
                     ui.label(RichText::new(txt).color(if self.s.folder.is_some() { TEXT } else { TEXT_DIM }));
-                    if ui.button("Choisir…").clicked() {
-                        if let Some(d) = rfd::FileDialog::new().pick_folder() {
-                            self.s.folder = Some(d);
-                            self.rescan();
-                        }
+                    let picking = self.dialogs.open.is_some();
+                    if ui.add_enabled(!picking, egui::Button::new(if picking { "Choix en cours…" } else { "Choisir…" })).clicked() {
+                        self.dialogs.show(ui.ctx(), (), star_ui::dialogs::Kind::Folder);
                     }
                     if ui.button("Relire").on_hover_text("Relit les dossiers (fichiers ajoutés ou retirés)").clicked() {
                         self.rescan();
@@ -366,6 +386,22 @@ impl Diaporama {
                 ui.add(egui::Slider::new(&mut self.s.photo_seconds, 1.0..=60.0).suffix(" s").step_by(0.5));
                 ui.end_row();
 
+                ui.label("Fondu entre photos");
+                ui.horizontal(|ui| {
+                    let mut on = self.s.fade > 0.0;
+                    if ui.checkbox(&mut on, "").on_hover_text("Fondu enchaîné d'une photo au média suivant (sinon : coupe)").changed() {
+                        self.s.fade = if on { 1.0 } else { 0.0 };
+                    }
+                    let max = (self.s.photo_seconds / 2.0).clamp(0.2, 5.0);
+                    if on {
+                        ui.add(egui::Slider::new(&mut self.s.fade, 0.2..=max).suffix(" s").step_by(0.1));
+                    } else {
+                        ui.label(RichText::new("coupe").color(TEXT_DIM));
+                    }
+                    self.s.fade = self.s.fade.min(max.max(0.2)).max(0.0);
+                });
+                ui.end_row();
+
                 ui.label("Ajustement");
                 egui::ComboBox::from_id_salt("fit").selected_text(self.s.fit.label()).width(260.0).show_ui(ui, |ui| {
                     for f in Fit::ALL {
@@ -385,14 +421,9 @@ impl Diaporama {
             out.send(Command::SetFit { fit: self.s.fit });
         }
         let b = &before.0;
-        let live = (self.s.photo_seconds, self.s.looping, self.s.shuffle, self.s.video_sound) != (b.photo_seconds, b.looping, b.shuffle, b.video_sound);
+        let live = (self.s.photo_seconds, self.s.looping, self.s.shuffle, self.s.video_sound, self.s.fade) != (b.photo_seconds, b.looping, b.shuffle, b.video_sound, b.fade);
         if live && running {
-            out.send(Command::SlideshowSettings {
-                photo_seconds: self.s.photo_seconds,
-                looping: self.s.looping,
-                shuffle: self.s.shuffle,
-                video_sound: self.s.video_sound,
-            });
+            out.send(self.settings_cmd());
         }
 
         ui.add_space(10.0);
@@ -401,6 +432,10 @@ impl Diaporama {
             if let Some(n) = &self.drop_note {
                 ui.label(RichText::new(n).small().color(TEXT_DIM));
             }
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                ui.selectable_value(&mut self.s.thumbnails, true, "Vignettes").on_hover_text("Afficher les médias en vignettes");
+                ui.selectable_value(&mut self.s.thumbnails, false, "Liste").on_hover_text("Afficher les médias en liste");
+            });
         });
         let list = egui::Frame::new().fill(SLOT_EMPTY).corner_radius(4).inner_margin(6).show(ui, |ui| {
             ui.set_min_size(ui.available_size());
@@ -411,6 +446,10 @@ impl Diaporama {
                 return;
             }
             let current = out.state.slide.as_ref().map(|s| s.2.clone());
+            if self.s.thumbnails {
+                self.thumb_grid(ui, current.as_deref(), running, out);
+                return;
+            }
             let row_h = 22.0;
             let font = egui::FontId::proportional(14.0);
             let mono = egui::FontId::monospace(12.0);
@@ -445,6 +484,74 @@ impl Diaporama {
             painter.rect_filled(r, 4.0, Color32::from_black_alpha(170));
             painter.rect_stroke(r.shrink(2.0), 4.0, egui::Stroke::new(2.0, ACCENT), egui::StrokeKind::Inside);
             painter.text(r.center(), egui::Align2::CENTER_CENTER, "Déposer pour ajouter au diaporama", egui::FontId::proportional(18.0), ACCENT);
+        }
+    }
+
+    /// Médias en vignettes : clic droit / survol pour le nom, double-clic pour y sauter.
+    fn thumb_grid(&mut self, ui: &mut egui::Ui, current: Option<&str>, running: bool, out: &mut OutputLink) {
+        let ctx = ui.ctx().clone();
+        let gap = 8.0;
+        let (tw, th) = (THUMB_W, THUMB_W * 9.0 / 16.0);
+        let cell_h = th + 18.0;
+        let cols = (((ui.available_width() - 12.0) + gap) / (tw + gap)).floor().max(1.0) as usize;
+        let rows = self.files.len().div_ceil(cols);
+        let mut pending = self.thumbs.pending();
+        let mut goto = None;
+        egui::ScrollArea::vertical().auto_shrink(false).show_rows(ui, cell_h + gap, rows, |ui, range| {
+            for row in range {
+                let (line, _) = ui.allocate_exact_size(vec2(ui.available_width(), cell_h + gap), Sense::hover());
+                for col in 0..cols {
+                    let i = row * cols + col;
+                    let Some(p) = self.files.get(i) else { break };
+                    let cell = Rect::from_min_size(egui::pos2(line.left() + col as f32 * (tw + gap), line.top()), vec2(tw, cell_h));
+                    let img_r = Rect::from_min_size(cell.min, vec2(tw, th));
+                    let resp = ui.interact(cell, ui.make_persistent_id(("dia-thumb", i)), Sense::click());
+                    let live = current == Some(&*p.to_string_lossy());
+                    let painter = ui.painter_at(cell.expand(3.0));
+                    painter.rect_filled(img_r, 3.0, Color32::BLACK);
+                    // Vignette demandée seulement si peu sont en cours (dossiers de centaines de photos).
+                    let tex = if self.thumbs.known(p) || pending < THUMBS_AT_ONCE {
+                        if !self.thumbs.known(p) {
+                            pending += 1;
+                        }
+                        self.thumbs.get(&ctx, p).cloned()
+                    } else {
+                        None
+                    };
+                    match tex {
+                        Some(t) => {
+                            let [w, h] = t.size();
+                            let k = (tw / w.max(1) as f32).min(th / h.max(1) as f32);
+                            let r = Rect::from_center_size(img_r.center(), vec2(w as f32 * k, h as f32 * k));
+                            painter.image(t.id(), r, Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)), Color32::WHITE);
+                        }
+                        None => {
+                            let txt = if self.thumbs.failed(p) { "pas d'aperçu" } else { "…" };
+                            painter.text(img_r.center(), egui::Align2::CENTER_CENTER, txt, egui::FontId::proportional(13.0), TEXT_DIM);
+                        }
+                    }
+                    if is_video(p) {
+                        painter.text(img_r.right_bottom() + vec2(-5.0, -4.0), egui::Align2::RIGHT_BOTTOM, "▶", egui::FontId::proportional(12.0), Color32::WHITE);
+                    }
+                    let (stroke, width) = if live { (GO, 3.0) } else if resp.hovered() { (BORDER, 1.0) } else { (Color32::TRANSPARENT, 0.0) };
+                    if width > 0.0 {
+                        painter.rect_stroke(img_r, 3.0, egui::Stroke::new(width, stroke), egui::StrokeKind::Outside);
+                    }
+                    let name = p.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                    let col = if live { GO } else { TEXT };
+                    let mut job = egui::text::LayoutJob::simple_singleline(format!("{}  {name}", i + 1), egui::FontId::proportional(12.0), col);
+                    job.wrap = egui::text::TextWrapping::truncate_at_width(tw);
+                    let g = painter.layout_job(job);
+                    painter.galley(egui::pos2(cell.left(), img_r.bottom() + 3.0), g, col);
+                    let resp = resp.on_hover_text(format!("{name}\nDouble-clic : afficher ce média (hors ordre aléatoire)"));
+                    if resp.double_clicked() && running && !self.s.shuffle {
+                        goto = Some(i);
+                    }
+                }
+            }
+        });
+        if let Some(i) = goto {
+            out.send(Command::Goto { index: i });
         }
     }
 }

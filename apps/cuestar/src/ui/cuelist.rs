@@ -55,6 +55,22 @@ pub struct Cuelist {
     renaming: Option<(usize, String, bool)>,
     /// Cue dont la boucle vient de changer dans la liste (à transmettre s'il passe).
     clip_changed: Option<usize>,
+    /// Boîtes de choix de fichiers, ouvertes sans bloquer la régie (sous Wayland, une boîte
+    /// bloquante figeait la fenêtre).
+    dialogs: star_ui::dialogs::Dialogs<FilePick>,
+}
+
+/// Ce que deviennent les fichiers choisis dans une boîte de la Cuelist.
+#[derive(Clone, Copy, Debug, PartialEq)]
+enum FilePick {
+    AddFiles,
+    AddFolder,
+    /// Nouveau média du cue n°.
+    Change(usize),
+}
+
+fn media_filter() -> star_ui::dialogs::Filter {
+    star_ui::dialogs::Filter::new("Médias", EXTENSIONS)
 }
 
 fn stem(p: &Path) -> String {
@@ -286,6 +302,9 @@ impl Cuelist {
             cues: self.cues.len(),
             standby: if self.standby < self.cues.len() { self.standby + 1 } else { 0 },
             standby_name: name(self.standby),
+            standby_comment: self.cues.get(self.standby).map(|c| c.comment.clone()).unwrap_or_default(),
+            running: self.running.map(|i| i + 1).unwrap_or(0),
+            looping: self.loop_all,
             running_name: self.running.map(name).unwrap_or_default(),
         }
     }
@@ -449,17 +468,14 @@ impl Cuelist {
             ui.horizontal(|ui| {
                 let add = add_button(ui, "Ajouter des médias", true);
                 egui::Popup::menu(&add).show(|ui| {
-                    if ui.button("Des fichiers…").clicked() {
+                    let free = self.dialogs.open.is_none();
+                    if ui.add_enabled(free, egui::Button::new("Des fichiers…")).clicked() {
                         ui.close();
-                        if let Some(files) = rfd::FileDialog::new().add_filter("Médias", EXTENSIONS).pick_files() {
-                            self.add(files, None);
-                        }
+                        self.dialogs.show(ui.ctx(), FilePick::AddFiles, star_ui::dialogs::Kind::OpenMany(media_filter()));
                     }
-                    if ui.button("Un dossier…").clicked() {
+                    if ui.add_enabled(free, egui::Button::new("Un dossier…")).clicked() {
                         ui.close();
-                        if let Some(d) = rfd::FileDialog::new().pick_folder() {
-                            self.add([d], None);
-                        }
+                        self.dialogs.show(ui.ctx(), FilePick::AddFolder, star_ui::dialogs::Kind::Folder);
                     }
                     ui.separator();
                     if ui.button("Un cue Noir").on_hover_text("Coupe l'image (avec la transition du cue)").clicked() {
@@ -656,7 +672,8 @@ impl Cuelist {
             ui.horizontal_wrapped(|ui| {
                 match self.cues.get_mut(standby) {
                     Some(c) => {
-                        ui.label(RichText::new(format!("Transition du cue {}", standby + 1)).color(TEXT_DIM));
+                        ui.label(RichText::new(format!("Entrée du cue {}", standby + 1)).color(TEXT_DIM))
+                            .on_hover_text("Transition jouée au lancement de ce cue (le cue en attente). Chaque cue garde la sienne : après le GO, ces boutons règlent le cue suivant.");
                         ui.radio_value(&mut c.transition.kind, TransitionKind::Cut, "Coupe").on_hover_text("Passage direct au média suivant");
                         ui.radio_value(&mut c.transition.kind, TransitionKind::Black, "Noir").on_hover_text("Fondu au noir, puis fondu d'ouverture");
                         ui.radio_value(&mut c.transition.kind, TransitionKind::Crossfade, "Fondu enchaîné")
@@ -666,6 +683,11 @@ impl Cuelist {
                         }
                         if ui.small_button("À tous").on_hover_text("Donner cette transition à tous les cues de la conduite").clicked() {
                             to_all = Some(c.transition);
+                        }
+                        // Le fondu d'entrée réglé dans le cue l'emporte : il part toujours du noir.
+                        if c.clip.sound.fade_in > 0.0 && c.path.is_some() {
+                            ui.label(RichText::new(format!("(fondu d'entrée du cue {:.1} s : part du noir)", c.clip.sound.fade_in)).small().color(METER_MID))
+                                .on_hover_text("Ce cue a un fondu d'entrée (Réglages du cue) : il part du noir quelle que soit la transition choisie ici. Mettez son fondu d'entrée à 0 pour utiliser Coupe ou Fondu enchaîné.");
                         }
                     }
                     None => {
@@ -716,7 +738,14 @@ impl Cuelist {
                         ui.painter().text(rect.center(), Align2::CENTER_CENTER, txt, FontId::proportional(14.0), TEXT_DIM);
                     }
                     if self.preview.state.missing.is_none() && !super::media_editor::is_image(p) && self.editor.is_none() {
-                        super::media_editor::scrub_bar(ui, "cl-next-scrub", &mut self.preview, p, clip);
+                        // « Entrée ici » / « Sortie ici » : le point du cue en attente se cale sur
+                        // l'image affichée.
+                        if let Some(m) = super::media_editor::scrub_bar(ui, "cl-next-scrub", &mut self.preview, p, clip) {
+                            let d = self.preview.state.duration;
+                            if let Some(c) = self.cues.get_mut(self.standby) {
+                                m.apply(&mut c.clip, d);
+                            }
+                        }
                     }
                     ui.horizontal(|ui| {
                         if clip.sound.looping {
@@ -736,6 +765,18 @@ impl Cuelist {
                 None => {
                     ui.label(RichText::new("Fin de la conduite").color(TEXT_DIM));
                 }
+            }
+            // Volet des remarques du cue en attente : la régie les a sous les yeux avant le GO.
+            if let Some(c) = self.cues.get_mut(self.standby) {
+                ui.add_space(4.0);
+                ui.label(RichText::new("REMARQUES").small().strong().color(TEXT_DIM));
+                ui.add(
+                    egui::TextEdit::multiline(&mut c.comment)
+                        .id_salt("cl-standby-comment")
+                        .hint_text("Remarques sur ce cue (top, consigne, réglage…)")
+                        .desired_rows(3)
+                        .desired_width(f32::INFINITY),
+                );
             }
         });
     }
@@ -760,6 +801,7 @@ impl Cuelist {
                     .on_hover_text("Glisser pour déplacer ce cue");
                 let grip_hovered = grip.hovered();
                 let resp = row.union(grip);
+                let resp = if c.comment.trim().is_empty() { resp } else { resp.on_hover_text(c.comment.trim()) };
                 let p = ui.painter_at(rect);
                 let is_standby = i == standby;
                 let is_running = running == Some(i);
@@ -825,6 +867,10 @@ impl Cuelist {
                 // Cue édité (rotation, points, fondus, volume, EQ) : repère après le nom.
                 let name = if c.path.is_none() { format!("■ {}", c.name) } else if c.clip.is_plain() { c.name.clone() } else { format!("{}  ✎", c.name) };
                 let mut job = egui::text::LayoutJob::simple_singleline(name, FontId::proportional(13.5), col);
+                // Commentaire après le nom, en plus discret (le texte entier en infobulle).
+                if let Some(first) = c.comment.lines().map(str::trim).find(|l| !l.is_empty()) {
+                    job.append(&format!("   {first}"), 0.0, egui::TextFormat { font_id: FontId::proportional(12.0), color: TEXT_DIM, italics: true, ..Default::default() });
+                }
                 job.wrap = egui::text::TextWrapping::truncate_at_width(name_r.width().max(10.0));
                 let g = p.layout_job(job);
                 p.galley(pos2(name_r.left(), rect.center().y - g.size().y / 2.0), g, col);
@@ -998,6 +1044,16 @@ impl Cuelist {
         }
         self.preview.poll();
         self.preview.settle(ctx);
+        if let Some((pick, files)) = self.dialogs.take() {
+            match pick {
+                FilePick::AddFiles | FilePick::AddFolder => self.add(files, None),
+                FilePick::Change(i) => {
+                    if let (Some(c), Some(f)) = (self.cues.get_mut(i), files.into_iter().next()) {
+                        c.path = Some(f);
+                    }
+                }
+            }
+        }
         let mut slot = 0;
         self.infos.retain_mut(|w| {
             slot += 1;
@@ -1035,18 +1091,19 @@ impl Cuelist {
                 ui.label("Nom");
                 ui.text_edit_singleline(&mut c.name);
                 ui.end_row();
+                ui.label("Remarques");
+                ui.add(egui::TextEdit::multiline(&mut c.comment).hint_text("Commentaire pour la régie (n'apparaît pas à l'antenne)").desired_rows(2).desired_width(f32::INFINITY));
+                ui.end_row();
                 ui.label("Média");
                 ui.horizontal(|ui| {
                     let txt = c.path.as_ref().map(|p| p.display().to_string()).unwrap_or_else(|| "Noir (pas de média)".into());
                     ui.label(RichText::new(txt).color(TEXT_DIM).small());
-                    if ui.button("Changer…").clicked() {
-                        if let Some(f) = rfd::FileDialog::new().add_filter("Médias", EXTENSIONS).pick_file() {
-                            c.path = Some(f);
-                        }
+                    if ui.add_enabled(self.dialogs.open.is_none(), egui::Button::new("Changer…")).clicked() {
+                        self.dialogs.show(ui.ctx(), FilePick::Change(i), star_ui::dialogs::Kind::Open(media_filter()));
                     }
                 });
                 ui.end_row();
-                ui.label("Transition");
+                ui.label("Transition d'entrée").on_hover_text("Jouée au lancement de ce cue");
                 ui.horizontal(|ui| {
                     ui.radio_value(&mut c.transition.kind, TransitionKind::Cut, "Coupe");
                     ui.radio_value(&mut c.transition.kind, TransitionKind::Black, "Noir");

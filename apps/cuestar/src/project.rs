@@ -48,6 +48,9 @@ pub struct CueData {
     /// sa dernière image.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub end_black: bool,
+    /// Commentaire ou remarques de la régie sur ce cue (texte libre, jamais à l'antenne).
+    #[serde(skip_serializing_if = "String::is_empty")]
+    pub comment: String,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
@@ -96,11 +99,21 @@ pub struct DiaporamaData {
     pub photo_seconds: f64,
     pub fit: Fit,
     pub video_sound: bool,
+    /// Fondu enchaîné entre photos, en secondes (0 : coupe).
+    #[serde(skip_serializing_if = "is_zero")]
+    pub fade: f64,
+    /// Liste des médias affichée en vignettes plutôt qu'en lignes.
+    #[serde(skip_serializing_if = "std::ops::Not::not")]
+    pub thumbnails: bool,
+}
+
+fn is_zero(v: &f64) -> bool {
+    *v == 0.0
 }
 
 impl Default for DiaporamaData {
     fn default() -> Self {
-        Self { folder: None, extra: Vec::new(), recursive: true, shuffle: false, looping: true, photo_seconds: 5.0, fit: Fit::Auto, video_sound: false }
+        Self { folder: None, extra: Vec::new(), recursive: true, shuffle: false, looping: true, photo_seconds: 5.0, fit: Fit::Auto, video_sound: false, fade: 0.0, thumbnails: false }
     }
 }
 
@@ -236,11 +249,11 @@ mod golden {
                 shuffle: true,
                 transition: fade,
             },
-            diaporama: DiaporamaData { folder: Some("/photos".into()), extra: Vec::new(), recursive: false, shuffle: true, looping: false, photo_seconds: 7.5, fit: Fit::Cover, video_sound: true },
+            diaporama: DiaporamaData { folder: Some("/photos".into()), extra: Vec::new(), recursive: false, shuffle: true, looping: false, photo_seconds: 7.5, fit: Fit::Cover, video_sound: true, fade: 0.0, thumbnails: false },
             cuelist: CuelistData {
                 cues: vec![
-                    CueData { name: "Ouverture".into(), path: Some("/v/ouverture.mov".into()), clip: looped(false), transition: fade, follow: CueFollow::Continue, end_black: false },
-                    CueData { name: "Noir".into(), path: None, clip: looped(true), transition: Transition { kind: TransitionKind::Black, secs: 1.0 }, follow: CueFollow::Stop, end_black: false },
+                    CueData { name: "Ouverture".into(), path: Some("/v/ouverture.mov".into()), clip: looped(false), transition: fade, follow: CueFollow::Continue, end_black: false, comment: String::new() },
+                    CueData { name: "Noir".into(), path: None, clip: looped(true), transition: Transition { kind: TransitionKind::Black, secs: 1.0 }, follow: CueFollow::Stop, end_black: false, comment: String::new() },
                 ],
                 loop_all: false,
             },

@@ -233,16 +233,38 @@ impl OutputView {
                 ui.end_row();
 
                 ui.label("FPS de sortie");
-                // Sans choix enregistré, l'écran garde sa fréquence : c'est elle qui est affichée.
-                let shown = d.fps.or_else(|| s.monitor.as_ref().map(|m| m.refresh_hz.round()).filter(|hz| *hz > 0.0));
-                let text = shown.map(fps_label).unwrap_or_else(|| "—".into());
-                egui::ComboBox::from_id_salt("fps").selected_text(text).width(80.0).show_ui(ui, |ui| {
-                    for f in FPS_CHOICES {
-                        ui.selectable_value(&mut d.fps, Some(f), fps_label(f));
-                    }
-                })
-                .response
-                .on_hover_text("Images par seconde de la sortie : l'écran de sortie est passé sur cette fréquence (en Hz) à l'ouverture de la sortie, et la retrouve en quittant CueStar. Windows, macOS, Linux X11 (pas sous Wayland). Noir un instant au changement.");
+                if wayland_session() {
+                    // Wayland ne laisse pas une application changer la fréquence de l'écran : le
+                    // choix est retiré, et on dit où la régler.
+                    d.fps = None;
+                    ui.vertical(|ui| {
+                        let hz = s.monitor.as_ref().map(|m| m.refresh_hz).filter(|hz| *hz > 0.0);
+                        ui.label(RichText::new(match hz {
+                            Some(hz) => format!("Celle de l'écran ({hz:.2} Hz)"),
+                            None => "Celle de l'écran".to_string(),
+                        }));
+                        ui.label(
+                            RichText::new(
+                                "Sous Wayland, le système ne laisse pas CueStar changer la fréquence de l'écran. Réglez-la dans les paramètres d'affichage \
+                                 (KDE : Configuration du système > Affichage et écran ; GNOME : Paramètres > Écrans), avec le bouton ci-dessous, \
+                                 ou ouvrez une session X11 pour que CueStar la change lui-même.",
+                            )
+                            .small()
+                            .color(METER_MID),
+                        );
+                    });
+                } else {
+                    // Sans choix enregistré, l'écran garde sa fréquence : c'est elle qui est affichée.
+                    let shown = d.fps.or_else(|| s.monitor.as_ref().map(|m| m.refresh_hz.round()).filter(|hz| *hz > 0.0));
+                    let text = shown.map(fps_label).unwrap_or_else(|| "—".into());
+                    egui::ComboBox::from_id_salt("fps").selected_text(text).width(80.0).show_ui(ui, |ui| {
+                        for f in FPS_CHOICES {
+                            ui.selectable_value(&mut d.fps, Some(f), fps_label(f));
+                        }
+                    })
+                    .response
+                    .on_hover_text("Images par seconde de la sortie : l'écran de sortie est passé sur cette fréquence (en Hz) à l'ouverture de la sortie, et la retrouve en quittant CueStar. Windows, macOS, Linux X11 (pas sous Wayland). Noir un instant au changement.");
+                }
                 ui.end_row();
 
                 ui.label("Décodage");
@@ -625,4 +647,10 @@ impl OutputView {
             self.warp_dirty = false;
         }
     }
+}
+
+/// Session Wayland (Linux) : la fréquence de l'écran ne peut pas être changée par l'appli.
+fn wayland_session() -> bool {
+    cfg!(all(unix, not(target_os = "macos")))
+        && (std::env::var_os("WAYLAND_DISPLAY").is_some() || std::env::var("XDG_SESSION_TYPE").is_ok_and(|t| t.eq_ignore_ascii_case("wayland")))
 }

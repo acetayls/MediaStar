@@ -1029,7 +1029,6 @@ dependencies = [
  "star-build",
  "star-core",
  "star-pdf",
- "star-pptx",
  "star-remote",
  "star-ui",
  "sysinfo",

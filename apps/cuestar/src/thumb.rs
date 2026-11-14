@@ -142,4 +142,14 @@ impl Thumbs {
     pub fn failed(&self, media: &Path) -> bool {
         matches!(self.slots.get(media), Some(Slot::Failed))
     }
+
+    /// Vignette déjà demandée (prête, en cours ou en échec).
+    pub fn known(&self, media: &Path) -> bool {
+        self.slots.contains_key(media)
+    }
+
+    /// Vignettes en cours de fabrication (pour ne pas en lancer des centaines à la fois).
+    pub fn pending(&self) -> usize {
+        self.slots.values().filter(|s| matches!(s, Slot::Pending)).count()
+    }
 }

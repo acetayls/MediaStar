@@ -6,7 +6,7 @@ l'image, tournent dans deux programmes séparés : une régie qui rame ne retard
 
 Trois modules se partagent l'écran : la **Cuelist** (une conduite de médias lancés au GO, qui
 peuvent s'enchaîner tout seuls), le **Diaporama** (un dossier de photos et de vidéos) et la
-**Présentation** (un fichier PowerPoint). Le
+**Présentation** (un PDF). Le
 panneau **Texte** s'affiche à côté pour garder la conduite écrite sous les yeux.
 
 ## Prise en main
@@ -92,9 +92,20 @@ image : le GO lance alors le cue en attente.
 
 À droite, l'aperçu montre le cue qui partira au prochain GO, tourné comme sur la sortie. On s'y
 promène sans toucher à la sortie : cliquez ou glissez sur la barre sous l'image, **▶** lit
-l'aperçu (sans le son), **⏮ / ⏭** avancent ou reculent d'une image. Les repères d'entrée et de
-sortie sont dessinés sur la barre. **Aperçu** (en haut de la conduite) l'affiche ou le masque ;
-la poignée entre les deux règle sa largeur.
+l'aperçu (sans le son), **⏮ / ⏭** avancent ou reculent d'une image (les appuis rapides ne se
+perdent pas). Le temps s'affiche à l'image près (minutes:secondes.image). Une fois la bonne
+image trouvée, **[ Entrée ici** ou **Sortie ici ]** y cale le point d'entrée ou de sortie du
+cue. Les repères d'entrée et de sortie sont dessinés sur la barre. **Aperçu** (en haut de la
+conduite) l'affiche ou le masque ; la poignée entre les deux règle sa largeur.
+
+Sous l'aperçu, **REMARQUES** : un commentaire libre pour le cue en attente (top, consigne,
+réglage…), jamais à l'antenne. Il s'affiche aussi en gris après le nom du cue dans la conduite,
+en entier au survol, et se modifie aussi dans les réglages du cue.
+
+La **transition** réglée sous le GO est celle d'**entrée** du cue en attente : elle joue quand
+ce cue part. Après le GO, ces boutons règlent donc le cue suivant. Un cue qui a son propre
+fondu d'entrée (dans ses réglages) part toujours du noir, quelle que soit la transition ; c'est
+signalé à côté.
 
 ### Clic droit sur un cue
 
@@ -110,8 +121,8 @@ Un cue réglé (rotation, points, fondus, son) porte la marque **✎**.
 
 ## Éditer un élément
 
-Clic droit sur un cue → **Réglages…**. En haut : son nom, son média, sa **transition** et ce
-qui se passe **à la fin** (attendre le GO, ou enchaîner sur le cue suivant). Le reste reprend la
+Clic droit sur un cue → **Réglages…**. En haut : son nom, ses **remarques**, son média, sa
+**transition d'entrée** et ce qui se passe **à la fin** (attendre le GO, ou enchaîner sur le cue suivant). Le reste reprend la
 fenêtre d'un jingle de JingleStar. Les réglages sont enregistrés avec le projet.
 
 - **Rotation** : 0°, 90°, 180° ou 270°, dans le sens des aiguilles d'une montre, pour ce fichier
@@ -121,9 +132,11 @@ fenêtre d'un jingle de JingleStar. Les réglages sont enregistrés avec le proj
   noir), image et son ensemble.
 - **Frise** : les vignettes du média sur toute sa durée. Les poignées **entrée** et **sortie**
   se glissent pour couper le début et la fin ; les fondus se voient en voile sur la frise.
-  Pendant le glissement, l'aperçu montre l'image à cet endroit.
-- **Aperçu** : la même navigation que l'aperçu du cue en attente, pour vérifier un point
-  d'entrée à l'image près.
+  Pendant le glissement, l'aperçu montre l'image exacte à cet endroit.
+- **Aperçu** : la même navigation que l'aperçu du cue en attente, avec **[ Entrée ici** et
+  **Sortie ici ]**, pour caler un point à l'image près. Au clavier (hors saisie de texte) :
+  **← / →** image par image, **Maj + ← / →** une seconde, **K** lecture / pause, **I** pose
+  l'entrée et **O** la sortie sur l'image affichée.
 - **Égaliseur** : coupe-bas (12 ou 24 dB/oct), grave, deux bandes en cloche, aigu, comme dans
   JingleStar. La forme d'onde du son s'affiche derrière la courbe.
 - Si le cue est à l'antenne, volume, égaliseur, fondus, boucle et rotation changent tout de
@@ -161,6 +174,10 @@ Lit un dossier de photos et de vidéos.
 - **Inclure les sous-dossiers**, **Durée des photos**, **Ajustement** (image entière avec bandes
   noires, remplir l'écran en recadrant, ou automatique) et **Vidéos avec le son** (lues en
   entier).
+- **Fondu entre photos** : fondu enchaîné, de la durée choisie, quand une photo laisse la place
+  au média suivant (décoché : coupe). Après une vidéo, le passage reste une coupe.
+- **Liste / Vignettes** (au-dessus des médias) : la liste des fichiers, ou leurs vignettes.
+  Double-clic sur un média pour y sauter (hors ordre aléatoire).
 - **Espace** lance ou met en pause, **← / →** passent au média précédent / suivant.
 - **Aléatoire** remélange à chaque tour, **Tout boucler** reprend au début.
 
@@ -168,13 +185,14 @@ Les changements s'appliquent tout de suite, sans relancer le diaporama.
 
 ## La Présentation
 
-Diffuse une présentation PowerPoint (**.pptx**) ou un **PDF** sur la sortie, sans PowerPoint :
-CueStar dessine lui-même chaque diapositive (ou chaque page du PDF) à la résolution de la sortie.
+Diffuse un **PDF** sur la sortie, une page par diapositive : CueStar dessine lui-même chaque
+page à la résolution de la sortie. Une présentation PowerPoint s'exporte en PDF (dans
+PowerPoint : Fichier > Exporter > PDF) ; les fichiers PowerPoint ne sont plus lus directement.
 
-- **Choisir…** ou glissez un fichier .pptx ou .pdf ; **Relire** reprend le fichier après une
-  modification dans PowerPoint.
+- **Choisir…** ou glissez un PDF ; **Relire** reprend le fichier après une modification.
 - Les **vignettes** montrent toutes les diapositives : clic pour sélectionner, double-clic pour
-  l'afficher sur la sortie. Les diapositives masquées sont sautées.
+  l'afficher sur la sortie. **Taille** (curseur, **+ / −**, ou **Ctrl + molette** sur la liste)
+  les agrandit pour mieux les lire.
 - **LANCER** affiche la diapositive sélectionnée, puis **SUIVANTE** (**Espace** ou **→**) et
   **←** passent d'une diapositive à l'autre ; **Aller à** saute à un numéro. La suivante est
   préparée d'avance.
@@ -188,9 +206,6 @@ CueStar dessine lui-même chaque diapositive (ou chaque page du PDF) à la réso
 réglage. **Page suivante / précédente**, le bouton écran noir et F5 sont reconnus dans tous les
 onglets dès qu'une présentation est à l'écran, et aussi quand la fenêtre de sortie a le focus.
 
-Textes, puces, formes, images, tableaux, SmartArt et graphiques simples sont rendus ; les
-animations ne le sont pas : une vidéo intégrée apparaît comme son image d'aperçu.
-
 ## Le panneau Texte
 
 La conduite écrite, à côté du module en cours : gras, italique, souligné, barré, couleurs,
@@ -203,6 +218,10 @@ test, Mapping 4 coins) :
 
 - **Écran de sortie** : automatique (premier écran secondaire) ou un écran précis. Le plein
   écran se règle avec le bouton **Plein écran** de la barre du haut.
+- **FPS de sortie** : l'écran de sortie passe sur cette fréquence à l'ouverture de la sortie
+  (Windows, macOS, Linux X11). Sous **Wayland** (KDE, GNOME…), le système ne le permet pas à
+  une application : la fréquence se règle dans les paramètres d'affichage du système, ou en
+  ouvrant une session X11. Les Préférences le disent à la place du choix.
 - **Décodage** : automatique, GPU ou CPU. **Rendu de secours** et **Rendu léger** pour une
   petite machine.
 - **Synchro de l'image** : **Mélange d'images** (conseillé, choisi d'office) fait comme
@@ -242,16 +261,18 @@ mêmes réglages que JingleStar.
 
 ### Activer
 
-Dans **Télécommandes**, onglet **OSC**, cochez **Activer**, réglez les options puis cliquez sur
+Le pilotage OSC est **activé d'office**, à l'écoute du réseau, avec OSCQuery et l'annonce
+mDNS : Companion (ou une autre régie) trouve CueStar et lit son état sans réglage. Dans
+**Télécommandes**, onglet **OSC**, on peut le couper ou changer les options, puis cliquer sur
 **Appliquer** :
 
 | Réglage | Par défaut | Rôle |
 |---|---|---|
-| Accès | Local | **Local** : seulement depuis ce PC ; **Réseau** : depuis les autres machines |
+| Accès | Réseau | **Local** : seulement depuis ce PC ; **Réseau** : depuis les autres machines |
 | Port (UDP) | 9000 | Port sur lequel CueStar reçoit les commandes |
 | Préfixe | `/cuestar` | Début de toutes les adresses |
-| OSCQuery | désactivé, port 9001 | Serveur HTTP qui décrit les adresses et l'état courant |
-| Découverte | désactivée | Annonce en mDNS / Bonjour pour être trouvé automatiquement |
+| OSCQuery | activé, port 9001 | Serveur HTTP qui décrit les adresses et l'état courant |
+| Découverte | activée | Annonce en mDNS / Bonjour pour être trouvé automatiquement |
 | Nom annoncé | CueStar | Nom visible sur le réseau |
 
 Une fois appliqué, la fenêtre affiche l'adresse IP et les ports en écoute, ou l'erreur si un
@@ -301,7 +322,8 @@ du Diaporama d'origine (`/diaporama/…`) sont aussi acceptées, comme celles de
 - `http://<ip>:9001/<chemin>?VALUE` renvoie la valeur d'un nœud.
 
 En lecture seule, on y trouve aussi le média à l'écran, la position, le temps restant, le nombre
-d'éléments et de cues, l'élément en cours et le nom du cue en attente.
+d'éléments et de cues, l'élément en cours, le nom et les remarques du cue en attente
+(`cuelist/standby_comment`) et le dernier cue lancé (`cuelist/running`).
 
 ### Exemple
 
@@ -346,6 +368,11 @@ n'agissent pas pendant la saisie d'un texte.
 | Réglages d'un cue, informations sur le fichier | Clic droit sur le cue |
 | Lancer un cue | Double-clic |
 | Se déplacer dans l'aperçu | Clic ou glisser sur la barre sous l'image |
+| Réglages d'un cue : image précédente / suivante | **Flèche Gauche / Droite** |
+| Réglages d'un cue : une seconde avant / après | **Maj + Flèche Gauche / Droite** |
+| Réglages d'un cue : lecture / pause de l'aperçu | **K** |
+| Réglages d'un cue : entrée / sortie sur l'image affichée | **I** / **O** |
+| Présentation : taille des vignettes | **Ctrl + molette** |
 | Rechercher dans l'aide | Ctrl+F dans la fenêtre d'aide |
 
 ## En cas de problème

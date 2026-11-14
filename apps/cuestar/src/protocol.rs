@@ -47,9 +47,26 @@ pub enum Command {
     /// réglage (None : rien).
     Warp { geom: Option<WarpGeom>, guides: Option<WarpGuides> },
     /// Lance un diaporama : le moteur de sortie tient le minutage et l'enchaînement.
-    Slideshow { items: Vec<String>, photo_seconds: f64, looping: bool, shuffle: bool, fit: Fit, video_sound: bool },
+    /// `fade` : fondu enchaîné entre deux médias quand celui qui part est une photo (s, 0 : coupe).
+    Slideshow {
+        items: Vec<String>,
+        photo_seconds: f64,
+        looping: bool,
+        shuffle: bool,
+        fit: Fit,
+        video_sound: bool,
+        #[serde(default)]
+        fade: f64,
+    },
     /// Réglages du diaporama en cours, appliqués à chaud (sans recharger le média affiché).
-    SlideshowSettings { photo_seconds: f64, looping: bool, shuffle: bool, video_sound: bool },
+    SlideshowSettings {
+        photo_seconds: f64,
+        looping: bool,
+        shuffle: bool,
+        video_sound: bool,
+        #[serde(default)]
+        fade: f64,
+    },
     /// Sortie audio (nom mpv `audio-device` ; None = automatique), à chaud.
     AudioDevice { name: Option<String> },
     /// Délai de la sortie audio en millisecondes, à chaud.
