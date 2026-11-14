@@ -477,52 +477,57 @@ pub fn clip_editor(ui: &mut Ui, id_salt: impl std::hash::Hash + std::fmt::Debug 
     }
 
     // Frise avec ses poignées, puis dessous la barre de déplacement (verte entre l'entrée et
-    // la sortie).
+    // la sortie), et les points : dans un volet qu'on peut replier, comme l'égaliseur. Les
+    // raccourcis clavier restent actifs volet replié.
     ui.add_space(6.0);
     let shown = preview.shows(path);
     let duration = preview.state.duration;
     let before = (clip.sound.start, clip.sound.end);
     let points_before = (clip.sound.start, clip.sound.end, clip.sound.loop_start, clip.sound.loop_end);
     let mut seek_to = None;
-    if shown && duration > 0.0 {
-        if !audio {
-            preview.request_strip(&ctx, path, STRIP_COUNT);
+    let mut mark = preview_keys(ui, preview, path);
+    egui::CollapsingHeader::new(tr("Points d'entrée et de sortie", "In and out points")).id_salt(("clip-points-zone", id_salt)).default_open(true).show(ui, |ui| {
+        if shown && duration > 0.0 {
+            if !audio {
+                preview.request_strip(&ctx, path, STRIP_COUNT);
+            }
+            let tiles: Vec<Option<egui::TextureHandle>> = if audio { Vec::new() } else { preview.strip_textures(&ctx).to_vec() };
+            let rot = (clip.rotation() + preview.state.rotate) % 360;
+            let playhead = Some(preview.state.time);
+            let s = &mut clip.sound;
+            let (st, ls, le, end) = s.markers(duration);
+            let mut mk = Markers { start: st, loop_start: ls, loop_end: le, end };
+            if waveform_editor(ui, strip_background(tiles, duration, rot), duration, &mut mk, s.looping, &mut s.fade_in, &mut s.fade_out, playhead, &mut seek_to) {
+                set_markers(s, &mk);
+            }
+        } else {
+            ui.label(RichText::new(tr("Lecture du média…", "Reading the media…")).color(TEXT_DIM));
         }
-        let tiles: Vec<Option<egui::TextureHandle>> = if audio { Vec::new() } else { preview.strip_textures(&ctx).to_vec() };
-        let rot = (clip.rotation() + preview.state.rotate) % 360;
-        let playhead = Some(preview.state.time);
-        let s = &mut clip.sound;
-        let (st, ls, le, end) = s.markers(duration);
-        let mut mk = Markers { start: st, loop_start: ls, loop_end: le, end };
-        if waveform_editor(ui, strip_background(tiles, duration, rot), duration, &mut mk, s.looping, &mut s.fade_in, &mut s.fade_out, playhead, &mut seek_to) {
-            set_markers(s, &mk);
+        if let Some(t) = seek_to {
+            preview.seek(&ctx, t, true);
         }
-    } else {
-        ui.label(RichText::new(tr("Lecture du média…", "Reading the media…")).color(TEXT_DIM));
-    }
-    if let Some(t) = seek_to {
-        preview.seek(&ctx, t, true);
-    }
-    let keys = preview_keys(ui, preview, path);
-    let mut mark = scrub_bar(ui, ("clip-scrub", id_salt), preview, path, clip, false).or(keys);
-    ui.label(
-        RichText::new(tr(
-            "← → image par image · Maj + ← → une seconde · K lecture/pause · I entrée · O sortie",
-            "← → frame by frame · Shift + ← → one second · K play/pause · I in · O out",
-        ))
-        .small()
-        .color(TEXT_DIM),
-    );
-
-    // Points rassemblés.
-    if shown && duration > 0.0 {
-        ui.add_space(6.0);
-        let now = preview.state.time.clamp(0.0, duration);
-        let fps = preview.state.fps;
-        if let Some(m) = points_rows(ui, id_salt, &mut clip.sound, duration, fps, now) {
+        if let Some(m) = scrub_bar(ui, ("clip-scrub", id_salt), preview, path, clip, false) {
             mark = Some(m);
         }
-    }
+        ui.label(
+            RichText::new(tr(
+                "← → image par image · Maj + ← → une seconde · K lecture/pause · I entrée · O sortie",
+                "← → frame by frame · Shift + ← → one second · K play/pause · I in · O out",
+            ))
+            .small()
+            .color(TEXT_DIM),
+        );
+
+        // Points rassemblés.
+        if shown && duration > 0.0 {
+            ui.add_space(6.0);
+            let now = preview.state.time.clamp(0.0, duration);
+            let fps = preview.state.fps;
+            if let Some(m) = points_rows(ui, id_salt, &mut clip.sound, duration, fps, now) {
+                mark = Some(m);
+            }
+        }
+    });
     if let Some(m) = mark {
         m.apply(clip, duration);
     }
@@ -541,6 +546,7 @@ pub fn clip_editor(ui: &mut Ui, id_salt: impl std::hash::Hash + std::fmt::Debug 
     ui.add_space(6.0);
     egui::Grid::new(("clip-volume", id_salt)).num_columns(2).spacing([12.0, 8.0]).show(ui, |ui| {
         ui.label("Volume");
+        ui.spacing_mut().slider_width = (ui.available_width() - 80.0).max(160.0);
         ui.add(egui::Slider::new(&mut clip.sound.volume_db, -40.0..=10.0).suffix(" dB").step_by(0.5));
         ui.end_row();
     });
