@@ -17,6 +17,10 @@ use crate::project::{ModuleMode, OscSettings};
 pub const MODULE_DB: (f32, f32) = (-60.0, 10.0);
 pub const JINGLE_DB: (f32, f32) = (-40.0, 10.0);
 
+/// Module « le premier qui convient » : `/cue/…` vise le premier module Cuelist, `/playlist/…`
+/// le premier module Playlist. Remplacé par le vrai numéro à l'exécution de la commande.
+pub const FIRST: usize = usize::MAX;
+
 /// Commande reçue, avec des index comptés à partir de 0.
 #[derive(Debug, Clone, PartialEq)]
 pub enum OscCommand {
@@ -136,8 +140,12 @@ pub fn parse(prefix: &str, msg: &OscMessage) -> Result<Option<OscCommand>, Strin
     match segs.as_slice() {
         ["stop_all"] => trigger(OscCommand::StopAll),
         ["go"] => trigger(OscCommand::CueGo(None)),
-        ["module", m, tail @ ..] => {
-            let m = index(Some(m), MAX_MODULES)?;
+        ["module", ..] | ["cue", _] | ["playlist", _] => {
+            // Sans numéro de module (`/cue/next`, `/playlist/pause`…) : premier module du bon mode.
+            let (m, tail) = match segs.as_slice() {
+                ["module", rest @ ..] => (index(rest.first().copied(), MAX_MODULES)?, rest.get(1..).unwrap_or(&[])),
+                tail => (FIRST, tail),
+            };
             match tail {
                 ["stop"] => trigger(OscCommand::ModuleStop(m)),
                 ["volume"] => Ok(Some(OscCommand::ModuleVolume(m, value()?.clamp(MODULE_DB.0, MODULE_DB.1)))),
@@ -234,9 +242,23 @@ pub fn tree(prefix: &str, snap: &Snapshot) -> Value {
     let mut add = |path: String, node: Value| insert(&mut root, &format!("{p}{path}"), node);
     add("/stop_all".into(), trigger_leaf("Arrête tous les sons"));
     add("/go".into(), trigger_leaf("GO du premier module GO"));
+    add("/cue/next".into(), trigger_leaf("Cue suivant en attente (première Cuelist)"));
+    add("/cue/previous".into(), trigger_leaf("Cue précédent en attente (première Cuelist)"));
+    add("/cue/pause".into(), trigger_leaf("Pause / reprise des cues qui sonnent (première Cuelist)"));
+    add("/playlist/play".into(), trigger_leaf("Lecture de la première playlist"));
+    add("/playlist/stop".into(), trigger_leaf("Arrête la première playlist"));
+    add("/playlist/pause".into(), trigger_leaf("Pause / reprise de la première playlist"));
+    add("/playlist/next".into(), trigger_leaf("Morceau suivant (première playlist)"));
+    add("/playlist/previous".into(), trigger_leaf("Morceau précédent (première playlist)"));
     add(
         "/subscribe".into(),
-        leaf("i", ACCESS_WRITE, "Reçoit les niveaux (…/module/<m>/meter, dB G et D) pendant 5 s ; argument : port de réception", None, None),
+        leaf(
+            "i",
+            ACCESS_WRITE,
+            "Reçoit pendant 5 s les niveaux (…/module/<m>/meter, dB G et D) et l'état (…/cue/name, …/cue/remaining, …/playlist/title, …/playlist/remaining) ; argument : port de réception",
+            None,
+            None,
+        ),
     );
     for (mi, m) in snap.modules.iter().enumerate() {
         let base = format!("/module/{}", mi + 1);
@@ -379,6 +401,32 @@ pub fn start(settings: OscSettings, repaint: Arc<dyn Fn() + Send + Sync>) -> Osc
     OscServer::start(cfg, Arc::new(move |m| parse(&prefix, m)), Arc::new(move |snap| tree(&tree_prefix, snap)), repaint)
 }
 
+/// Envoie aux abonnés l'état de la première Cuelist et de la première playlist (télécommandes
+/// comme OldStar) : nom et temps restant (-1 : rien) du cue en attente ou qui sonne, titre et
+/// temps restant du morceau.
+pub fn send_state(server: &OscServer, snap: &Snapshot) {
+    let p = &server.prefix;
+    let s = |addr: &str, v: String| OscMessage { addr: format!("{p}{addr}"), args: vec![OscType::String(v)] };
+    let f = |addr: &str, v: Option<f32>| OscMessage {
+        addr: format!("{p}{addr}"),
+        args: vec![OscType::Float(v.map(|r| (r.max(0.0) * 10.0).round() / 10.0).unwrap_or(-1.0))],
+    };
+    let mut messages = Vec::new();
+    if let Some(m) = snap.modules.iter().find(|m| m.mode == ModuleMode::Go) {
+        let c = &m.cues;
+        messages.push(s("/cue/name", c.names.get(c.standby).cloned().unwrap_or_default()));
+        messages.push(s("/cue/playing_name", c.playing_name.clone()));
+        messages.push(f("/cue/remaining", c.remaining));
+    }
+    if let Some(m) = snap.modules.iter().find(|m| m.mode == ModuleMode::Playlist) {
+        messages.push(s("/playlist/title", m.playlist.title.clone()));
+        messages.push(f("/playlist/remaining", m.playlist.remaining));
+    }
+    if !messages.is_empty() {
+        server.send_to_subscribers(messages);
+    }
+}
+
 /// Envoie le niveau de chaque module (dB, gauche et droite) aux abonnés.
 pub fn send_levels(server: &OscServer, levels: &[[f32; 2]]) {
     let messages = levels
@@ -407,6 +455,19 @@ mod tests {
     fn prefix_is_normalized() {
         assert_eq!(normalize_prefix("jinglestar/"), "/jinglestar");
         assert_eq!(normalize_prefix(" / "), "");
+    }
+
+    #[test]
+    fn addresses_without_module_target_the_first_one() {
+        let p = "/jinglestar";
+        assert_eq!(parse(p, &msg("/jinglestar/cue/next", vec![])), Ok(Some(OscCommand::CueStep(FIRST, 1))));
+        assert_eq!(parse(p, &msg("/jinglestar/cue/previous", vec![])), Ok(Some(OscCommand::CueStep(FIRST, -1))));
+        assert_eq!(parse(p, &msg("/jinglestar/cue/pause", vec![])), Ok(Some(OscCommand::CuePause(FIRST, None))));
+        assert_eq!(parse(p, &msg("/jinglestar/playlist/pause", vec![])), Ok(Some(OscCommand::PlaylistPause(FIRST, None))));
+        assert_eq!(parse(p, &msg("/jinglestar/playlist/play", vec![OscType::Int(3)])), Ok(Some(OscCommand::PlaylistPlay(FIRST, Some(2)))));
+        assert_eq!(parse(p, &msg("/jinglestar/module/2/playlist/next", vec![])), Ok(Some(OscCommand::PlaylistStep(1, 1))));
+        assert!(parse(p, &msg("/jinglestar/module", vec![])).is_err());
+        assert!(parse(p, &msg("/jinglestar/cue/jingle/1/play", vec![])).is_err());
     }
 
     #[test]

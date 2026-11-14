@@ -104,7 +104,11 @@ Sur un très petit écran, l'état se réduit à sa pastille de couleur.
 
 Les boutons de CueStar et de JingleStar (GO, Stop, Pause, cue précédent ou suivant, Noir…), en
 grand. Le voyant vert indique que l'appli répond. Pour CueStar : le cue en attente, le média à
-l'écran et le temps restant.
+l'écran et le temps restant. Pour JingleStar : le cue en attente, son temps restant et le
+morceau ; les boutons de cues agissent sur la première Cuelist du projet, celui de playlist sur
+la première playlist. Dans JingleStar, activez d'abord le pilotage OSC (**Télécommandes → OSC**,
+port 8000) ; si OldStar tourne sur un autre PC, mettez l'adresse IP de celui de JingleStar dans
+`oldstar.json`.
 
 ### Fenêtres
 

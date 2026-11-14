@@ -1732,6 +1732,9 @@ impl Controller {
             self.last_osc_publish = Instant::now();
             let snap = self.osc_snapshot();
             if let Some(server) = self.osc.as_ref() {
+                if server.has_subscribers() {
+                    osc::send_state(server, &snap);
+                }
                 server.publish(snap);
             }
         }
@@ -1746,6 +1749,13 @@ impl Controller {
 
     /// Exécute une commande reçue de l'OSC ou d'une télécommande (`source` sert aux messages).
     fn handle_command(&mut self, source: &str, cmd: OscCommand) {
+        let cmd = match self.resolve_first(cmd) {
+            Ok(cmd) => cmd,
+            Err(e) => {
+                self.status = Some(format!("{source} : {e}"));
+                return;
+            }
+        };
         let n = self.project.module_count;
         let mode = |c: &Self, m: usize| c.project.modules[m].mode;
         match cmd {
@@ -1768,10 +1778,6 @@ impl Controller {
             },
             OscCommand::PlaylistStep(m, d) if m < n && mode(self, m) == ModuleMode::Playlist => self.playlist_step(m, d),
             OscCommand::CueGo(Some(m)) if m < n && mode(self, m) == ModuleMode::Go => self.cue_go(m),
-            OscCommand::CueGo(None) if self.first_go_module().is_some() => {
-                let m = self.first_go_module().unwrap_or(0);
-                self.cue_go(m);
-            }
             OscCommand::CueStep(m, d) if m < n && mode(self, m) == ModuleMode::Go => self.cue_step(m, d),
             OscCommand::CueStandby(m, i) if m < n && mode(self, m) == ModuleMode::Go => self.set_standby(m, i),
             OscCommand::CuePause(m, state) if m < n && mode(self, m) == ModuleMode::Go => match state {
@@ -1784,6 +1790,33 @@ impl Controller {
             OscCommand::PlaylistLoop(m, on) if m < n && mode(self, m) == ModuleMode::Playlist => self.update_playlist(m, |p| p.looping = on),
             other => self.status = Some(format!("{source} : {} ({other:?})", tr("commande ignorée", "command ignored"))),
         }
+    }
+
+    /// Premier module en mode Playlist (cible de `/playlist/…` sans numéro de module).
+    fn first_playlist_module(&self) -> Option<usize> {
+        (0..self.project.module_count).find(|&m| self.project.modules[m].mode == ModuleMode::Playlist)
+    }
+
+    /// Remplace « premier module qui convient » (`/go`, `/cue/…`, `/playlist/…`) par son numéro ;
+    /// erreur claire s'il n'y en a pas, plutôt qu'une commande ignorée sans explication.
+    fn resolve_first(&self, cmd: OscCommand) -> Result<OscCommand, String> {
+        use OscCommand::*;
+        let f = osc::FIRST;
+        let go = || self.first_go_module().ok_or_else(|| tr("aucun module en mode Cuelist", "no module in Cuelist mode").to_string());
+        let pl = || self.first_playlist_module().ok_or_else(|| tr("aucun module en mode Playlist", "no module in Playlist mode").to_string());
+        Ok(match cmd {
+            CueGo(None) => CueGo(Some(go()?)),
+            CueStep(m, d) if m == f => CueStep(go()?, d),
+            CueStandby(m, i) if m == f => CueStandby(go()?, i),
+            CuePause(m, p) if m == f => CuePause(go()?, p),
+            PlaylistPlay(m, t) if m == f => PlaylistPlay(pl()?, t),
+            PlaylistStop(m) if m == f => PlaylistStop(pl()?),
+            PlaylistPause(m, p) if m == f => PlaylistPause(pl()?, p),
+            PlaylistStep(m, d) if m == f => PlaylistStep(pl()?, d),
+            PlaylistShuffle(m, on) if m == f => PlaylistShuffle(pl()?, on),
+            PlaylistLoop(m, on) if m == f => PlaylistLoop(pl()?, on),
+            other => other,
+        })
     }
 
     // ------------------------------------------------------ MIDI et console

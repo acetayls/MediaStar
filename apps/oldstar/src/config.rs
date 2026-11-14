@@ -303,19 +303,50 @@ fn default_targets() -> Vec<OscTarget> {
             host: "127.0.0.1".into(),
             port: 8000,
             prefix: "/jinglestar".into(),
-            // Le retour d'état de JingleStar ne contient que les niveaux.
-            subscribe: false,
-            feedback: vec![],
+            subscribe: true,
+            feedback: jinglestar_feedback(),
+            // Adresses sans numéro de module : JingleStar prend sa première Cuelist ou sa première
+            // playlist, où qu'elles soient dans le projet.
             buttons: vec![
                 b("GO", "go", "go", true),
                 b("Tout arrêter", "stop_all", "stop", true),
-                b("◀ Cue préc.", "module/1/cue/previous", "", false),
-                b("Cue suiv. ▶", "module/1/cue/next", "", false),
-                b("Pause cues", "module/1/cue/pause", "", false),
-                b("Playlist ▶/❚❚", "module/2/playlist/pause", "", false),
+                b("◀ Cue préc.", "cue/previous", "", false),
+                b("Cue suiv. ▶", "cue/next", "", false),
+                b("Pause cues", "cue/pause", "", false),
+                b("Playlist ▶/❚❚", "playlist/pause", "", false),
             ],
         },
     ]
+}
+
+fn jinglestar_feedback() -> Vec<Feedback> {
+    vec![f("cue/name", "En attente"), f("cue/remaining", "Reste (s)"), f("playlist/title", "Morceau")]
+}
+
+/// Réglages JingleStar écrits par OldStar 0.0.1 avant la correction : boutons visant les modules 1
+/// (Cuelist) et 2 (Playlist), sans retour d'état. Un projet JingleStar neuf n'a que des modules
+/// Jingles, si bien que ces boutons restaient sans effet et la pastille rouge. On les remplace par
+/// les adresses sans numéro de module, si l'utilisateur ne les a pas modifiés.
+fn upgrade_jinglestar(t: &mut OscTarget) {
+    if t.prefix.trim().trim_matches('/') != "jinglestar" {
+        return;
+    }
+    let mut old = false;
+    for btn in &mut t.buttons {
+        let new = match btn.address.trim().trim_start_matches('/') {
+            "module/1/cue/previous" => "cue/previous",
+            "module/1/cue/next" => "cue/next",
+            "module/1/cue/pause" => "cue/pause",
+            "module/2/playlist/pause" => "playlist/pause",
+            _ => continue,
+        };
+        btn.address = new.into();
+        old = true;
+    }
+    if old && !t.subscribe && t.feedback.is_empty() {
+        t.subscribe = true;
+        t.feedback = jinglestar_feedback();
+    }
 }
 
 /// Une fenêtre capturée, retrouvée par un bout de son titre.
@@ -384,7 +415,11 @@ impl Config {
     /// Lit le fichier ; s'il manque, l'écrit avec les valeurs par défaut pour qu'on puisse le modifier.
     pub fn load_or_create(path: &Path) -> Result<Self, String> {
         match std::fs::read_to_string(path) {
-            Ok(text) => serde_json::from_str(&text).map_err(|e| format!("{} : {e}", path.display())),
+            Ok(text) => {
+                let mut c: Self = serde_json::from_str(&text).map_err(|e| format!("{} : {e}", path.display()))?;
+                c.osc.iter_mut().for_each(upgrade_jinglestar);
+                Ok(c)
+            }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
                 let c = Self::default();
                 c.save(path)?;
@@ -400,5 +435,28 @@ impl Config {
         }
         let text = serde_json::to_string_pretty(self).map_err(|e| e.to_string())?;
         std::fs::write(path, text).map_err(|e| format!("{} : {e}", path.display()))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn old_jinglestar_buttons_are_upgraded() {
+        let mut t = default_targets().remove(1);
+        t.subscribe = false;
+        t.feedback.clear();
+        t.buttons[2].address = "module/1/cue/previous".into();
+        t.buttons[5].address = "/module/2/playlist/pause".into();
+        upgrade_jinglestar(&mut t);
+        assert_eq!(t.buttons[2].address, "cue/previous");
+        assert_eq!(t.buttons[5].address, "playlist/pause");
+        assert!(t.subscribe);
+        assert_eq!(t.feedback.len(), 3);
+        // Un bouton choisi par l'utilisateur ne bouge pas.
+        t.buttons[3].address = "module/3/cue/next".into();
+        upgrade_jinglestar(&mut t);
+        assert_eq!(t.buttons[3].address, "module/3/cue/next");
     }
 }

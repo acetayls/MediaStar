@@ -2,6 +2,19 @@
 
 ## 0.1.4 — en cours
 
+### Pilotage OSC
+
+- **Adresses sans numéro de module** : `/jinglestar/cue/next`, `cue/previous`, `cue/pause`,
+  `cue/standby` agissent sur la première Cuelist, `/jinglestar/playlist/play`, `stop`, `pause`,
+  `next`, `previous`, `track`, `shuffle`, `loop` sur la première playlist, comme `/jinglestar/go`.
+  Une télécommande (OldStar, Companion…) marche ainsi quel que soit l'ordre des modules.
+- **Retour d'état pour les abonnés** : en plus des niveaux, `/jinglestar/subscribe` envoie le nom
+  du cue en attente (`cue/name`), du cue qui sonne (`cue/playing_name`), leur temps restant
+  (`cue/remaining`), le titre et le temps restant du morceau (`playlist/title`,
+  `playlist/remaining`). OldStar s'en sert pour son voyant et sa carte JingleStar.
+- Une commande sans module du bon mode (GO sans Cuelist, par exemple) l'explique dans la barre
+  d'état (« aucun module en mode Cuelist ») au lieu d'un simple « commande ignorée ».
+
 ### Barre du haut
 
 - **Barre du haut commune à la suite** : logo et nom « JingleStar » (« Star » en jaune) avant

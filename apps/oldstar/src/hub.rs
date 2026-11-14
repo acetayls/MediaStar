@@ -299,6 +299,7 @@ fn default_label(label: &str) -> &str {
         "En attente" => "Standby",
         "À l'écran" => "On screen",
         "Reste (s)" => "Remaining (s)",
+        "Morceau" => "Track",
         "◀ Cue préc." => "◀ Prev cue",
         "Cue suiv. ▶" => "Next cue ▶",
         "Noir" => "Black",

@@ -395,10 +395,12 @@ default prefix.
 | `/jinglestar/module/<m>/cue/standby` | int | Puts cue no. on standby |
 | `/jinglestar/module/<m>/cue/pause` | — | Pause / resume the sounding cues |
 | `/jinglestar/module/<m>/cue/paused` | bool | Pauses (true) or resumes (false) |
+| `/jinglestar/cue/next`, `/jinglestar/cue/previous`, `/jinglestar/cue/pause` | — | Like `module/<m>/cue/…`, on the first Cuelist |
+| `/jinglestar/playlist/<action>` | as above | Like `module/<m>/playlist/…`, on the first playlist |
 
 - Triggers (`play`, `stop`, `toggle`, `next`…) fire with no argument or a non-zero value: a button sending 1 on press and 0 on release triggers only once.
 - Booleans accept `T`/`F`, an int or a float (≥ 0.5 = true), or `true`/`false`/`on`/`off`.
-- **Bitfocus Companion / Stream Deck**: a ready-made module lives in the repository's `companion/` folder (see its README). For button feedback, OSCQuery also publishes each jingle's color and remaining time, the current track's title and remaining time, and the name and remaining time of the sounding cue, and each one's progress (`progress`, 0 to 1). `/jinglestar/subscribe` subscribes the sender for 5 s to module levels (`/jinglestar/module/<m>/meter`, left and right dB, about 20 times per second): renew it every 2 to 3 s.
+- **Bitfocus Companion / Stream Deck**: a ready-made module lives in the repository's `companion/` folder (see its README). For button feedback, OSCQuery also publishes each jingle's color and remaining time, the current track's title and remaining time, and the name and remaining time of the sounding cue, and each one's progress (`progress`, 0 to 1). `/jinglestar/subscribe` subscribes the sender for 5 s to module levels (`/jinglestar/module/<m>/meter`, left and right dB, about 20 times per second) and to the state of the first Cuelist and first playlist (`cue/name`, `cue/playing_name`, `cue/remaining`, `playlist/title`, `playlist/remaining`, times in seconds, -1 when nothing plays): renew it every 2 to 3 s.
 - Jingle commands only act on a module in Jingles mode, playlist commands on a module in Playlist mode. Bundles are accepted.
 
 ### OSCQuery

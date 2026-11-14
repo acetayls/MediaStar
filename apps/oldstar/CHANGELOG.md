@@ -106,6 +106,13 @@ la page sur le réseau local.
 - Les boutons de CueStar et de JingleStar (GO, Stop, Pause, cue précédent ou suivant, Noir…),
   en grand ; le voyant vert indique que l'appli répond. Pour CueStar, le nom du cue en attente,
   le média à l'écran et le temps restant.
+- **JingleStar se pilote vraiment** : les boutons Cue préc., Cue suiv., Pause cues et
+  Playlist ▶/❚❚ visent désormais la première Cuelist et la première playlist du projet
+  JingleStar, où qu'elles soient (avant : modules 1 et 2 seulement, sans effet sur un projet
+  neuf). Le voyant passe au vert quand JingleStar répond, et la carte affiche le cue en attente,
+  son temps restant et le morceau. Les réglages déjà enregistrés sont repris d'eux-mêmes, sauf
+  les boutons modifiés à la main. Dans JingleStar, le pilotage OSC doit être activé
+  (**Télécommandes → OSC**, port 8000).
 
 ### Onglet Fenêtres
 

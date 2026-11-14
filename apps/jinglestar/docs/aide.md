@@ -403,10 +403,12 @@ données avec le préfixe par défaut.
 | `/jinglestar/module/<m>/cue/standby` | int | Met le cue n° en attente |
 | `/jinglestar/module/<m>/cue/pause` | — | Pause / reprise des cues qui sonnent |
 | `/jinglestar/module/<m>/cue/paused` | bool | Met en pause (vrai) ou reprend (faux) |
+| `/jinglestar/cue/next`, `/jinglestar/cue/previous`, `/jinglestar/cue/pause` | — | Comme `module/<m>/cue/…`, sur la première Cuelist |
+| `/jinglestar/playlist/<action>` | comme ci-dessus | Comme `module/<m>/playlist/…`, sur la première playlist |
 
 - Les déclencheurs (`play`, `stop`, `toggle`, `next`…) partent sans argument ou avec une valeur non nulle : un bouton qui envoie 1 à l'appui puis 0 au relâché ne déclenche qu'une fois.
 - Les booléens acceptent `T`/`F`, un entier ou un float (≥ 0,5 = vrai), ou `true`/`false`/`on`/`off`.
-- **Bitfocus Companion / Stream Deck** : un module prêt à l'emploi se trouve dans le dossier `companion/` du dépôt (voir son README). OSCQuery publie aussi, pour les touches, la couleur et le temps restant de chaque jingle, le titre et le temps restant du morceau, le nom et le temps restant du cue qui sonne, et l'avancement (`progress`, de 0 à 1) de chacun. `/jinglestar/subscribe` abonne l'expéditeur pendant 5 s aux niveaux des modules (`/jinglestar/module/<m>/meter`, dB gauche et droite, environ 20 fois par seconde) : à renouveler toutes les 2 à 3 s.
+- **Bitfocus Companion / Stream Deck** : un module prêt à l'emploi se trouve dans le dossier `companion/` du dépôt (voir son README). OSCQuery publie aussi, pour les touches, la couleur et le temps restant de chaque jingle, le titre et le temps restant du morceau, le nom et le temps restant du cue qui sonne, et l'avancement (`progress`, de 0 à 1) de chacun. `/jinglestar/subscribe` abonne l'expéditeur pendant 5 s aux niveaux des modules (`/jinglestar/module/<m>/meter`, dB gauche et droite, environ 20 fois par seconde) et à l'état de la première Cuelist et de la première playlist (`cue/name`, `cue/playing_name`, `cue/remaining`, `playlist/title`, `playlist/remaining`, temps en secondes, -1 quand rien ne joue) : à renouveler toutes les 2 à 3 s.
 - Les commandes de jingle n'agissent que sur un module en mode Jingles, celles de playlist sur un module en mode Playlist. Les paquets groupés (bundles) sont acceptés.
 
 ### OSCQuery

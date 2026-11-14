@@ -103,7 +103,10 @@ On a very small screen, the status is reduced to its coloured dot.
 
 The CueStar and JingleStar buttons (GO, Stop, Pause, previous or next cue, Black…), in large
 size. The green light shows the app is answering. For CueStar: the standby cue, the media on
-screen and the remaining time.
+screen and the remaining time. For JingleStar: the standby cue, its remaining time and the
+track; the cue buttons act on the project's first Cuelist, the playlist button on the first
+playlist. In JingleStar, first enable OSC control (**Remotes → OSC**, port 8000); if OldStar runs
+on another PC, put the JingleStar PC's IP address in `oldstar.json`.
 
 ### Windows
 
