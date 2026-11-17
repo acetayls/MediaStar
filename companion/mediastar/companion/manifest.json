@@ -1,0 +1,22 @@
+{
+	"$schema": "../node_modules/@companion-module/base/assets/manifest.schema.json",
+	"id": "mediastar",
+	"name": "mediastar",
+	"shortname": "MediaStar",
+	"description": "Control JingleStar and CueStar (MediaStar suite) over OSC, with state feedback through OSCQuery.",
+	"version": "0.0.0",
+	"license": "MIT",
+	"repository": "git+https://github.com/acetayls/MediaStar.git",
+	"bugs": "https://github.com/acetayls/MediaStar/issues",
+	"maintainers": [{ "name": "MediaStar" }],
+	"legacyIds": [],
+	"runtime": {
+		"type": "node22",
+		"api": "nodejs-ipc",
+		"apiVersion": "0.0.0",
+		"entrypoint": "../src/main.js"
+	},
+	"manufacturer": "MediaStar",
+	"products": ["JingleStar", "CueStar"],
+	"keywords": ["jingle", "playback", "audio", "video", "cue", "show control"]
+}
