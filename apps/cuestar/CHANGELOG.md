@@ -26,6 +26,15 @@
 
 ### Cuelist
 
+- **Points d'édition en timecode** : dans les réglages du cue, l'entrée, la sortie, les points
+  de boucle et les fondus s'affichent et se saisissent en HH:MM:SS:II (heures, minutes,
+  secondes, image), images calées sur la cadence du fichier ; le temps sous l'aperçu aussi. On
+  peut toujours taper MM:SS ou des secondes.
+- **Volet « Points d'entrée et de sortie » fermé par défaut** : les raccourcis clavier (← →,
+  K, I, O) marchent aussi volet replié.
+- **Frise à la bonne place** : chaque vignette commence exactement à l'instant qu'elle montre,
+  au zoom comme avec la rotation (plus de vignettes réparties côte à côte sans lien avec le
+  temps). Au zoom avant, la vignette se répète jusqu'à la suivante.
 - **Réglages du cue réorganisés** : la lecture (une fois ou en boucle) suit la transition
   d'entrée ; l'aperçu est centré ; la barre de déplacement (verte entre l'entrée et la sortie)
   passe sous la frise ; l'entrée et son fondu, la boucle, la sortie et son fondu sont rassemblés,

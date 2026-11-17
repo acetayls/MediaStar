@@ -23,32 +23,49 @@ pub fn is_audio(p: &Path) -> bool {
     p.extension().map(|e| ["mp3", "wav", "flac", "aac", "m4a", "ogg"].contains(&e.to_string_lossy().to_lowercase().as_str())).unwrap_or(false)
 }
 
-/// Fond de l'éditeur : vignettes de la vidéo côte à côte sur la partie visible, assombries
-/// pendant les fondus (le noir que verra la salle). Vignettes tournées de `rot` degrés, comme
-/// l'aperçu et la sortie.
+/// Fond de l'éditeur : vignettes de la vidéo sur la partie visible, assombries pendant les
+/// fondus (le noir que verra la salle). La vignette n° i est l'image à i × durée / n : son bord
+/// gauche est posé à cet instant, quel que soit le zoom. Trop serrées, on n'en garde qu'une
+/// sur k (toujours les mêmes) ; trop espacées, la vignette se répète jusqu'à la suivante.
+/// Vignettes tournées de `rot` degrés, comme l'aperçu et la sortie.
 fn strip_background(tiles: Vec<Option<egui::TextureHandle>>, duration: f64, rot: u16) -> impl FnOnce(&WaveView) {
     move |w: &WaveView| {
         let p = w.painter;
         let r = w.rect;
         let n = tiles.len().max(1);
-        let tile_w = (r.height() * 16.0 / 9.0).max(8.0);
-        let mut x = r.left();
-        while x < r.right() {
-            let cell = Rect::from_min_size(pos2(x, r.top()), vec2(tile_w.min(r.right() - x), r.height()));
-            let t = w.t_of(cell.center().x);
-            let i = ((t / duration.max(1e-6)) * n as f64).floor().clamp(0.0, (n - 1) as f64) as usize;
-            match tiles.get(i).and_then(|t| t.as_ref()) {
-                Some(tex) => {
-                    let full = Rect::from_min_size(cell.min, vec2(tile_w, r.height()));
-                    let clip = p.with_clip_rect(cell.intersect(p.clip_rect()));
-                    clip.rect_filled(cell, CornerRadius::ZERO, Color32::BLACK);
-                    paint_texture(&clip, tex, full, rot);
-                }
-                None => {
-                    p.rect_filled(cell.shrink(1.0), CornerRadius::same(2), PANEL_HI);
-                }
+        let step_t = duration.max(1e-6) / n as f64;
+        // Largeur d'une vignette : proportions de l'image, tournée comme à l'écran.
+        let aspect = tiles.iter().flatten().next().map_or(16.0 / 9.0, |t| {
+            let s = t.size_vec2();
+            if rot == 90 || rot == 270 { s.y / s.x.max(1.0) } else { s.x / s.y.max(1.0) }
+        });
+        let tile_w = (r.height() * aspect).max(8.0);
+        let seg_w = (w.x_of(step_t) - w.x_of(0.0)).max(1e-3);
+        let k = ((tile_w / seg_w).ceil() as usize).max(1);
+        let first = ((w.v0 / step_t).floor().max(0.0) as usize / k) * k;
+        let mut i = first;
+        while i < n {
+            let x0 = w.x_of(i as f64 * step_t);
+            if x0 >= r.right() {
+                break;
             }
-            x += tile_w;
+            let x1 = w.x_of(((i + k).min(n)) as f64 * step_t).min(r.right());
+            let clip = p.with_clip_rect(Rect::from_x_y_ranges(x0.max(r.left())..=x1, r.y_range()).intersect(p.clip_rect()));
+            let mut x = x0;
+            while x < x1 {
+                let cell = Rect::from_min_size(pos2(x, r.top()), vec2(tile_w, r.height()));
+                match tiles.get(i).and_then(|t| t.as_ref()) {
+                    Some(tex) => {
+                        clip.rect_filled(cell, CornerRadius::ZERO, Color32::BLACK);
+                        paint_texture(&clip, tex, cell, rot);
+                    }
+                    None => {
+                        clip.rect_filled(cell.shrink(1.0), CornerRadius::same(2), PANEL_HI);
+                    }
+                }
+                x += tile_w;
+            }
+            i += k;
         }
         // Fondus : voile noir selon le gain, colonne par colonne.
         let step = 3.0;
@@ -122,26 +139,6 @@ impl Mark {
     }
 }
 
-/// Temps à l'image près : « 1:23.12 » (secondes et numéro d'image dans la seconde), ou au
-/// centième si la cadence est inconnue.
-pub fn fmt_frames(t: f64, fps: f64) -> String {
-    let t = t.max(0.0);
-    if fps > 1.0 {
-        let per = fps.round().max(1.0) as u64;
-        let n = (t * fps + 1e-6).floor() as u64;
-        let (secs, f) = (n / per, n % per);
-        let h = secs / 3600;
-        if h > 0 {
-            format!("{h}:{:02}:{:02}.{f:02}", (secs / 60) % 60, secs % 60)
-        } else {
-            format!("{}:{:02}.{f:02}", secs / 60, secs % 60)
-        }
-    } else {
-        let cs = (t * 100.0).round() as u64;
-        format!("{}:{:02},{:02}", cs / 6000, (cs / 100) % 60, cs % 100)
-    }
-}
-
 /// Barre de déplacement de l'aperçu, avec les points d'entrée et de sortie de l'élément,
 /// puis le temps à l'image près et les boutons lecture, image précédente et suivante.
 /// `trimmed` : la barre ne couvre que la partie jouée du cue (de l'entrée à la sortie), et le
@@ -212,8 +209,8 @@ pub fn scrub_bar(ui: &mut Ui, id: impl std::hash::Hash, preview: &mut Preview, p
             preview.step(&ctx, false);
         }
         let fps = preview.state.fps;
-        ui.label(RichText::new(fmt_frames(t - a, fps)).monospace().color(TEXT))
-            .on_hover_text(if fps > 1.0 { format!("{} {fps:.3} {}", tr("minutes:secondes.image, à", "minutes:seconds.frame, at"), tr("images/s", "fps")) } else { tr("Cadence inconnue : temps au centième", "Unknown frame rate: time in hundredths").to_string() });
+        ui.label(RichText::new(fmt_tc(t - a, fps)).monospace().color(TEXT))
+            .on_hover_text(if fps > 1.0 { format!("{} {fps:.3} {}", tr("heures:minutes:secondes:image, à", "hours:minutes:seconds:frame, at"), tr("images/s", "fps")) } else { tr("Cadence inconnue : temps au centième", "Unknown frame rate: time in hundredths").to_string() });
         ui.with_layout(Layout::right_to_left(Align::Center), |ui| {
             ui.label(RichText::new(format!("-{}", fmt_time((b - t).max(0.0)))).monospace().color(TEXT_DIM));
         });
@@ -342,7 +339,7 @@ fn points_rows(ui: &mut Ui, id_salt: impl std::hash::Hash + std::fmt::Debug + Co
         ui.horizontal(|ui| {
             tc_field(ui, id("in"), &mut mk.start, fps, duration);
             ui.label(RichText::new(tr("fondu", "fade")).color(TEXT_DIM)).on_hover_text(fade_tip);
-            ui.add(egui::DragValue::new(&mut s.fade_in).range(0.0..=30.0).speed(0.05).suffix(" s").max_decimals(2)).on_hover_text(fade_tip);
+            tc_field(ui, id("fade-in"), &mut s.fade_in, fps, 30.0);
             if ui.add(egui::Button::new(RichText::new(tr("[ Entrée ici", "[ Set in")).color(GO)).small())
                 .on_hover_text(tr("Le point d'entrée se cale sur l'image affichée (touche I)", "Set the in point on the frame shown (I key)"))
                 .clicked()
@@ -364,7 +361,7 @@ fn points_rows(ui: &mut Ui, id_salt: impl std::hash::Hash + std::fmt::Debug + Co
         ui.horizontal(|ui| {
             tc_field(ui, id("out"), &mut mk.end, fps, duration);
             ui.label(RichText::new(tr("fondu", "fade")).color(TEXT_DIM)).on_hover_text(fade_tip);
-            ui.add(egui::DragValue::new(&mut s.fade_out).range(0.0..=30.0).speed(0.05).suffix(" s").max_decimals(2)).on_hover_text(fade_tip);
+            tc_field(ui, id("fade-out"), &mut s.fade_out, fps, 30.0);
             if ui.add(egui::Button::new(RichText::new(tr("Sortie ici ]", "Set out ]")).color(STOP)).small())
                 .on_hover_text(tr("Le point de sortie se cale sur l'image affichée (touche O)", "Set the out point on the frame shown (O key)"))
                 .clicked()
@@ -493,7 +490,7 @@ pub fn clip_editor(ui: &mut Ui, id_salt: impl std::hash::Hash + std::fmt::Debug 
     let points_before = (clip.sound.start, clip.sound.end, clip.sound.loop_start, clip.sound.loop_end);
     let mut seek_to = None;
     let mut mark = preview_keys(ui, preview, path);
-    egui::CollapsingHeader::new(tr("Points d'entrée et de sortie", "In and out points")).id_salt(("clip-points-zone", id_salt)).default_open(true).show(ui, |ui| {
+    egui::CollapsingHeader::new(tr("Points d'entrée et de sortie", "In and out points")).id_salt(("clip-points-zone", id_salt)).default_open(false).show(ui, |ui| {
         if shown && duration > 0.0 {
             if !audio {
                 preview.request_strip(&ctx, path, STRIP_COUNT);

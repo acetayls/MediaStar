@@ -94,7 +94,7 @@ standby cue.
 On the right, the preview shows the cue the next GO will play, rotated as on the output. You can
 move around in it without touching the output: click or drag on the bar under the picture,
 **▶** plays the preview (silently), **⏮ / ⏭** step one frame back or forward (quick presses
-are not lost). The time shows to the frame (minutes:seconds.frame). Once on the right frame,
+are not lost). The time shows to the frame, as timecode (hours:minutes:seconds:frame). Once on the right frame,
 **[ In here** or **Out here ]** sets the cue's in or out point there. The in and out marks are
 drawn on the bar. **Aperçu** (above the running order) shows or hides it; the handle between
 the two sets its width.
@@ -130,13 +130,17 @@ jingle editor. Settings are saved with the project.
 - **Volume** of the item's sound, in dB, and play **once** or **looped**.
 - **Fades to black**: length of the fade in (from black) and of the fade out (to black),
   picture and sound together.
-- **Strip**: thumbnails of the media over its whole length. Drag the **in** and **out** handles
+- **Strip**: thumbnails of the media over its whole length, each placed at the moment it
+  shows (when zoomed too). Drag the **in** and **out** handles
   to trim the start and the end; fades show as a veil on the strip. While dragging, the preview
   shows the exact picture at that point.
 - **Preview**: the same navigation as the standby preview, with **[ In here** and **Out here ]**,
   to set a point to the frame. With the keyboard (outside text fields): **← / →** frame by
   frame, **Shift + ← / →** one second, **K** play / pause, **I** sets the in point and **O** the
-  out point on the frame shown.
+  out point on the frame shown. Strip, preview and points sit in the **In and out points**
+  panel, closed at first; the shortcuts work with the panel folded.
+- **Points**: in, out, loop and fades as timecode HH:MM:SS:FF (frame matched to the file's
+  frame rate). You can also type MM:SS or seconds, then Enter.
 - **Equalizer**: low cut (12 or 24 dB/oct), low shelf, two bell bands, high shelf, as in
   JingleStar. The sound's waveform shows behind the curve.
 - If the cue is on air, volume, equalizer, fades, loop and rotation change at once, without

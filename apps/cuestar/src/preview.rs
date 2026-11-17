@@ -405,9 +405,11 @@ pub fn run() {
             }
             match j.waiting {
                 None => {
-                    let t = (j.next as f64 + 0.5) * j.duration / j.count as f64;
+                    // Vignette n° i : l'image exacte à i × durée / nombre, là où la frise la
+                    // dessine (son bord gauche tombe sur cet instant).
+                    let t = j.next as f64 * j.duration / j.count as f64;
                     s.dirty.store(false, Ordering::Release);
-                    let _ = s.m.command(&["seek", &format!("{t:.3}"), "absolute+keyframes"]);
+                    let _ = s.m.command(&["seek", &format!("{t:.3}"), "absolute+exact"]);
                     j.waiting = Some(Instant::now());
                 }
                 Some(since) => {
@@ -690,7 +692,7 @@ impl Preview {
         self.state.path.as_deref() == Some(path) && (self.state.duration > 0.0 || self.state.image)
     }
 
-    /// Demande la frise de `path` (vignettes réparties sur toute la durée).
+    /// Demande la frise de `path` : `count` vignettes, la n° i étant l'image à i × durée / `count`.
     pub fn request_strip(&mut self, ctx: &egui::Context, path: &Path, count: usize) {
         if self.state.strip.as_ref().is_some_and(|s| s.0 == path) {
             return;

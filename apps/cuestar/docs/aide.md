@@ -93,7 +93,7 @@ image : le GO lance alors le cue en attente.
 À droite, l'aperçu montre le cue qui partira au prochain GO, tourné comme sur la sortie. On s'y
 promène sans toucher à la sortie : cliquez ou glissez sur la barre sous l'image, **▶** lit
 l'aperçu (sans le son), **⏮ / ⏭** avancent ou reculent d'une image (les appuis rapides ne se
-perdent pas). Le temps s'affiche à l'image près (minutes:secondes.image). Une fois la bonne
+perdent pas). Le temps s'affiche à l'image près, en timecode (heures:minutes:secondes:image). Une fois la bonne
 image trouvée, **[ Entrée ici** ou **Sortie ici ]** y cale le point d'entrée ou de sortie du
 cue. Les repères d'entrée et de sortie sont dessinés sur la barre. **Aperçu** (en haut de la
 conduite) l'affiche ou le masque ; la poignée entre les deux règle sa largeur.
@@ -130,13 +130,17 @@ fenêtre d'un jingle de JingleStar. Les réglages sont enregistrés avec le proj
 - **Volume** du son de l'élément, en dB, et lecture **une fois** ou **en boucle**.
 - **Fondus au noir** : durée du fondu d'entrée (depuis le noir) et du fondu de sortie (vers le
   noir), image et son ensemble.
-- **Frise** : les vignettes du média sur toute sa durée. Les poignées **entrée** et **sortie**
+- **Frise** : les vignettes du média sur toute sa durée, chacune posée à l'instant qu'elle
+  montre (au zoom aussi). Les poignées **entrée** et **sortie**
   se glissent pour couper le début et la fin ; les fondus se voient en voile sur la frise.
   Pendant le glissement, l'aperçu montre l'image exacte à cet endroit.
 - **Aperçu** : la même navigation que l'aperçu du cue en attente, avec **[ Entrée ici** et
   **Sortie ici ]**, pour caler un point à l'image près. Au clavier (hors saisie de texte) :
   **← / →** image par image, **Maj + ← / →** une seconde, **K** lecture / pause, **I** pose
-  l'entrée et **O** la sortie sur l'image affichée.
+  l'entrée et **O** la sortie sur l'image affichée. Frise, aperçu et points sont dans le volet
+  **Points d'entrée et de sortie**, fermé au départ ; les raccourcis marchent volet replié.
+- **Points** : entrée, sortie, boucle et fondus en timecode HH:MM:SS:II (image calée sur la
+  cadence du fichier). On peut aussi taper MM:SS ou des secondes, puis Entrée.
 - **Égaliseur** : coupe-bas (12 ou 24 dB/oct), grave, deux bandes en cloche, aigu, comme dans
   JingleStar. La forme d'onde du son s'affiche derrière la courbe.
 - Si le cue est à l'antenne, volume, égaliseur, fondus, boucle et rotation changent tout de
