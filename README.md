@@ -24,7 +24,7 @@ identiques sous Windows, macOS et Linux.
 - **Multiplateforme** : Windows, macOS (Intel et Apple Silicon) et Linux.
 - **Gratuit et ouvert** : code source public, licence MIT.
 - **Pilotable** : OSC avec OSCQuery, MIDI, consoles Yamaha (QL, CL, TF…) et Midas M32 /
-  Behringer X32, Bitfocus Companion et Stream Deck.
+  Behringer X32, Bitfocus Companion et Stream Deck ([voir plus bas](#stream-deck-bitfocus-companion)).
 - **Sans perte de travail** : la session est gardée automatiquement et se retrouve au
   lancement suivant.
 
@@ -152,6 +152,28 @@ Rendre l'AppImage exécutable puis la lancer :
 chmod +x MediaStar-*-linux-x86_64.AppImage
 ./MediaStar-*-linux-x86_64.AppImage
 ```
+
+## Stream Deck (Bitfocus Companion)
+
+JingleStar et CueStar se pilotent depuis un Stream Deck grâce au module MediaStar pour
+[Bitfocus Companion](https://bitfocus.io/companion) : boutons qui lancent les jingles, la
+playlist ou le GO, et qui affichent l'état (couleur du jingle, nom et temps restant, cue en
+attente, noir…).
+
+1. Sur la page [Releases](https://github.com/acetayls/MediaStar/releases), dans la release
+   MediaStar, télécharger `MediaStar-Companion-<version>.tgz`.
+2. Dans Companion (version 4), page **Modules** : **Import module package**, puis choisir le
+   `.tgz`.
+3. Page **Connections** : ajouter **MediaStar**, choisir l'appli (JingleStar ou CueStar) et
+   l'adresse IP du PC où elle tourne (`127.0.0.1` si c'est le même PC). Une connexion pilote une
+   appli : en ajouter une deuxième pour l'autre appli ou pour un autre PC.
+4. Dans l'appli, ouvrir les **Télécommandes**, onglet **OSC**, et vérifier que l'OSC et
+   **OSCQuery** sont activés (OSCQuery donne l'état affiché sur les boutons), puis
+   **Appliquer**. Si Companion tourne sur un autre PC, l'accès doit être sur **Réseau**.
+5. Glisser les boutons tout prêts (presets : grille de jingles, transport de la playlist, GO)
+   sur les touches du Stream Deck.
+
+Ports par défaut : JingleStar 8000 (OSC) et 8001 (OSCQuery), CueStar 9000 et 9001.
 
 ## Pour les développeurs
 

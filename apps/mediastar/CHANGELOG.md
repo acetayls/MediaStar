@@ -8,6 +8,10 @@
   et EM 2000/2050, Shure Axient Digital AD4D et AD4Q, à ajouter dans **Paramètres → Micros HF**.
   Essai sans matériel : `mediastar --old --simulateur-micros`.
 
+- **Module Stream Deck (Bitfocus Companion)** joint à la release : `MediaStar-Companion-<version>.tgz`,
+  à importer dans Companion pour piloter JingleStar et CueStar depuis un Stream Deck (marche à
+  suivre dans le README du dépôt).
+
 ## 0.0.1 — 12/11/2026
 
 - **Nouvel exécutable MediaStar** : il regroupe JingleStar, CueStar, OldStar et SweepStar. Chaque module
