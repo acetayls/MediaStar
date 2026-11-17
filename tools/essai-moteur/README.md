@@ -22,7 +22,7 @@ son coupé. Ne pas toucher au clavier ni à la souris pendant l'essai, une dizai
 Options de `recette.py` :
 
 - `--seulement fondus,boucle` : seulement les essais dont le nom contient un de ces mots
-  (`lecture`, `derniere_image`, `points`, `fondus`, `transitions`, `preparation`, `boucle`,
+  (`lecture`, `derniere_image`, `points`, `fondus`, `transitions`, `transitions_formes` (pousser, volet, fondu par le blanc ; affichage composé seulement), `preparation`, `boucle`,
   `rotation`, `pause`, `image_son`, `illisibles`, `navigation`, `rafales`, `mires`, `fermeture`) ;
 - `--secours` : essaie l'affichage de secours (mpv seul dans la fenêtre) au lieu de l'affichage
   composé, grâce à la variable `CUESTAR_SECOURS=1` que le moteur reconnaît ;

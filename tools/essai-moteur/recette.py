@@ -211,6 +211,39 @@ class Recette:
         v = self.a_l_ecran(0.3)
         self.verifier("fondu enchaîné : arrivée sur le nouveau cue", v is not None and v.id == "rouge", f"repère {v.id if v else None}")
 
+    def e_transitions_formes(self):
+        self.titre("Transitions pousser, volet, couleur (affichage composé)")
+        m = self.m
+        if self.secours:
+            return self.note("affichage de secours : ces transitions passent par le noir, sauté")
+        if not (self.med("a_h264_1080p30.mp4") and self.med("b_h264_1080p25.mp4")):
+            return self.note("médias absents : sauté")
+        # Le repère de couleur est lu en haut à gauche de l'image.
+        def passe(nom, kind, attendu_milieu, depart, arrivee, **reglages):
+            self.jouer(depart, garder=True)
+            time.sleep(1.5)
+            t = m.envoyer({"Load": {"path": self.med(arrivee), "paused": False, "looping": False, "hold": True,
+                                    "transition": dict({"kind": kind, "secs": 2.0}, **reglages), "clip": {}, "signal_end": False}})
+            time.sleep(3.5)
+            vues = m.vues(t, t + 3.5)
+            on = m.attendre("OnScreen", 0.1, depuis=t)
+            t0 = on[0] if on else t + 0.4
+            milieu = [v for v in vues if 0.7 < v.t - t0 < 1.3]
+            if milieu:
+                self.verifier(f"{nom} : au milieu", attendu_milieu(milieu), f"repères {[v.id for v in milieu[::max(1, len(milieu) // 5)]]}, luminosité max {max(v.lum for v in milieu):.0f}")
+            fin = self.a_l_ecran(0.3)
+            return fin
+        a, b = "a_h264_1080p30.mp4", "b_h264_1080p25.mp4"
+        # Pousser vers la droite : la nouvelle image entre par la gauche, le coin haut gauche passe vite au vert.
+        v = passe("pousser vers la droite", "Push", lambda vs: any(x.id == "vert" for x in vs), a, b, direction="Right")
+        self.verifier("pousser : arrivée sur le nouveau cue", v is not None and v.id == "vert", f"repère {v.id if v else None}")
+        # Volet vers la gauche : le bord part de la droite, le coin haut gauche garde l'ancienne image (vert) jusqu'au bout.
+        v = passe("volet vers la gauche", "Wipe", lambda vs: all(x.id == "vert" for x in vs), b, a, direction="Left")
+        self.verifier("volet : arrivée sur le nouveau cue", v is not None and v.id == "rouge", f"repère {v.id if v else None}")
+        # Fondu par le blanc : l'image passe presque au blanc au milieu.
+        v = passe("fondu par le blanc", "Dip", lambda vs: max(x.lum for x in vs) > 200, a, b)
+        self.verifier("fondu par le blanc : arrivée sur le nouveau cue", v is not None and v.id == "vert", f"repère {v.id if v else None}")
+
     def e_preparation(self):
         self.titre("Cue préparé : délai du GO")
         m = self.m
@@ -440,7 +473,7 @@ class Recette:
             self.verifier("le moteur se ferme si la régie disparaît", False, "toujours en marche après 6 s")
 
 
-ESSAIS = ["lecture", "derniere_image", "points", "fondus", "transitions", "preparation", "boucle", "rotation", "pause", "image_son", "illisibles", "navigation", "rafales", "mires", "fermeture"]
+ESSAIS = ["lecture", "derniere_image", "points", "fondus", "transitions", "transitions_formes", "preparation", "boucle", "rotation", "pause", "image_son", "illisibles", "navigation", "rafales", "mires", "fermeture"]
 
 
 def main():
