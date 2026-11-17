@@ -2,7 +2,7 @@
 //! enregistrement sûr (fichier temporaire forcé sur le disque puis renommé), session
 //! restaurée au lancement avec copie de secours, copies datées, projet déplacé retrouvé.
 
-use crate::protocol::{Clip, Fit};
+use crate::protocol::{Clip, Fit, Transition, TransitionKind};
 use serde::{Deserialize, Serialize};
 use star_core::document::{self, Document};
 use std::path::{Path, PathBuf};
@@ -19,6 +19,9 @@ pub struct Project {
     pub lecteur: LecteurData,
     pub diaporama: DiaporamaData,
     pub cuelist: CuelistData,
+    /// Réglages du module Présentation (transition entre pages, noir à la fin).
+    #[serde(skip_serializing_if = "PresentationData::is_default")]
+    pub presentation: PresentationData,
     /// Module Texte : la conduite écrite (balisage léger de JingleStar).
     pub notes: String,
 }
@@ -99,21 +102,51 @@ pub struct DiaporamaData {
     pub photo_seconds: f64,
     pub fit: Fit,
     pub video_sound: bool,
-    /// Fondu enchaîné entre photos, en secondes (0 : coupe).
-    #[serde(skip_serializing_if = "is_zero")]
+    /// Passage d'un média au suivant.
+    #[serde(skip_serializing_if = "is_default_transition")]
+    pub transition: Transition,
+    /// Ancien réglage (0.0.1) : fondu enchaîné entre photos, en secondes (0 : coupe).
+    /// Relu seulement : devient `transition` à l'ouverture (voir `Project::sanitize`).
+    #[serde(skip_serializing)]
     pub fade: f64,
     /// Liste des médias affichée en vignettes plutôt qu'en lignes.
     #[serde(skip_serializing_if = "std::ops::Not::not")]
     pub thumbnails: bool,
 }
 
-fn is_zero(v: &f64) -> bool {
-    *v == 0.0
+fn is_default_transition(t: &Transition) -> bool {
+    *t == Transition::default()
 }
+
+/// Réglages du module Présentation enregistrés dans le projet (le PDF, lui, ne l'est pas).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct PresentationData {
+    /// Passage d'une page à la suivante.
+    pub transition: Transition,
+    /// Après la dernière page, « suivante » passe au noir (avec la transition) au lieu de
+    /// rester sur la dernière page.
+    pub end_black: bool,
+}
+
+impl Default for PresentationData {
+    fn default() -> Self {
+        Self { transition: Transition::new(TransitionKind::Cut, 0.5), end_black: false }
+    }
+}
+
+impl PresentationData {
+    fn is_default(&self) -> bool {
+        *self == Self::default()
+    }
+}
+
+/// Durée maximale d'une transition (s).
+pub const TRANSITION_MAX_SECS: f64 = 10.0;
 
 impl Default for DiaporamaData {
     fn default() -> Self {
-        Self { folder: None, extra: Vec::new(), recursive: true, shuffle: false, looping: true, photo_seconds: 5.0, fit: Fit::Auto, video_sound: false, fade: 0.0, thumbnails: false }
+        Self { folder: None, extra: Vec::new(), recursive: true, shuffle: false, looping: true, photo_seconds: 5.0, fit: Fit::Auto, video_sound: false, transition: Transition::default(), fade: 0.0, thumbnails: false }
     }
 }
 
@@ -131,6 +164,16 @@ impl Project {
     pub fn sanitize(&mut self) {
         let d = &mut self.diaporama;
         d.photo_seconds = if d.photo_seconds.is_finite() { d.photo_seconds.clamp(0.5, 3600.0) } else { 5.0 };
+        // Projet 0.0.1 : l'ancien « fondu entre photos » devient un fondu enchaîné de même durée.
+        if d.fade.is_finite() && d.fade > 0.0 && d.transition == Transition::default() {
+            d.transition = Transition::new(TransitionKind::Crossfade, d.fade);
+        }
+        d.fade = 0.0;
+        d.transition.sanitize(TRANSITION_MAX_SECS);
+        self.presentation.transition.sanitize(TRANSITION_MAX_SECS);
+        for c in self.cuelist.cues.iter_mut() {
+            c.transition.sanitize(TRANSITION_MAX_SECS);
+        }
         for c in self.lecteur.items.iter_mut().map(|i| &mut i.clip).chain(self.cuelist.cues.iter_mut().map(|c| &mut c.clip)) {
             c.sanitize();
         }
@@ -216,7 +259,6 @@ mod golden {
     //! toujours se relire et se réécrire à l'identique (format stable).
     //! `STAR_UPDATE_FIXTURES=1 cargo test` les régénère : seulement pour un changement voulu.
     use super::*;
-    use crate::protocol::{Transition, TransitionKind};
     use crate::remote::{ActionKind, ConsoleSettings, M32Settings, Mapping, MidiSettings, RemoteSettings, Trigger};
 
     fn check(name: &str, value: serde_json::Value) {
@@ -240,7 +282,7 @@ mod golden {
 
     /// Projet de la 0.0.1, d'avant l'éditeur d'élément.
     fn project_0_0_1() -> Project {
-        let fade = Transition { kind: TransitionKind::Crossfade, secs: 2.0 };
+        let fade = Transition::new(TransitionKind::Crossfade, 2.0);
         Project {
             name: "Gala".into(),
             lecteur: LecteurData {
@@ -249,14 +291,15 @@ mod golden {
                 shuffle: true,
                 transition: fade,
             },
-            diaporama: DiaporamaData { folder: Some("/photos".into()), extra: Vec::new(), recursive: false, shuffle: true, looping: false, photo_seconds: 7.5, fit: Fit::Cover, video_sound: true, fade: 0.0, thumbnails: false },
+            diaporama: DiaporamaData { folder: Some("/photos".into()), extra: Vec::new(), recursive: false, shuffle: true, looping: false, photo_seconds: 7.5, fit: Fit::Cover, video_sound: true, transition: Transition::default(), fade: 0.0, thumbnails: false },
             cuelist: CuelistData {
                 cues: vec![
                     CueData { name: "Ouverture".into(), path: Some("/v/ouverture.mov".into()), clip: looped(false), transition: fade, follow: CueFollow::Continue, end_black: false, comment: String::new() },
-                    CueData { name: "Noir".into(), path: None, clip: looped(true), transition: Transition { kind: TransitionKind::Black, secs: 1.0 }, follow: CueFollow::Stop, end_black: false, comment: String::new() },
+                    CueData { name: "Noir".into(), path: None, clip: looped(true), transition: Transition::new(TransitionKind::Black, 1.0), follow: CueFollow::Stop, end_black: false, comment: String::new() },
                 ],
                 loop_all: false,
             },
+            presentation: PresentationData::default(),
             notes: "**Acte 1**\nTop vidéo".into(),
         }
     }
@@ -288,6 +331,34 @@ mod golden {
         check("projet-0.0.2.cuestar", serde_json::to_value(&p).unwrap());
         let back = Project::load(&Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/projet-0.0.2.cuestar")).unwrap();
         assert_eq!(back, p);
+    }
+
+    /// Lot 2 (0.0.2) : transitions du Diaporama et de la Présentation. L'ancien `fade` en
+    /// secondes d'un projet 0.0.1 devient un fondu enchaîné de même durée.
+    #[test]
+    fn old_slideshow_fade_becomes_crossfade() {
+        let dir = std::env::temp_dir().join(format!("cuestar-fade-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let f = dir.join("p.cuestar");
+        std::fs::write(&f, r#"{"name":"x","diaporama":{"photo_seconds":6.0,"fade":1.5}}"#).unwrap();
+        let p = Project::load(&f).unwrap();
+        assert_eq!(p.diaporama.transition, Transition::new(TransitionKind::Crossfade, 1.5));
+        assert_eq!(p.diaporama.fade, 0.0);
+        // Réécrit sans l'ancien champ, relu à l'identique.
+        p.save(&f).unwrap();
+        let text = std::fs::read_to_string(&f).unwrap();
+        assert!(!text.contains("\"fade\""), "{text}");
+        assert_eq!(Project::load(&f).unwrap(), p);
+        // Fondu à 0 (coupe) : transition par défaut.
+        std::fs::write(&f, r#"{"diaporama":{"fade":0.0}}"#).unwrap();
+        assert_eq!(Project::load(&f).unwrap().diaporama.transition, Transition::default());
+        // Nouvelles transitions et Présentation : relues à l'identique.
+        let mut p = p;
+        p.diaporama.transition = Transition { kind: TransitionKind::Push, secs: 0.8, direction: crate::protocol::Direction::Up, color: [255, 255, 255] };
+        p.presentation = PresentationData { transition: Transition { kind: TransitionKind::Dip, secs: 1.2, direction: Default::default(), color: [0, 0, 128] }, end_black: true };
+        p.save(&f).unwrap();
+        assert_eq!(Project::load(&f).unwrap(), p);
+        let _ = std::fs::remove_dir_all(dir);
     }
 
     #[test]

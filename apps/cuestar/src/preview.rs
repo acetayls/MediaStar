@@ -55,6 +55,12 @@ pub enum PreviewCmd {
         path: String,
         count: usize,
     },
+    /// Images exactes aux instants `times` (s), pour la frise zoomée : une demande remplace la
+    /// précédente pas encore servie. Servie après la frise entière si elle est en cours.
+    Frames {
+        path: String,
+        times: Vec<f64>,
+    },
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -80,10 +86,16 @@ pub enum PreviewEvent {
         seq: u64,
     },
     StripInfo { path: String, duration: f64, count: usize },
+    /// Les images de détail qui suivent (`FRAME_AT`) sont celles de ce fichier.
+    FramesFor { path: String },
     Error { message: String },
 }
 
-/// Image envoyée : 0 = aperçu, 1 + i = vignette n° i de la frise.
+/// Étiquette d'une image de détail : `FRAME_AT | millisecondes` de son instant.
+const FRAME_AT: u32 = 0x8000_0000;
+
+/// Image envoyée : 0 = aperçu, 1 + i = vignette n° i de la frise, `FRAME_AT | ms` = image de
+/// détail de la frise zoomée.
 struct FrameMsg {
     tag: u32,
     w: u32,
@@ -254,6 +266,8 @@ impl Drop for SwPlayer {
 struct StripJob {
     path: String,
     count: usize,
+    /// Instants demandés (frise zoomée) ; vide : `count` vignettes réparties sur la durée.
+    times: Vec<f64>,
     next: usize,
     duration: f64,
     /// Attente de l'image demandée (saut lancé à cet instant).
@@ -288,6 +302,10 @@ pub fn run() {
 
     let mut current: Option<String> = None;
     let mut job: Option<StripJob> = None;
+    // Demande d'images de détail arrivée pendant la frise entière, et fichier ouvert sur le
+    // lecteur de la frise (gardé ouvert pour servir le détail sans le rouvrir).
+    let mut queued: Option<StripJob> = None;
+    let mut strip_open: Option<(String, f64)> = None;
     let mut last_pos = Instant::now();
     let mut sent_pos: Option<(f64, bool, u64)> = None;
     // Demandes servies : les positions envoyées portent le numéro de la dernière, et la régie
@@ -332,11 +350,27 @@ pub fn run() {
                     steps.push_back((back, seq));
                 }
                 PreviewCmd::Strip { path, count } => {
+                    queued = None;
+                    strip_open = None;
                     if let Some(s) = &strip {
                         let _ = s.m.set_property("start", "0");
                         if s.m.command(&["loadfile", &path, "replace"]).is_ok() {
-                            job = Some(StripJob { path, count: count.clamp(1, 200), next: 0, duration: 0.0, waiting: None, loaded: false });
+                            job = Some(StripJob { path, count: count.clamp(1, 200), times: Vec::new(), next: 0, duration: 0.0, waiting: None, loaded: false });
                         }
+                    }
+                }
+                PreviewCmd::Frames { path, mut times } => {
+                    times.truncate(200);
+                    let j = StripJob { path, count: times.len(), times, next: 0, duration: 0.0, waiting: None, loaded: false };
+                    if j.times.is_empty() {
+                        if job.as_ref().is_some_and(|j| !j.times.is_empty()) {
+                            job = None;
+                        }
+                        queued = None;
+                    } else if job.as_ref().is_some_and(|j| j.times.is_empty()) {
+                        queued = Some(j);
+                    } else if let Some(s) = &strip {
+                        job = start_frames(s, j, &mut strip_open);
                     }
                 }
             },
@@ -398,7 +432,10 @@ pub fn run() {
             if loaded {
                 j.loaded = true;
                 j.duration = s.get_f64("duration").unwrap_or(0.0);
-                send_event(&PreviewEvent::StripInfo { path: j.path.clone(), duration: j.duration, count: j.count });
+                strip_open = Some((j.path.clone(), j.duration));
+                if j.times.is_empty() {
+                    send_event(&PreviewEvent::StripInfo { path: j.path.clone(), duration: j.duration, count: j.count });
+                }
             }
             if !j.loaded {
                 continue;
@@ -407,7 +444,10 @@ pub fn run() {
                 None => {
                     // Vignette n° i : l'image exacte à i × durée / nombre, là où la frise la
                     // dessine (son bord gauche tombe sur cet instant).
-                    let t = j.next as f64 * j.duration / j.count as f64;
+                    let t = match j.times.get(j.next) {
+                        Some(t) => t.clamp(0.0, j.duration.max(0.0)),
+                        None => j.next as f64 * j.duration / j.count as f64,
+                    };
                     s.dirty.store(false, Ordering::Release);
                     let _ = s.m.command(&["seek", &format!("{t:.3}"), "absolute+exact"]);
                     j.waiting = Some(Instant::now());
@@ -417,19 +457,41 @@ pub fn run() {
                     let late = since.elapsed() > Duration::from_secs(3);
                     if frame.is_some() || late {
                         if let Some((w, h, rgba)) = frame.or_else(|| if late { s.render(STRIP_W) } else { None }) {
-                            send_frame(&FrameMsg { tag: 1 + j.next as u32, w, h, rgba });
+                            let tag = match j.times.get(j.next) {
+                                Some(t) => FRAME_AT | ((t * 1000.0).round().clamp(0.0, (FRAME_AT - 1) as f64) as u32),
+                                None => 1 + j.next as u32,
+                            };
+                            send_frame(&FrameMsg { tag, w, h, rgba });
                         }
                         j.next += 1;
                         j.waiting = None;
                         if j.next >= j.count || j.duration <= 0.0 {
-                            let _ = s.m.command(&["stop"]);
-                            job = None;
+                            // Le fichier reste ouvert : les images de détail en ont besoin.
+                            job = queued.take().and_then(|q| start_frames(s, q, &mut strip_open));
                         }
                     }
                 }
             }
         }
     }
+}
+
+/// Lance une demande d'images de détail sur le lecteur de la frise (le fichier n'est rouvert
+/// que s'il a changé).
+fn start_frames(s: &SwPlayer, mut j: StripJob, open: &mut Option<(String, f64)>) -> Option<StripJob> {
+    send_event(&PreviewEvent::FramesFor { path: j.path.clone() });
+    match open {
+        Some((p, d)) if *p == j.path => {
+            j.loaded = true;
+            j.duration = *d;
+        }
+        _ => {
+            *open = None;
+            let _ = s.m.set_property("start", "0");
+            s.m.command(&["loadfile", &j.path, "replace"]).ok()?;
+        }
+    }
+    Some(j)
 }
 
 // --- Côté régie -------------------------------------------------------------------------------
@@ -448,6 +510,9 @@ struct Shared {
     live: Pixels,
     strip: Vec<Option<Pixels>>,
     strip_serial: u64,
+    /// Fichier des images de détail qui arrivent, et images arrivées (fichier, ms, pixels).
+    detail_path: Option<String>,
+    detail: Vec<(String, u32, Pixels)>,
     events: Vec<PreviewEvent>,
 }
 
@@ -481,6 +546,11 @@ pub struct Preview {
     live_tex: Option<(egui::TextureHandle, u64)>,
     strip_tex: Vec<Option<egui::TextureHandle>>,
     strip_seen: u64,
+    /// Images de détail de la frise zoomée : fichier, images reçues (instant en ms), dernière
+    /// demande envoyée.
+    detail_for: Option<PathBuf>,
+    detail_tex: std::collections::HashMap<u32, egui::TextureHandle>,
+    detail_asked: Vec<u32>,
     started: bool,
     /// Dernière demande de déplacement envoyée (pour ne pas inonder le processus).
     last_seek: Option<(f64, bool)>,
@@ -501,6 +571,9 @@ impl Default for Preview {
             live_tex: None,
             strip_tex: Vec::new(),
             strip_seen: 0,
+            detail_for: None,
+            detail_tex: Default::default(),
+            detail_asked: Vec::new(),
             started: false,
             last_seek: None,
             pending_exact: None,
@@ -551,6 +624,9 @@ impl Preview {
                         let mut s = shared.lock().unwrap_or_else(|e| e.into_inner());
                         if kind == 0 {
                             if let Ok(ev) = serde_json::from_slice::<PreviewEvent>(&buf) {
+                                if let PreviewEvent::FramesFor { path } = &ev {
+                                    s.detail_path = Some(path.clone());
+                                }
                                 s.events.push(ev);
                             }
                         } else if buf.len() >= 12 {
@@ -561,6 +637,10 @@ impl Preview {
                                 if tag == 0 {
                                     let serial = s.live.serial + 1;
                                     s.live = Pixels { serial, ..px };
+                                } else if tag as u32 & FRAME_AT != 0 {
+                                    if let Some(p) = s.detail_path.clone() {
+                                        s.detail.push((p, tag as u32 & !FRAME_AT, px));
+                                    }
                                 } else {
                                     let i = tag - 1;
                                     if s.strip.len() <= i {
@@ -624,6 +704,7 @@ impl Preview {
                     self.state.paused = paused;
                 }
                 PreviewEvent::StripInfo { path, duration, count } => self.state.strip = Some((PathBuf::from(path), duration, count)),
+                PreviewEvent::FramesFor { .. } => {}
                 PreviewEvent::Error { message } => self.state.error = Some(message),
             }
         }
@@ -726,6 +807,45 @@ impl Preview {
         self.live_tex.as_ref().map(|(t, _)| t)
     }
 
+    /// Demande les images exactes de `path` aux instants `times` (frise zoomée) ; seules celles
+    /// qui manquent partent, et une demande identique à la précédente n'est pas renvoyée.
+    pub fn request_frames(&mut self, ctx: &egui::Context, path: &Path, times: &[f64]) {
+        if self.detail_for.as_deref() != Some(path) {
+            self.detail_for = Some(path.to_path_buf());
+            self.detail_tex.clear();
+            self.detail_asked.clear();
+        }
+        let missing: Vec<u32> = times.iter().map(|t| ms(*t)).filter(|m| !self.detail_tex.contains_key(m)).collect();
+        if missing == self.detail_asked {
+            return;
+        }
+        self.detail_asked = missing.clone();
+        self.send(ctx, PreviewCmd::Frames { path: path.to_string_lossy().into_owned(), times: missing.iter().map(|m| *m as f64 / 1000.0).collect() });
+    }
+
+    /// Images de détail de `path` reçues jusqu'ici, par instant (ms, voir `ms`).
+    pub fn detail_textures(&mut self, ctx: &egui::Context, path: &Path) -> &std::collections::HashMap<u32, egui::TextureHandle> {
+        let new = std::mem::take(&mut self.shared.lock().unwrap_or_else(|e| e.into_inner()).detail);
+        if self.detail_for.as_deref() != Some(path) {
+            self.detail_for = Some(path.to_path_buf());
+            self.detail_tex.clear();
+            self.detail_asked.clear();
+        }
+        let want = path.to_string_lossy();
+        for (p, at, px) in new {
+            if p == want {
+                // Mémoire bornée : au-delà, on repart de zéro (les images visibles reviennent).
+                if self.detail_tex.len() >= 400 {
+                    self.detail_tex.clear();
+                    self.detail_asked.clear();
+                }
+                let img = egui::ColorImage::from_rgba_unmultiplied([px.w, px.h], &px.rgba);
+                self.detail_tex.insert(at, ctx.load_texture(format!("detail-{at}"), img, egui::TextureOptions::LINEAR));
+            }
+        }
+        &self.detail_tex
+    }
+
     /// Vignettes de la frise reçues jusqu'ici (None : pas encore arrivée).
     pub fn strip_textures(&mut self, ctx: &egui::Context) -> &[Option<egui::TextureHandle>] {
         let s = self.shared.lock().unwrap_or_else(|e| e.into_inner());
@@ -741,6 +861,11 @@ impl Preview {
         }
         &self.strip_tex
     }
+}
+
+/// Instant en millisecondes, clé des images de détail.
+pub fn ms(t: f64) -> u32 {
+    (t.max(0.0) * 1000.0).round().min((FRAME_AT - 1) as f64) as u32
 }
 
 impl Drop for Preview {

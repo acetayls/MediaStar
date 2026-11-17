@@ -100,6 +100,8 @@ uniform vec4 h1;
 uniform vec4 h2;
 uniform vec4 misc;
 uniform vec4 wx[13];
+uniform vec4 fx;
+uniform vec4 fxc;
 ";
 
 const FRAG_MAIN: &str = "
@@ -108,10 +110,13 @@ void main() {
     float w = h2.x * p.x + h2.y * p.y + h2.z;
     vec2 t = winv(p, vec2(h0.x * p.x + h0.y * p.y + h0.z, h1.x * p.x + h1.y * p.y + h1.z) / w);
     float cov = wcover(p, t, w);
-    vec2 q = clamp(t, 0.0, 1.0);
-    vec3 a = texture(tex0, q).rgb * misc.z;
-    vec3 b = texture(tex1, q).rgb * misc.w;
-    vec3 col = cov > 0.0 ? mix(a, b, misc.x) * misc.y * cov : vec3(0.0, 0.0, 0.0);
+    bool in1 = fx.w > 0.5;
+    float pr = in1 ? misc.x : 1.0 - misc.x;
+    vec4 q = tcoords(t, pr);
+    vec3 c0 = texture(tex0, clamp(in1 ? q.xy : q.zw, 0.0, 1.0)).rgb * misc.z;
+    vec3 c1 = texture(tex1, clamp(in1 ? q.zw : q.xy, 0.0, 1.0)).rgb * misc.w;
+    vec3 mixed = in1 ? tcombine(t, pr, q, c0, c1) : tcombine(t, pr, q, c1, c0);
+    vec3 col = cov > 0.0 ? mixed * misc.y * cov : vec3(0.0, 0.0, 0.0);
     vec4 gd = wguides(p, t, cov);
     color = vec4(mix(col, gd.rgb, gd.a), 1.0);
 }
@@ -179,7 +184,7 @@ struct Gl {
     targets: Vec<Fb>,
     program: u32,
     vao: u32,
-    loc: [i32; 7],
+    loc: [i32; 9],
     thumb: (Fb, u32, u32),
     /// Lectures de vignettes en cours : (tampon, attente GPU).
     pbos: Vec<(u32, Option<gl::types::GLsync>)>,
@@ -229,7 +234,7 @@ unsafe fn setup(shared: &Arc<Shared>, parts: GlParts, links: &[(Handle, RenderAp
         }
 
         let vs = shader(gl::VERTEX_SHADER, VERT)?;
-        let fs = shader(gl::FRAGMENT_SHADER, &format!("{FRAG}{}{FRAG_MAIN}", super::warp::glsl_core()))?;
+        let fs = shader(gl::FRAGMENT_SHADER, &format!("{FRAG}{}{}{FRAG_MAIN}", super::warp::glsl_core(), super::warp::glsl_transitions()))?;
         let program = gl::CreateProgram();
         gl::AttachShader(program, vs);
         gl::AttachShader(program, fs);
@@ -242,7 +247,7 @@ unsafe fn setup(shared: &Arc<Shared>, parts: GlParts, links: &[(Handle, RenderAp
         if ok == 0 {
             return Err("programme OpenGL : édition de liens impossible".into());
         }
-        let loc = ["tex0", "tex1", "h0", "h1", "h2", "misc", "wx"].map(|n| {
+        let loc = ["tex0", "tex1", "h0", "h1", "h2", "misc", "wx", "fx", "fxc"].map(|n| {
             let c = CString::new(n).unwrap();
             gl::GetUniformLocation(program, c.as_ptr())
         });
@@ -321,6 +326,8 @@ impl Gl {
             }
             gl::Uniform4fv(self.loc[5], 1, p.misc.as_ptr());
             gl::Uniform4fv(self.loc[6], 13, p.wx.as_ptr() as *const f32);
+            gl::Uniform4fv(self.loc[7], 1, p.fx.as_ptr());
+            gl::Uniform4fv(self.loc[8], 1, p.fxc.as_ptr());
             gl::DrawArrays(gl::TRIANGLES, 0, 3);
             gl::BindVertexArray(0);
             gl::ActiveTexture(gl::TEXTURE0);

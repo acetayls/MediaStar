@@ -84,9 +84,31 @@ image : le GO lance alors le cue en attente.
   pendant qu'il joue, le passage en cours va jusqu'au bout, puis le cue enchaîne sur le suivant
   ou s'arrête sur sa dernière image, selon sa flèche.
 - **Boucler la conduite** : après le dernier cue, le premier repart (ou attend le GO).
-- **Transition du cue en attente** : **Coupe**, **Noir** (fondu au noir puis ouverture) ou
-  **Fondu enchaîné**, avec sa durée. Chaque cue garde la sienne ; **À tous** la donne à toute la
+- **Transition du cue en attente** : choisie dans le menu (voir [Transitions](#transitions)),
+  avec sa durée en secondes. Chaque cue garde la sienne ; **À tous** la donne à toute la
   conduite.
+
+### Transitions
+
+Le même menu sert dans la Cuelist, le Diaporama et la Présentation. La durée se règle en
+secondes ; selon le type, on choisit aussi le sens du mouvement ou la couleur.
+
+| Transition | Effet |
+|---|---|
+| **Coupe** | Passage direct au média suivant |
+| **Fondu enchaîné** | Le média suivant apparaît pendant que le précédent disparaît |
+| **Fondu au noir** | Fondu au noir, puis fondu d'ouverture : le média suivant démarre au noir |
+| **Fondu par une couleur** | L'image passe par une couleur (blanc par défaut), puis le suivant en sort |
+| **Pousser** | Le média suivant pousse le précédent hors de l'écran (gauche, droite, haut, bas) |
+| **Couvrir** | Le média suivant glisse par-dessus le précédent |
+| **Découvrir** | Le média précédent glisse hors de l'écran et découvre le suivant |
+| **Volet** | Un bord adouci balaie l'écran, dans le sens choisi |
+| **Iris** | Un cercle s'ouvre depuis le centre |
+| **Zoom** | Le média précédent avance en s'effaçant, le suivant arrive derrière |
+
+Les transitions qui mélangent deux images (toutes sauf Coupe et Fondu au noir) demandent
+l'affichage normal de la sortie ; avec l'affichage de secours (un seul lecteur), elles passent
+par le noir. Le son suit en fondu enchaîné.
 
 ### Aperçu du cue en attente
 
@@ -129,9 +151,12 @@ fenêtre d'un jingle de JingleStar. Les réglages sont enregistrés avec le proj
   seulement (une vidéo tournée en portrait, un écran posé de côté). L'aperçu tourne aussi.
 - **Volume** du son de l'élément, en dB, et lecture **une fois** ou **en boucle**.
 - **Fondus au noir** : durée du fondu d'entrée (depuis le noir) et du fondu de sortie (vers le
-  noir), image et son ensemble.
+  noir), en secondes, image et son ensemble.
 - **Frise** : les vignettes du média sur toute sa durée, chacune posée à l'instant qu'elle
-  montre (au zoom aussi). Les poignées **entrée** et **sortie**
+  montre et dessinée une seule fois. Au zoom avant, comme dans un logiciel de montage, la frise
+  se découpe en cases calées sur les images du film, chacune avec son image exacte (elles
+  arrivent juste après qu'on a fini de zoomer ou de se déplacer) ; tout près, une case par image.
+  Les poignées **entrée** et **sortie**
   se glissent pour couper le début et la fin ; les fondus se voient en voile sur la frise.
   Pendant le glissement, l'aperçu montre l'image exacte à cet endroit.
 - **Aperçu** : la même navigation que l'aperçu du cue en attente, avec **[ Entrée ici** et
@@ -139,8 +164,8 @@ fenêtre d'un jingle de JingleStar. Les réglages sont enregistrés avec le proj
   **← / →** image par image, **Maj + ← / →** une seconde, **K** lecture / pause, **I** pose
   l'entrée et **O** la sortie sur l'image affichée. Frise, aperçu et points sont dans le volet
   **Points d'entrée et de sortie**, fermé au départ ; les raccourcis marchent volet replié.
-- **Points** : entrée, sortie, boucle et fondus en timecode HH:MM:SS:II (image calée sur la
-  cadence du fichier). On peut aussi taper MM:SS ou des secondes, puis Entrée.
+- **Points** : entrée, sortie et boucle en timecode HH:MM:SS:II (image calée sur la
+  cadence du fichier) ; les fondus restent en secondes. On peut aussi taper MM:SS ou des secondes, puis Entrée.
 - **Égaliseur** : coupe-bas (12 ou 24 dB/oct), grave, deux bandes en cloche, aigu, comme dans
   JingleStar. La forme d'onde du son s'affiche derrière la courbe.
 - Si le cue est à l'antenne, volume, égaliseur, fondus, boucle et rotation changent tout de
@@ -178,8 +203,9 @@ Lit un dossier de photos et de vidéos.
 - **Inclure les sous-dossiers**, **Durée des photos**, **Ajustement** (image entière avec bandes
   noires, remplir l'écran en recadrant, ou automatique) et **Vidéos avec le son** (lues en
   entier).
-- **Fondu entre photos** : fondu enchaîné, de la durée choisie, quand une photo laisse la place
-  au média suivant (décoché : coupe). Après une vidéo, le passage reste une coupe.
+- **Transition** : passage d'une photo au média suivant, choisie dans le menu (voir
+  [Transitions](#transitions)), jusqu'à la moitié de la durée des photos. Après une vidéo, le
+  passage reste une coupe. Un projet d'avant (« Fondu entre photos ») garde son fondu enchaîné.
 - **Liste / Vignettes** (au-dessus des médias) : la liste des fichiers, ou leurs vignettes.
   Double-clic sur un média pour y sauter (hors ordre aléatoire).
 - **Espace** lance ou met en pause, **← / →** passent au média précédent / suivant.
@@ -200,7 +226,10 @@ PowerPoint : Fichier > Exporter > PDF) ; les fichiers PowerPoint ne sont plus lu
 - **LANCER** affiche la diapositive sélectionnée, puis **SUIVANTE** (**Espace** ou **→**) et
   **←** passent d'une diapositive à l'autre ; **Aller à** saute à un numéro. La suivante est
   préparée d'avance.
-- **Transition** : **Coupe**, **Noir** (fondu au noir puis d'ouverture) ou **Fondu enchaîné**.
+- **Transition** : passage d'une page à la suivante, choisie dans le menu (voir
+  [Transitions](#transitions)). Elle est enregistrée avec le projet.
+- **Image noire à la fin** : après la dernière diapositive, **SUIVANTE** passe au noir (avec la
+  transition) au lieu de rester sur la dernière page ; **←** y revient.
 - **Échap** met au noir ; **LANCER** réaffiche la diapositive.
 - **B** ou **point** : écran noir, puis retour à la diapositive. **F5** lance depuis la première
   diapositive, **Maj+F5** depuis la diapositive sélectionnée ; **Début** et **Fin** vont à la
@@ -294,7 +323,7 @@ du Diaporama d'origine (`/diaporama/…`) sont aussi acceptées, comme celles de
 | `/cuestar/output/drops/reset` | — | Remet à zéro le compteur d'images perdues et retardées |
 | `/cuestar/cuelist/goto` | int | Lance tout de suite le cue n° |
 | `/cuestar/cuelist/loop` | bool | Boucler la conduite |
-| `/cuestar/cuelist/transition` | `cut`, `black` ou `fade`, puis float (s) | Transition du cue en attente et durée |
+| `/cuestar/cuelist/transition` | `cut`, `fade`, `black`, `dip`, `push`, `cover`, `uncover`, `wipe`, `iris` ou `zoom`, puis float (s) | Transition du cue en attente et durée |
 | `/cuestar/cuelist/go` | — | Lance le cue en attente (ou reprend) |
 | `/cuestar/cuelist/play`, `pause`, `toggle`, `stop` | — | Transport de la Cuelist |
 | `/cuestar/cuelist/next`, `prev` | — | Cue en attente suivant / précédent |
@@ -305,6 +334,7 @@ du Diaporama d'origine (`/diaporama/…`) sont aussi acceptées, comme celles de
 | `/cuestar/diaporama/settings/shuffle`, `loop`, `recursive`, `video_sound` | bool | Réglages du Diaporama |
 | `/cuestar/diaporama/settings/photo_duration` | float (1 à 60 s) | Durée des photos |
 | `/cuestar/diaporama/settings/fit` | `contain`, `cover` ou `auto` | Ajustement |
+| `/cuestar/diaporama/settings/transition` | mêmes noms que `cuelist/transition`, puis float (s) | Transition entre photos et durée |
 | `/cuestar/diaporama/settings/folder` | string | Dossier à lire |
 
 - Les déclencheurs partent sans argument ou avec une valeur non nulle : un bouton qui envoie 1 à

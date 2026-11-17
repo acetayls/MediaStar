@@ -200,7 +200,7 @@ pub fn tree(prefix: &str, snap: &Snapshot) -> Value {
     add("lecteur/goto", idx("Lance l'élément n° i", l.items));
     add("lecteur/shuffle", flag("Ordre aléatoire", l.shuffle));
     add("lecteur/loop", flag("Tout boucler", l.looping));
-    add("lecteur/transition", leaf("sf", ACCESS_WRITE, "Transition (cut, black, fade) et durée", None, None));
+    add("lecteur/transition", leaf("sf", ACCESS_WRITE, "Transition (cut, black, fade, dip, push, cover, uncover, wipe, iris, zoom) et durée", None, None));
     add("lecteur/items", read("i", "Nombre d'éléments", json!(l.items)));
     add("lecteur/playing", read("i", "Élément en cours (0 : aucun)", json!(l.playing)));
     let c = &snap.cuelist;
@@ -212,7 +212,7 @@ pub fn tree(prefix: &str, snap: &Snapshot) -> Value {
     add("cuelist/cues", read("i", "Nombre de cues", json!(c.cues)));
     add("cuelist/goto", idx("Lance tout de suite le cue n° i", c.cues));
     add("cuelist/loop", flag("Boucler la conduite", c.looping));
-    add("cuelist/transition", leaf("sf", ACCESS_WRITE, "Transition du cue en attente (cut, black, fade) et durée", None, None));
+    add("cuelist/transition", leaf("sf", ACCESS_WRITE, "Transition du cue en attente (cut, black, fade, dip, push, cover, uncover, wipe, iris, zoom) et durée", None, None));
     for t in ["play", "pause", "toggle", "stop", "next", "prev"] {
         add(&format!("diaporama/{t}"), trigger_leaf(&format!("Diaporama : {t}")));
     }
@@ -224,6 +224,7 @@ pub fn tree(prefix: &str, snap: &Snapshot) -> Value {
     }
     add("diaporama/settings/photo_duration", leaf("f", ACCESS_WRITE, "Durée des photos (s)", None, Some(json!({ "MIN": 1, "MAX": 60 }))));
     add("diaporama/settings/fit", leaf("s", ACCESS_WRITE, "Ajustement (contain, cover, auto)", None, None));
+    add("diaporama/settings/transition", leaf("sf", ACCESS_WRITE, "Transition entre photos (cut, black, fade, dip, push, cover, uncover, wipe, iris, zoom) et durée", None, None));
     add("diaporama/settings/folder", leaf("s", ACCESS_WRITE, "Dossier à lire", None, None));
     root
 }
@@ -303,13 +304,14 @@ pub const HELP: &[(&str, &str)] = &[
     ("cuelist/standby <i>", "met le cue n° i en attente"),
     ("cuelist/goto <i>", "lance tout de suite le cue n° i"),
     ("cuelist/loop <0|1>", "boucler la conduite"),
-    ("cuelist/transition <cut|black|fade> [s]", "transition du cue en attente et durée"),
+    ("cuelist/transition <cut|black|fade|dip|push|cover|uncover|wipe|iris|zoom> [s]", "transition du cue en attente et durée"),
     ("diaporama/play | pause | toggle | stop", "transport du Diaporama"),
     ("diaporama/next | prev", "média suivant / précédent"),
     ("diaporama/goto <i>", "média n° i (1 = premier)"),
     ("diaporama/settings/shuffle | loop | recursive | video_sound <0|1>", "réglages"),
     ("diaporama/settings/photo_duration <s>", "durée des photos (1 à 60)"),
     ("diaporama/settings/fit <contain|cover|auto>", "ajustement"),
+    ("diaporama/settings/transition <cut|fade|push|…> [s]", "transition entre photos et durée"),
     ("diaporama/settings/folder <chemin>", "dossier à lire"),
 ];
 

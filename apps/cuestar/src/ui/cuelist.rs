@@ -262,7 +262,7 @@ impl Cuelist {
         }
         let Some(c) = self.cues.get(self.standby) else { return };
         let Some(p) = &c.path else { return };
-        let quick = c.transition.kind == TransitionKind::Cut || c.transition.kind == TransitionKind::Crossfade;
+        let quick = c.transition.kind != TransitionKind::Black;
         if !quick || c.clip.sound.fade_in > 0.0 {
             return;
         }
@@ -334,11 +334,8 @@ impl Cuelist {
             // Transition du cue en attente.
             "transition" => {
                 let Some(c) = self.cues.get_mut(self.standby) else { return };
-                match m.text().unwrap_or_default().to_lowercase().as_str() {
-                    "cut" | "coupe" => c.transition.kind = TransitionKind::Cut,
-                    "black" | "noir" => c.transition.kind = TransitionKind::Black,
-                    "fade" | "crossfade" | "fondu" => c.transition.kind = TransitionKind::Crossfade,
-                    _ => {}
+                if let Some(k) = m.text().and_then(|t| TransitionKind::from_name(&t)) {
+                    c.transition.kind = k;
                 }
                 if let Some(rosc::OscType::Float(s)) = m.args.get(1) {
                     c.transition.secs = (*s as f64).clamp(0.1, 10.0);
@@ -674,20 +671,14 @@ impl Cuelist {
                     Some(c) => {
                         ui.label(RichText::new(format!("Entrée du cue {}", standby + 1)).color(TEXT_DIM))
                             .on_hover_text("Transition jouée au lancement de ce cue (le cue en attente). Chaque cue garde la sienne : après le GO, ces boutons règlent le cue suivant.");
-                        ui.radio_value(&mut c.transition.kind, TransitionKind::Cut, "Coupe").on_hover_text("Passage direct au média suivant");
-                        ui.radio_value(&mut c.transition.kind, TransitionKind::Black, "Noir").on_hover_text("Fondu au noir, puis fondu d'ouverture");
-                        ui.radio_value(&mut c.transition.kind, TransitionKind::Crossfade, "Fondu enchaîné")
-                            .on_hover_text("Fondu enchaîné : le média suivant apparaît pendant que le précédent disparaît");
-                        if c.transition.kind != TransitionKind::Cut {
-                            ui.add(egui::DragValue::new(&mut c.transition.secs).range(0.1..=10.0).speed(0.05).suffix(" s").max_decimals(1));
-                        }
+                        super::transition::picker(ui, "cue-standby", &mut c.transition, crate::project::TRANSITION_MAX_SECS);
                         if ui.small_button("À tous").on_hover_text("Donner cette transition à tous les cues de la conduite").clicked() {
                             to_all = Some(c.transition);
                         }
                         // Le fondu d'entrée réglé dans le cue l'emporte : il part toujours du noir.
                         if c.clip.sound.fade_in > 0.0 && c.path.is_some() {
                             ui.label(RichText::new(format!("(fondu d'entrée du cue {:.1} s : part du noir)", c.clip.sound.fade_in)).small().color(METER_MID))
-                                .on_hover_text("Ce cue a un fondu d'entrée (Réglages du cue) : il part du noir quelle que soit la transition choisie ici. Mettez son fondu d'entrée à 0 pour utiliser Coupe ou Fondu enchaîné.");
+                                .on_hover_text("Ce cue a un fondu d'entrée (Réglages du cue) : il part du noir quelle que soit la transition choisie ici. Mettez son fondu d'entrée à 0 pour utiliser la transition choisie ici.");
                         }
                     }
                     None => {
@@ -847,7 +838,7 @@ impl Cuelist {
                 }
                 right = lr.left() - 6.0;
                 if c.transition.kind != TransitionKind::Cut {
-                    let txt = format!("{} {:.1} s", if c.transition.kind == TransitionKind::Crossfade { "Fondu" } else { "Noir" }, c.transition.secs);
+                    let txt = c.transition.short_label();
                     let g = p.layout_no_wrap(txt, FontId::proportional(11.0), TEXT_DIM);
                     p.galley(pos2(right - g.size().x, rect.center().y - g.size().y / 2.0), g.clone(), TEXT_DIM);
                     right -= g.size().x + 8.0;
@@ -1098,14 +1089,7 @@ impl Cuelist {
                 });
                 ui.end_row();
                 ui.label("Transition d'entrée").on_hover_text("Jouée au lancement de ce cue");
-                ui.horizontal(|ui| {
-                    ui.radio_value(&mut c.transition.kind, TransitionKind::Cut, "Coupe");
-                    ui.radio_value(&mut c.transition.kind, TransitionKind::Black, "Noir");
-                    ui.radio_value(&mut c.transition.kind, TransitionKind::Crossfade, "Fondu enchaîné").on_hover_text("Fondu enchaîné : le média suivant apparaît pendant que le précédent disparaît");
-                    if c.transition.kind != TransitionKind::Cut {
-                        ui.add(egui::DragValue::new(&mut c.transition.secs).range(0.1..=10.0).speed(0.05).suffix(" s").max_decimals(1));
-                    }
-                });
+                super::transition::picker(ui, ("cue-edit", i), &mut c.transition, crate::project::TRANSITION_MAX_SECS);
                 ui.end_row();
                 if c.path.as_deref().is_some_and(|p| !super::media_editor::is_image(p)) {
                     ui.label(tr("Lecture", "Playback"));
@@ -1335,7 +1319,7 @@ mod tests {
             items: vec![crate::project::LecteurItem { path: "/v/x.mp4".into(), clip: Default::default() }],
             loop_all: true,
             shuffle: false,
-            transition: crate::protocol::Transition { kind: TransitionKind::Crossfade, secs: 2.0 },
+            transition: crate::protocol::Transition::new(TransitionKind::Crossfade, 2.0),
         };
         l.import_lecteur(&d);
         assert!(l.loop_all && l.cues.len() == 1 && l.cues[0].follow == CueFollow::Continue && l.cues[0].transition.kind == TransitionKind::Crossfade);

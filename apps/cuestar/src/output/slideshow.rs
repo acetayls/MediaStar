@@ -1,7 +1,7 @@
 //! Déroulé du diaporama, tenu par le moteur de sortie : le minutage des photos ne dépend
 //! pas de la régie.
 
-use crate::protocol::Fit;
+use crate::protocol::{Fit, Transition};
 use std::time::{Duration, Instant};
 
 const VIDEO_EXT: &[&str] = &["mp4", "mov", "mkv", "avi", "webm", "m4v", "mxf", "mpg", "mpeg", "ts", "wmv", "gif"];
@@ -13,6 +13,11 @@ pub fn is_video(path: &str) -> bool {
         .unwrap_or(false)
 }
 
+fn clamped(mut t: Transition) -> Transition {
+    t.sanitize(10.0);
+    t
+}
+
 pub struct Show {
     pub items: Vec<String>,
     order: Vec<usize>,
@@ -22,8 +27,8 @@ pub struct Show {
     pub shuffle: bool,
     pub fit: Fit,
     pub video_sound: bool,
-    /// Fondu enchaîné quand une photo laisse la place au média suivant (s, 0 : coupe).
-    pub fade: f64,
+    /// Passage d'une photo au média suivant.
+    pub transition: Transition,
     /// Fin de la photo affichée (None : vidéo en cours, ou pause).
     pub deadline: Option<Instant>,
     /// Temps restant de la photo pendant une pause.
@@ -36,7 +41,7 @@ pub struct Show {
 }
 
 impl Show {
-    pub fn new(items: Vec<String>, photo_seconds: f64, looping: bool, shuffle: bool, fit: Fit, video_sound: bool, fade: f64) -> Self {
+    pub fn new(items: Vec<String>, photo_seconds: f64, looping: bool, shuffle: bool, fit: Fit, video_sound: bool, transition: Transition) -> Self {
         let seed = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).map(|d| d.as_nanos() as u64).unwrap_or(1) | 1;
         let mut s = Self {
             order: (0..items.len()).collect(),
@@ -47,7 +52,7 @@ impl Show {
             shuffle,
             fit,
             video_sound,
-            fade: fade.clamp(0.0, 10.0),
+            transition: clamped(transition),
             deadline: None,
             remaining: None,
             shown_since: None,
@@ -130,8 +135,8 @@ impl Show {
     }
 
     /// Réglages modifiés pendant la lecture : le média affiché reste à l'écran.
-    pub fn update(&mut self, photo_seconds: f64, looping: bool, shuffle: bool, video_sound: bool, fade: f64) {
-        self.fade = fade.clamp(0.0, 10.0);
+    pub fn update(&mut self, photo_seconds: f64, looping: bool, shuffle: bool, video_sound: bool, transition: Transition) {
+        self.transition = clamped(transition);
         let photo = Duration::from_secs_f64(photo_seconds.clamp(0.5, 3600.0));
         if photo != self.photo {
             // La photo affichée prend la nouvelle durée, comptée depuis son apparition.

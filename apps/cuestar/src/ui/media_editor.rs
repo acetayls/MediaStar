@@ -24,48 +24,85 @@ pub fn is_audio(p: &Path) -> bool {
 }
 
 /// Fond de l'éditeur : vignettes de la vidéo sur la partie visible, assombries pendant les
-/// fondus (le noir que verra la salle). La vignette n° i est l'image à i × durée / n : son bord
-/// gauche est posé à cet instant, quel que soit le zoom. Trop serrées, on n'en garde qu'une
-/// sur k (toujours les mêmes) ; trop espacées, la vignette se répète jusqu'à la suivante.
+/// fondus (le noir que verra la salle). Chaque image est dessinée une seule fois, son bord
+/// gauche posé à l'instant qu'elle montre, quel que soit le zoom.
+/// - Vue large : les `tiles` de la frise (n° i = image à i × durée / n) ; trop serrées, on n'en
+///   garde qu'une sur k (toujours les mêmes).
+/// - Zoom fort (les vignettes de la frise s'écarteraient) : comme dans un logiciel de montage,
+///   des cases calées sur une grille d'images entières, chacune avec son image exacte (`detail`,
+///   par instant en ms) ; au niveau de l'image, une case par image du film. Les instants à
+///   demander sont rendus dans `wanted` (cases visibles seulement).
+///
 /// Vignettes tournées de `rot` degrés, comme l'aperçu et la sortie.
-fn strip_background(tiles: Vec<Option<egui::TextureHandle>>, duration: f64, rot: u16) -> impl FnOnce(&WaveView) {
+fn strip_background(
+    tiles: Vec<Option<egui::TextureHandle>>,
+    detail: std::collections::HashMap<u32, egui::TextureHandle>,
+    duration: f64,
+    fps: f64,
+    rot: u16,
+    wanted: std::rc::Rc<std::cell::RefCell<Option<Vec<f64>>>>,
+) -> impl FnOnce(&WaveView) {
     move |w: &WaveView| {
         let p = w.painter;
         let r = w.rect;
         let n = tiles.len().max(1);
         let step_t = duration.max(1e-6) / n as f64;
         // Largeur d'une vignette : proportions de l'image, tournée comme à l'écran.
-        let aspect = tiles.iter().flatten().next().map_or(16.0 / 9.0, |t| {
+        let aspect = tiles.iter().flatten().chain(detail.values()).next().map_or(16.0 / 9.0, |t| {
             let s = t.size_vec2();
             if rot == 90 || rot == 270 { s.y / s.x.max(1.0) } else { s.x / s.y.max(1.0) }
         });
         let tile_w = (r.height() * aspect).max(8.0);
         let seg_w = (w.x_of(step_t) - w.x_of(0.0)).max(1e-3);
-        let k = ((tile_w / seg_w).ceil() as usize).max(1);
-        let first = ((w.v0 / step_t).floor().max(0.0) as usize / k) * k;
-        let mut i = first;
-        while i < n {
-            let x0 = w.x_of(i as f64 * step_t);
-            if x0 >= r.right() {
-                break;
+        let tile = |clip: &egui::Painter, cell: Rect, tex: Option<&egui::TextureHandle>| match tex {
+            Some(tex) => {
+                clip.rect_filled(cell, CornerRadius::ZERO, Color32::BLACK);
+                paint_texture(clip, tex, cell, rot);
             }
-            let x1 = w.x_of(((i + k).min(n)) as f64 * step_t).min(r.right());
-            let clip = p.with_clip_rect(Rect::from_x_y_ranges(x0.max(r.left())..=x1, r.y_range()).intersect(p.clip_rect()));
-            let mut x = x0;
-            while x < x1 {
-                let cell = Rect::from_min_size(pos2(x, r.top()), vec2(tile_w, r.height()));
-                match tiles.get(i).and_then(|t| t.as_ref()) {
-                    Some(tex) => {
-                        clip.rect_filled(cell, CornerRadius::ZERO, Color32::BLACK);
-                        paint_texture(&clip, tex, cell, rot);
-                    }
-                    None => {
-                        clip.rect_filled(cell.shrink(1.0), CornerRadius::same(2), PANEL_HI);
-                    }
+            None => {
+                clip.rect_filled(cell.shrink(1.0), CornerRadius::same(2), PANEL_HI);
+            }
+        };
+        if seg_w <= tile_w || tiles.is_empty() {
+            *wanted.borrow_mut() = None;
+            let k = ((tile_w / seg_w).ceil() as usize).max(1);
+            let first = ((w.v0 / step_t).floor().max(0.0) as usize / k) * k;
+            let mut i = first;
+            while i < n {
+                let x0 = w.x_of(i as f64 * step_t);
+                if x0 >= r.right() {
+                    break;
                 }
-                x += tile_w;
+                let x1 = w.x_of(((i + k).min(n)) as f64 * step_t).min(r.right());
+                let clip = p.with_clip_rect(Rect::from_x_y_ranges(x0.max(r.left())..=x1, r.y_range()).intersect(p.clip_rect()));
+                tile(&clip, Rect::from_min_size(pos2(x0, r.top()), vec2(tile_w, r.height())), tiles.get(i).and_then(|t| t.as_ref()));
+                i += k;
             }
-            i += k;
+        } else {
+            // Une case par vignette, sur une grille d'images entières (stable pendant un
+            // déplacement) ; au niveau de l'image, une case par image du film.
+            let frame = if fps > 1.0 { 1.0 / fps } else { 1.0 / 25.0 };
+            let per_tile = tile_w as f64 * (w.v1 - w.v0) / r.width().max(1.0) as f64;
+            let step = (per_tile / frame).ceil().max(1.0) * frame;
+            let mut i = (w.v0 / step).floor().max(0.0) as u64;
+            let mut want = Vec::new();
+            loop {
+                let t = i as f64 * step;
+                let x0 = w.x_of(t);
+                if x0 >= r.right() || t >= duration || want.len() >= 60 {
+                    break;
+                }
+                let x1 = w.x_of(t + step).min(r.right());
+                let clip = p.with_clip_rect(Rect::from_x_y_ranges(x0.max(r.left())..=x1, r.y_range()).intersect(p.clip_rect()));
+                tile(&clip, Rect::from_min_size(pos2(x0, r.top()), vec2(tile_w, r.height())), detail.get(&crate::preview::ms(t)));
+                if x1 - x0 > tile_w + 2.0 {
+                    // Case plus large que l'image : limite de l'image du film.
+                    p.vline(x0, r.y_range(), egui::Stroke::new(1.0, PANEL_HI));
+                }
+                want.push(t);
+                i += 1;
+            }
+            *wanted.borrow_mut() = Some(want);
         }
         // Fondus : voile noir selon le gain, colonne par colonne.
         let step = 3.0;
@@ -339,7 +376,7 @@ fn points_rows(ui: &mut Ui, id_salt: impl std::hash::Hash + std::fmt::Debug + Co
         ui.horizontal(|ui| {
             tc_field(ui, id("in"), &mut mk.start, fps, duration);
             ui.label(RichText::new(tr("fondu", "fade")).color(TEXT_DIM)).on_hover_text(fade_tip);
-            tc_field(ui, id("fade-in"), &mut s.fade_in, fps, 30.0);
+            ui.add(egui::DragValue::new(&mut s.fade_in).range(0.0..=30.0).speed(0.05).suffix(" s").max_decimals(2)).on_hover_text(fade_tip);
             if ui.add(egui::Button::new(RichText::new(tr("[ Entrée ici", "[ Set in")).color(GO)).small())
                 .on_hover_text(tr("Le point d'entrée se cale sur l'image affichée (touche I)", "Set the in point on the frame shown (I key)"))
                 .clicked()
@@ -361,7 +398,7 @@ fn points_rows(ui: &mut Ui, id_salt: impl std::hash::Hash + std::fmt::Debug + Co
         ui.horizontal(|ui| {
             tc_field(ui, id("out"), &mut mk.end, fps, duration);
             ui.label(RichText::new(tr("fondu", "fade")).color(TEXT_DIM)).on_hover_text(fade_tip);
-            tc_field(ui, id("fade-out"), &mut s.fade_out, fps, 30.0);
+            ui.add(egui::DragValue::new(&mut s.fade_out).range(0.0..=30.0).speed(0.05).suffix(" s").max_decimals(2)).on_hover_text(fade_tip);
             if ui.add(egui::Button::new(RichText::new(tr("Sortie ici ]", "Set out ]")).color(STOP)).small())
                 .on_hover_text(tr("Le point de sortie se cale sur l'image affichée (touche O)", "Set the out point on the frame shown (O key)"))
                 .clicked()
@@ -501,8 +538,27 @@ pub fn clip_editor(ui: &mut Ui, id_salt: impl std::hash::Hash + std::fmt::Debug 
             let s = &mut clip.sound;
             let (st, ls, le, end) = s.markers(duration);
             let mut mk = Markers { start: st, loop_start: ls, loop_end: le, end };
-            if waveform_editor(ui, strip_background(tiles, duration, rot), duration, &mut mk, s.looping, &mut s.fade_in, &mut s.fade_out, playhead, &mut seek_to) {
+            let detail = if audio { Default::default() } else { preview.detail_textures(&ctx, path).clone() };
+            let wanted = std::rc::Rc::new(std::cell::RefCell::new(None));
+            let bg = strip_background(tiles, detail, duration, preview.state.fps, rot, wanted.clone());
+            if waveform_editor(ui, bg, duration, &mut mk, s.looping, &mut s.fade_in, &mut s.fade_out, playhead, &mut seek_to) {
                 set_markers(s, &mk);
+            }
+            // Zoom fort : images exactes des cases visibles, demandées une fois la vue posée
+            // (150 ms sans changement), pour ne pas décoder pendant un glisser.
+            let wanted = wanted.borrow_mut().take();
+            if let Some(times) = wanted {
+                let key = egui::Id::unique(("strip-detail", id_salt));
+                let now = ctx.input(|i| i.time);
+                let (last, since) = ctx.data(|d| d.get_temp::<(Vec<f64>, f64)>(key)).unwrap_or_default();
+                if last != times {
+                    ctx.data_mut(|d| d.insert_temp(key, (times, now)));
+                    ctx.request_repaint_after(std::time::Duration::from_millis(160));
+                } else if now - since >= 0.15 {
+                    preview.request_frames(&ctx, path, &times);
+                } else {
+                    ctx.request_repaint_after(std::time::Duration::from_millis(60));
+                }
             }
         } else {
             ui.label(RichText::new(tr("Lecture du média…", "Reading the media…")).color(TEXT_DIM));

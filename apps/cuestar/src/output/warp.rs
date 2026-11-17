@@ -261,6 +261,54 @@ vec4 wguides(vec2 p, vec2 t, float cover) {
 
 /// Calcul commun en GLSL, à placer après la déclaration de `wx`.
 #[allow(dead_code)]
+/// Formes de transition du compositeur, en GLSL (`fx`, `fxc` : voir `screen::Params`).
+/// `tcoords` donne où lire l'image qui part (xy) et celle qui arrive (zw) ; `tcombine` les
+/// assemble. `p` : avancement, 0 = image qui part seule, 1 = image qui arrive seule.
+const TRANSITIONS: &str = r#"
+float tinside(vec2 q) {
+    return (q.x >= 0.0 && q.x <= 1.0 && q.y >= 0.0 && q.y <= 1.0) ? 1.0 : 0.0;
+}
+vec4 tcoords(vec2 t, float p) {
+    float k = fx.x;
+    vec2 d = fx.yz;
+    vec2 qa = t;
+    vec2 qb = t;
+    if (k > 1.5 && k < 2.5) { qa = t - d * p; qb = t + d * (1.0 - p); }
+    else if (k > 2.5 && k < 3.5) { qb = t + d * (1.0 - p); }
+    else if (k > 3.5 && k < 4.5) { qa = t - d * p; }
+    else if (k > 6.5) { qa = 0.5 + (t - 0.5) / (1.0 + 0.5 * p); qb = 0.5 + (t - 0.5) / (0.75 + 0.25 * p); }
+    return vec4(qa, qb);
+}
+float tedge(float s, float p) {
+    float e = 0.04;
+    float edge = p * (1.0 + e);
+    return 1.0 - smoothstep(edge - e, edge, s);
+}
+vec3 tcombine(vec2 t, float p, vec4 q, vec3 a, vec3 b) {
+    float k = fx.x;
+    if (k < 0.5) { return mix(a, b, p); }
+    if (k < 1.5) { return p < 0.5 ? mix(a, fxc.rgb, p * 2.0) : mix(fxc.rgb, b, p * 2.0 - 1.0); }
+    if (k < 2.5) { return tinside(q.zw) > 0.5 ? b : a * tinside(q.xy); }
+    if (k < 3.5) { return tinside(q.zw) > 0.5 ? b : a; }
+    if (k < 4.5) { return tinside(q.xy) > 0.5 ? a : b; }
+    if (k < 5.5) { return mix(a, b, tedge(dot(t - 0.5, fx.yz) + 0.5, p)); }
+    if (k < 6.5) {
+        vec2 r = vec2(wx[12].z / max(wx[12].w, 1.0), 1.0);
+        return mix(a, b, tedge(length((t - 0.5) * r) / length(r * 0.5), p));
+    }
+    return mix(a, tinside(q.zw) > 0.5 ? b : a, p);
+}
+"#;
+
+pub fn glsl_transitions() -> &'static str {
+    TRANSITIONS
+}
+
+#[cfg_attr(not(windows), allow(dead_code))]
+pub fn hlsl_transitions() -> String {
+    TRANSITIONS.replace("vec2", "float2").replace("vec3", "float3").replace("vec4", "float4").replace("mix(", "lerp(")
+}
+
 pub fn glsl_core() -> String {
     CORE.to_string()
 }

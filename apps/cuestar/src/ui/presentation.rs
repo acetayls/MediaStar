@@ -13,7 +13,8 @@
 //! fenêtre de sortie quand elle a le focus.
 
 use crate::link::OutputLink;
-use crate::protocol::{Clip, Command, RemoteKey, Transition, TransitionKind};
+use crate::project::PresentationData;
+use crate::protocol::{Clip, Command, RemoteKey};
 use egui::{vec2, Color32, Key, Rect, RichText, Sense, Stroke, StrokeKind};
 use star_ui::theme::*;
 use star_ui::widgets::{pressed, transport_button, TransportIcon};
@@ -261,7 +262,8 @@ pub struct Presentation {
     shown: Option<(usize, PathBuf)>,
     /// Diapositive sélectionnée dans la liste (point de départ de « Lancer »).
     selected: usize,
-    transition: Transition,
+    /// Transition entre pages et noir à la fin (enregistrés dans le projet).
+    s: PresentationData,
     worker: Option<Worker>,
     /// Largeur d'affichage des vignettes (zoom de la liste, Ctrl + molette).
     thumb_w: f32,
@@ -286,7 +288,7 @@ impl Default for Presentation {
             want: None,
             shown: None,
             selected: 0,
-            transition: Transition { kind: TransitionKind::Cut, secs: 0.5 },
+            s: PresentationData::default(),
             worker: None,
             thumb_w: 192.0,
             thumb_px: THUMB_STEPS[0],
@@ -296,7 +298,46 @@ impl Default for Presentation {
     }
 }
 
+/// Image noire de fin de présentation (petite : la sortie l'agrandit, tout reste noir).
+fn black_file(dir: &Path) -> Result<PathBuf, String> {
+    let file = dir.join("fin-noir.png");
+    if !file.is_file() {
+        std::fs::create_dir_all(dir).map_err(|e| format!("dossier temporaire : {e}"))?;
+        let img = image::RgbaImage::from_pixel(64, 36, image::Rgba([0, 0, 0, 255]));
+        let tmp = file.with_extension("tmp");
+        img.save_with_format(&tmp, image::ImageFormat::Png).map_err(|e| format!("{}: {e}", tmp.display()))?;
+        std::fs::rename(&tmp, &file).map_err(|e| e.to_string())?;
+    }
+    Ok(file)
+}
+
 impl Presentation {
+    pub fn to_data(&self) -> PresentationData {
+        self.s.clone()
+    }
+
+    /// Projet ouvert : réglages remplacés (le PDF ouvert reste).
+    pub fn load_data(&mut self, d: &PresentationData) {
+        self.s = d.clone();
+    }
+
+    /// Le noir de fin est à l'antenne (ou demandé) : indice juste après la dernière page.
+    fn end_index(&self) -> usize {
+        self.slides.len()
+    }
+
+    /// Passe au noir de fin, avec la transition.
+    fn go_end_black(&mut self, out: &mut OutputLink) {
+        let Some(pdf) = &self.path else { return };
+        match black_file(&cache_dir(pdf)) {
+            Ok(p) => {
+                let i = self.end_index();
+                self.send(i, p, out);
+            }
+            Err(e) => self.error = Some(e),
+        }
+    }
+
     fn open(&mut self, ctx: &egui::Context, path: PathBuf) {
         let worker = self.worker.get_or_insert_with(|| Worker::start(ctx.clone()));
         self.gen += 1;
@@ -365,7 +406,7 @@ impl Presentation {
     fn send(&mut self, index: usize, path: PathBuf, out: &mut OutputLink) {
         self.want = None;
         let p = path.to_string_lossy().into_owned();
-        out.send(Command::Load { path: p, paused: false, looping: false, hold: true, transition: self.transition, clip: Clip::default(), signal_end: false });
+        out.send(Command::Load { path: p, paused: false, looping: false, hold: true, transition: self.s.transition, clip: Clip::default(), signal_end: false });
         self.shown = Some((index, path));
     }
 
@@ -389,6 +430,8 @@ impl Presentation {
         };
         if let Some(n) = self.next_visible(from) {
             self.go(n, out);
+        } else if self.s.end_black && from.is_some_and(|i| i < self.end_index()) {
+            self.go_end_black(out);
         }
     }
 
@@ -614,6 +657,7 @@ impl Presentation {
                     }
                     let count = match (on_air.or(self.shown.as_ref().map(|s| s.0)), self.slides.len()) {
                         (_, 0) => String::new(),
+                        (Some(i), n) if i >= n => format!("fin / {n}"),
                         (Some(i), n) => format!("{} / {}", i + 1, n),
                         (None, n) => format!("{n} diapositives"),
                     };
@@ -706,15 +750,13 @@ impl Presentation {
                 });
                 ui.end_row();
 
-                ui.label("Transition");
-                ui.horizontal(|ui| {
-                    ui.radio_value(&mut self.transition.kind, TransitionKind::Cut, "Coupe").on_hover_text("Passage direct à la diapositive suivante");
-                    ui.radio_value(&mut self.transition.kind, TransitionKind::Black, "Noir").on_hover_text("Fondu au noir, puis fondu d'ouverture");
-                    ui.radio_value(&mut self.transition.kind, TransitionKind::Crossfade, "Fondu enchaîné");
-                    if self.transition.kind != TransitionKind::Cut {
-                        ui.add(egui::DragValue::new(&mut self.transition.secs).range(0.1..=5.0).speed(0.05).suffix(" s").max_decimals(1));
-                    }
-                });
+                ui.label("Transition").on_hover_text("Passage d'une diapositive à la suivante");
+                super::transition::picker(ui, "presentation", &mut self.s.transition, 5.0);
+                ui.end_row();
+
+                ui.label("Fin");
+                ui.checkbox(&mut self.s.end_black, "Image noire à la fin")
+                    .on_hover_text("Après la dernière diapositive, « suivante » passe au noir (avec la transition) ; « précédente » revient à la dernière");
                 ui.end_row();
             });
             if let Some(e) = &self.error {
@@ -776,6 +818,9 @@ impl Presentation {
     }
 
     fn label(&self, i: usize) -> String {
+        if i == self.end_index() {
+            return "Noir de fin".into();
+        }
         match self.slides.get(i).and_then(|s| s.title.clone()) {
             Some(t) => format!("{} — {t}", i + 1),
             None => format!("Diapositive {}", i + 1),

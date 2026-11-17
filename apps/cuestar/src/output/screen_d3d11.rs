@@ -36,7 +36,7 @@ pub fn open(hwnd: isize, hmonitor: isize, size: (u32, u32), refresh_hz: f64, dec
 
 /// Source HLSL : en-tête, calcul commun du mapping (`warp::hlsl_core`), puis les shaders.
 fn shader_src() -> String {
-    format!("{SHADER_HEAD}{}{SHADER}", super::warp::hlsl_core())
+    format!("{SHADER_HEAD}{}{}{SHADER}", super::warp::hlsl_core(), super::warp::hlsl_transitions())
 }
 
 const SHADER_HEAD: &str = r#"
@@ -49,6 +49,8 @@ cbuffer Params : register(b0) {
     float4 h2;      // ligne 3
     float4 misc;    // x = mélange (0 : lecteur 0), y = niveau, z = lecteur 0 visible, w = lecteur 1 visible
     float4 wx[13];  // grille 3 × 3, bord adouci et repères du réglage (voir warp::params)
+    float4 fx;      // transition : forme, sens du mouvement (yz), lecteur qui arrive (w = 1 : lecteur 1)
+    float4 fxc;     // couleur traversée
 };
 "#;
 
@@ -66,10 +68,13 @@ float4 ps(VsOut i) : SV_Target {
     float w = h2.x * p.x + h2.y * p.y + h2.z;
     float2 t = winv(p, float2(h0.x * p.x + h0.y * p.y + h0.z, h1.x * p.x + h1.y * p.y + h1.z) / w);
     float cov = wcover(p, t, w);
-    float2 uv = clamp(t, 0.0, 1.0);
-    float3 a = tex0.Sample(smp, uv).rgb * misc.z;
-    float3 b = tex1.Sample(smp, uv).rgb * misc.w;
-    float3 col = cov > 0.0 ? lerp(a, b, misc.x) * misc.y * cov : float3(0.0, 0.0, 0.0);
+    bool in1 = fx.w > 0.5;
+    float pr = in1 ? misc.x : 1.0 - misc.x;
+    float4 q = tcoords(t, pr);
+    float3 c0 = tex0.Sample(smp, clamp(in1 ? q.xy : q.zw, 0.0, 1.0)).rgb * misc.z;
+    float3 c1 = tex1.Sample(smp, clamp(in1 ? q.zw : q.xy, 0.0, 1.0)).rgb * misc.w;
+    float3 mixed = in1 ? tcombine(t, pr, q, c0, c1) : tcombine(t, pr, q, c1, c0);
+    float3 col = cov > 0.0 ? mixed * misc.y * cov : float3(0.0, 0.0, 0.0);
     float4 gd = wguides(p, t, cov);
     return float4(lerp(col, gd.rgb, gd.a), 1.0);
 }

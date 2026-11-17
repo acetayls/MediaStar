@@ -85,9 +85,30 @@ standby cue.
   depending on its arrow.
 - **Boucler la conduite** (loop the running order): after the last cue, the first one plays
   again (or waits for GO).
-- **Standby cue transition**: **Coupe** (cut), **Noir** (fade to black then up) or **Fondu
-  enchaîné** (crossfade), with its duration. Each cue keeps its own; **À tous** gives it to the
-  whole running order.
+- **Standby cue transition**: picked from the menu (see [Transitions](#transitions)), with its
+  duration in seconds. Each cue keeps its own; **À tous** gives it to the whole running order.
+
+### Transitions
+
+The same menu is used in the Cuelist, the Diaporama and the Présentation. The duration is set
+in seconds; depending on the type, you also pick the direction of movement or the colour.
+
+| Transition | Effect |
+|---|---|
+| **Coupe** (cut) | Straight to the next media |
+| **Fondu enchaîné** (crossfade) | The next media appears while the previous one fades away |
+| **Fondu au noir** (fade to black) | Fade to black, then fade up: the next media starts in black |
+| **Fondu par une couleur** (dip to colour) | The picture goes through a colour (white by default), then the next one comes out of it |
+| **Pousser** (push) | The next media pushes the previous one off screen (left, right, up, down) |
+| **Couvrir** (cover) | The next media slides over the previous one |
+| **Découvrir** (uncover) | The previous media slides off screen and uncovers the next one |
+| **Volet** (wipe) | A soft edge sweeps across the screen, in the chosen direction |
+| **Iris** | A circle opens from the centre |
+| **Zoom** | The previous media moves forward as it fades, the next one arrives behind it |
+
+Transitions that mix two pictures (all but cut and fade to black) need the normal output
+display; with the fallback display (a single player) they go through black. The sound follows
+as a crossfade.
 
 ### Standby preview
 
@@ -128,10 +149,12 @@ jingle editor. Settings are saved with the project.
 - **Rotation**: 0°, 90°, 180° or 270° clockwise, for this file only (a portrait video, a screen
   on its side). The preview rotates too.
 - **Volume** of the item's sound, in dB, and play **once** or **looped**.
-- **Fades to black**: length of the fade in (from black) and of the fade out (to black),
-  picture and sound together.
+- **Fades to black**: length of the fade in (from black) and of the fade out (to black), in
+  seconds, picture and sound together.
 - **Strip**: thumbnails of the media over its whole length, each placed at the moment it
-  shows (when zoomed too). Drag the **in** and **out** handles
+  shows, drawn only once. Zoomed in, as in an editing application, the strip is cut into cells
+  aligned on the film's frames, each with its exact picture (they arrive just after you stop
+  zooming or moving); very close, one cell per frame. Drag the **in** and **out** handles
   to trim the start and the end; fades show as a veil on the strip. While dragging, the preview
   shows the exact picture at that point.
 - **Preview**: the same navigation as the standby preview, with **[ In here** and **Out here ]**,
@@ -139,8 +162,8 @@ jingle editor. Settings are saved with the project.
   frame, **Shift + ← / →** one second, **K** play / pause, **I** sets the in point and **O** the
   out point on the frame shown. Strip, preview and points sit in the **In and out points**
   panel, closed at first; the shortcuts work with the panel folded.
-- **Points**: in, out, loop and fades as timecode HH:MM:SS:FF (frame matched to the file's
-  frame rate). You can also type MM:SS or seconds, then Enter.
+- **Points**: in, out and loop as timecode HH:MM:SS:FF (frame matched to the file's
+  frame rate); fades stay in seconds. You can also type MM:SS or seconds, then Enter.
 - **Equalizer**: low cut (12 or 24 dB/oct), low shelf, two bell bands, high shelf, as in
   JingleStar. The sound's waveform shows behind the curve.
 - If the cue is on air, volume, equalizer, fades, loop and rotation change at once, without
@@ -174,8 +197,9 @@ Plays a folder of photos and videos.
 - **Dossier** (folder): the folder to play; **Relire** picks up added or removed files.
 - **Include subfolders**, **photo duration**, **fit** (whole picture with black bars, fill the
   screen by cropping, or automatic) and **videos with sound** (played in full).
-- **Fondu entre photos** (fade between photos): a crossfade of the chosen length when a photo
-  makes way for the next media (unticked: cut). After a video, the change stays a cut.
+- **Transition**: how a photo makes way for the next media, picked from the menu (see
+  [Transitions](#transitions)), up to half the photo duration. After a video, the change stays
+  a cut. A project from before (« Fondu entre photos ») keeps its crossfade.
 - **Liste / Vignettes** (above the media): the file list, or their thumbnails. Double-click a
   media to jump to it (unless shuffled).
 - **Space** plays or pauses, **← / →** go to the previous / next media.
@@ -196,8 +220,10 @@ PDF); PowerPoint files are no longer read directly.
 - **LANCER** (go) shows the selected slide, then **SUIVANTE** (next, **Space** or **→**) and
   **←** move from slide to slide; **Aller à** (go to) jumps to a number. The next slide is
   prepared in advance.
-- **Transition**: **Coupe** (cut), **Noir** (fade to black then up) or **Fondu enchaîné**
-  (crossfade).
+- **Transition**: how one page makes way for the next, picked from the menu (see
+  [Transitions](#transitions)). It is saved with the project.
+- **Image noire à la fin** (black at the end): after the last slide, **SUIVANTE** goes to black
+  (with the transition) instead of staying on the last page; **←** goes back to it.
 - **Esc** goes to black; **LANCER** shows the slide again.
 - **B** or **period**: black screen, then back to the slide. **F5** starts from the first slide,
   **Shift+F5** from the selected slide; **Home** and **End** go to the first and last.
@@ -287,7 +313,7 @@ addresses (`/diaporama/…`) are accepted too, and so are the former Player's
 | `/cuestar/output/drops/reset` | — | Resets the dropped and delayed frame counter |
 | `/cuestar/cuelist/goto` | int | Plays cue number n at once |
 | `/cuestar/cuelist/loop` | bool | Loop the running order |
-| `/cuestar/cuelist/transition` | `cut`, `black` or `fade`, then float (s) | Standby cue transition and duration |
+| `/cuestar/cuelist/transition` | `cut`, `fade`, `black`, `dip`, `push`, `cover`, `uncover`, `wipe`, `iris` or `zoom`, then float (s) | Standby cue transition and duration |
 | `/cuestar/cuelist/go` | — | Plays the standby cue (or resumes) |
 | `/cuestar/cuelist/play`, `pause`, `toggle`, `stop` | — | Cuelist transport |
 | `/cuestar/cuelist/next`, `prev` | — | Next / previous standby cue |
@@ -298,6 +324,7 @@ addresses (`/diaporama/…`) are accepted too, and so are the former Player's
 | `/cuestar/diaporama/settings/shuffle`, `loop`, `recursive`, `video_sound` | bool | Slideshow settings |
 | `/cuestar/diaporama/settings/photo_duration` | float (1 to 60 s) | Photo duration |
 | `/cuestar/diaporama/settings/fit` | `contain`, `cover` or `auto` | Fit |
+| `/cuestar/diaporama/settings/transition` | same names as `cuelist/transition`, then float (s) | Transition between photos and duration |
 | `/cuestar/diaporama/settings/folder` | string | Folder to play |
 
 - Triggers fire with no argument or a non-zero value: a button sending 1 on press and 0 on

@@ -12,6 +12,7 @@ mod log_view;
 mod output_view;
 mod six25;
 mod presentation;
+mod transition;
 
 use crate::link::OutputLink;
 use crate::prefs::MachinePrefs;
@@ -190,13 +191,14 @@ impl CueStarApp {
     // ------------------------------------------------------------ projet
 
     fn snapshot(&self) -> Project {
-        Project { name: self.project_name.clone(), lecteur: Default::default(), diaporama: self.diaporama.to_data(), cuelist: self.cuelist.to_data(), notes: self.notes.text.clone() }
+        Project { name: self.project_name.clone(), lecteur: Default::default(), diaporama: self.diaporama.to_data(), cuelist: self.cuelist.to_data(), presentation: self.presentation.to_data(), notes: self.notes.text.clone() }
     }
 
     fn apply_project(&mut self, p: &Project) {
         self.project_name = p.name.clone();
         self.diaporama.load_data(&p.diaporama);
         self.cuelist.load_data(&p.cuelist);
+        self.presentation.load_data(&p.presentation);
         // Ancien projet : la playlist du Lecteur passe dans la Cuelist.
         self.cuelist.import_lecteur(&p.lecteur);
         self.notes.text = p.notes.clone();

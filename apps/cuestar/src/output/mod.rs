@@ -24,7 +24,7 @@ mod slideshow;
 pub mod warp;
 
 use crate::prefs::{Cadence, MachinePrefs};
-use crate::protocol::{Clip, Command, Event, Fit, Monitor, RemoteKey, TransitionKind};
+use crate::protocol::{Clip, Command, Event, Fit, Monitor, RemoteKey, Transition, TransitionKind};
 use mpv::Mpv;
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use slideshow::Show;
@@ -116,6 +116,12 @@ impl Out {
     fn set_mix(&self, v: f64) {
         if let Out::Composite(s) = self {
             s.set_mix(v);
+        }
+    }
+    /// Forme de la prochaine transition vers le lecteur `to`.
+    fn set_fx(&self, t: &Transition, to: usize) {
+        if let Out::Composite(s) = self {
+            s.set_fx(t, to);
         }
     }
     fn show(&self, deck: usize, on: bool) {
@@ -283,6 +289,8 @@ struct OutputApp {
     /// Fondu enchaîné à lancer dès la première image du lecteur actif.
     xfade_after: Option<f64>,
     xfade: Option<Xfade>,
+    /// Forme du prochain mélange de lecteurs (fondu enchaîné, pousser, volet…).
+    fx: Transition,
     /// Lecteurs en cours de préchauffage (événements ignorés).
     warming: Vec<u8>,
     /// Numéro mpv (`playlist_entry_id`) du fichier demandé en dernier à chaque lecteur
@@ -810,7 +818,10 @@ impl OutputApp {
                 // Fondu enchaîné depuis une image déjà au noir (fondu de sortie du cue précédent) :
                 // c'est un fondu d'ouverture ; sinon la dernière image revenait d'un coup avant
                 // de s'effacer.
-                let cross = item_in.is_none() && transition.kind == TransitionKind::Crossfade && transition.secs > 0.0 && self.out().decks() > 1 && on_air && self.fade_level > 0.0;
+                let cross = item_in.is_none() && transition.is_composite() && self.out().decks() > 1 && on_air && self.fade_level > 0.0;
+                if cross {
+                    self.fx = transition;
+                }
                 let black = (item_in.is_some() || transition.kind != TransitionKind::Cut && transition.secs > 0.0) && self.out().can_fade() && !cross;
                 self.fade_in_audio = item_in.is_some();
                 // Média déjà préparé : coupe ou fondu enchaîné sans attendre l'ouverture du fichier.
@@ -841,7 +852,7 @@ impl OutputApp {
                         TransitionKind::Cut => 0.0,
                         // Fondu enchaîné impossible (déjà au noir, rien à l'écran, un seul lecteur) :
                         // ouverture sur toute la durée depuis le noir.
-                        TransitionKind::Crossfade if !on_air || self.fade_level <= 0.0 => transition.secs,
+                        k if k.is_composite() && (!on_air || self.fade_level <= 0.0) => transition.secs,
                         _ => transition.secs / 2.0,
                     };
                     let fade_in = item_in.unwrap_or(half);
@@ -935,21 +946,21 @@ impl OutputApp {
                     self.m().set_property("volume", &format!("{value:.1}"))
                 }
             }
-            Command::Slideshow { items, photo_seconds, looping, shuffle, fit, video_sound, fade } => {
+            Command::Slideshow { items, photo_seconds, looping, shuffle, fit, video_sound, transition } => {
                 if items.is_empty() {
                     Err("diaporama vide : aucun média dans le dossier".into())
                 } else {
                     self.cancel_transitions();
                     self.set_fade(1.0);
                     let _ = self.m().set_property("pause", "no");
-                    self.show = Some(Show::new(items, photo_seconds, looping, shuffle, fit, video_sound, fade));
+                    self.show = Some(Show::new(items, photo_seconds, looping, shuffle, fit, video_sound, transition));
                     self.show_current();
                     Ok(())
                 }
             }
-            Command::SlideshowSettings { photo_seconds, looping, shuffle, video_sound, fade } => {
+            Command::SlideshowSettings { photo_seconds, looping, shuffle, video_sound, transition } => {
                 if let Some(s) = &mut self.show {
-                    s.update(photo_seconds, looping, shuffle, video_sound, fade);
+                    s.update(photo_seconds, looping, shuffle, video_sound, transition);
                     let video = s.current().map(slideshow::is_video).unwrap_or(false);
                     if video {
                         let _ = self.m().set_property("mute", if video_sound { "no" } else { "yes" });
@@ -1177,6 +1188,7 @@ impl OutputApp {
         match xfade {
             Some(secs) => {
                 self.outgoing = Some(from);
+                self.out().set_fx(&self.fx, to);
                 self.xfade = Some(Xfade { from, to, start: Instant::now(), secs });
             }
             None => {
@@ -1383,17 +1395,22 @@ impl OutputApp {
         let video = slideshow::is_video(&path);
         let sound = self.show.as_ref().map(|s| s.video_sound).unwrap_or(false);
         let (pos, len) = self.show.as_ref().map(|s| (s.pos, s.len())).unwrap_or((0, 0));
-        // Fondu enchaîné : seulement quand c'est une photo qui part (une vidéo finie n'a plus
-        // d'image à fondre) et avec le compositeur à deux lecteurs.
-        let fade = self.show.as_ref().map(|s| s.fade).unwrap_or(0.0);
+        // Transition : seulement quand c'est une photo qui part (une vidéo finie n'a plus
+        // d'image à fondre) et avec le compositeur à deux lecteurs. Le fondu au noir y passe
+        // par la couleur noire (le diaporama n'attend pas le noir pour charger la suite).
+        let mut t = self.show.as_ref().map(|s| s.transition).unwrap_or_default();
+        if t.kind == TransitionKind::Black {
+            t = Transition { kind: TransitionKind::Dip, color: [0, 0, 0], ..t };
+        }
         let photo_out = self.current.as_deref().is_some_and(|c| !slideshow::is_video(c));
-        if fade > 0.0 && photo_out && self.out().decks() > 1 && self.fade_level > 0.0 {
+        if t.is_composite() && photo_out && self.out().decks() > 1 && self.fade_level > 0.0 {
             self.finish_xfade();
             let from = self.active;
             self.before = None;
             self.outgoing = Some(from);
             self.active = (from + 1) % self.out().decks();
-            self.xfade_after = Some(fade);
+            self.fx = t;
+            self.xfade_after = Some(t.secs);
             let _ = self.out().deck(self.active).set_property("volume", "0");
         } else {
             self.finish_xfade();
@@ -1608,6 +1625,9 @@ impl OutputApp {
                 }
             }
             if let (Some(secs), Some(from)) = (self.xfade_after.take(), self.outgoing) {
+                if secs > 0.0 {
+                    self.out().set_fx(&self.fx, deck);
+                }
                 self.xfade = Some(Xfade { from, to: deck, start: Instant::now(), secs });
             }
         }
@@ -1974,6 +1994,7 @@ pub fn run(prefs: MachinePrefs, monitor_port: Option<u16>) {
         outgoing: None,
         xfade_after: None,
         xfade: None,
+        fx: Transition::default(),
         warming: Vec::new(),
         entry: Vec::new(),
         started: Vec::new(),

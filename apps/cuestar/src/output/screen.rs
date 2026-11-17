@@ -30,6 +30,9 @@ pub(super) struct State {
     level: f32,
     /// Mélange des lecteurs : 0 = lecteur 0, 1 = lecteur 1.
     mix: f32,
+    /// Forme du mélange (voir `Params::fx`) et couleur traversée.
+    fx: [f32; 4],
+    fxc: [f32; 4],
     /// Homographie écran → image (mapping 4 coins).
     warp: [[f32; 3]; 3],
     /// Grille 3 × 3, bord adouci et repères du réglage (voir `warp::params`).
@@ -76,6 +79,11 @@ pub(super) struct Params {
     pub misc: [f32; 4],
     /// Grille 3 × 3, bord adouci et repères du réglage ; `wx[12].zw` = taille de l'écran.
     pub wx: [[f32; 4]; 13],
+    /// Transition : x = forme (0 fondu enchaîné, 1 couleur, 2 pousser, 3 couvrir, 4 découvrir,
+    /// 5 volet, 6 iris, 7 zoom), yz = sens du mouvement, w = 1 si le lecteur 1 est celui qui arrive.
+    pub fx: [f32; 4],
+    /// Couleur traversée (rgb, 0 à 1).
+    pub fxc: [f32; 4],
 }
 
 /// Contexte de rendu mpv d'un lecteur, tel que le voit le fil d'affichage.
@@ -147,6 +155,8 @@ impl Screen {
             st: Mutex::new(State {
                 level: 1.0,
                 mix: 0.0,
+                fx: [0.0, -1.0, 0.0, 1.0],
+                fxc: [1.0, 1.0, 1.0, 0.0],
                 warp: super::warp::inverse(None),
                 wx: super::warp::params(None, None),
                 size: (size.0.max(1), size.1.max(1)),
@@ -216,6 +226,16 @@ impl Screen {
 
     pub fn set_mix(&self, v: f64) {
         self.with(|s| s.mix = v.clamp(0.0, 1.0) as f32);
+    }
+
+    /// Forme de la transition qui va de l'autre lecteur vers `to`.
+    pub fn set_fx(&self, t: &crate::protocol::Transition, to: usize) {
+        let d = t.direction.vector();
+        let c = t.color.map(|v| v as f32 / 255.0);
+        self.with(|s| {
+            s.fx = [t.shader_code(), d[0], d[1], if to == 1 { 1.0 } else { 0.0 }];
+            s.fxc = [c[0], c[1], c[2], 0.0];
+        });
     }
 
     pub fn set_warp(&self, geom: Option<&crate::protocol::WarpGeom>, guides: Option<&crate::protocol::WarpGuides>) {
@@ -294,6 +314,8 @@ fn run<B: Backend>(shared: Arc<Shared>, mut g: B, mut decks: Vec<DeckRc>) {
                     wx[12][3] = s.size.1 as f32;
                     wx
                 },
+                fx: s.fx,
+                fxc: s.fxc,
             };
             let r = (p, s.size, s.reveal, s.stop, s.monitor.take(), s.dirty, s.vsync_us);
             s.dirty = false;

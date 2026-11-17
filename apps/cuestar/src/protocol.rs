@@ -47,7 +47,7 @@ pub enum Command {
     /// réglage (None : rien).
     Warp { geom: Option<WarpGeom>, guides: Option<WarpGuides> },
     /// Lance un diaporama : le moteur de sortie tient le minutage et l'enchaînement.
-    /// `fade` : fondu enchaîné entre deux médias quand celui qui part est une photo (s, 0 : coupe).
+    /// `transition` : passage d'un média au suivant quand celui qui part est une photo.
     Slideshow {
         items: Vec<String>,
         photo_seconds: f64,
@@ -56,7 +56,7 @@ pub enum Command {
         fit: Fit,
         video_sound: bool,
         #[serde(default)]
-        fade: f64,
+        transition: Transition,
     },
     /// Réglages du diaporama en cours, appliqués à chaud (sans recharger le média affiché).
     SlideshowSettings {
@@ -65,7 +65,7 @@ pub enum Command {
         shuffle: bool,
         video_sound: bool,
         #[serde(default)]
-        fade: f64,
+        transition: Transition,
     },
     /// Sortie audio (nom mpv `audio-device` ; None = automatique), à chaud.
     AudioDevice { name: Option<String> },
@@ -158,14 +158,71 @@ pub struct Transition {
     pub kind: TransitionKind,
     /// Durée totale en secondes (pour « Noir » : moitié en fondu sortant, moitié en entrant).
     pub secs: f64,
+    /// Sens du mouvement (Pousser, Couvrir, Découvrir, Volet).
+    #[serde(skip_serializing_if = "is_default")]
+    pub direction: Direction,
+    /// Couleur traversée par « Fondu par une couleur » (RVB).
+    #[serde(skip_serializing_if = "is_white")]
+    pub color: [u8; 3],
 }
+
+fn is_default<T: Default + PartialEq>(v: &T) -> bool {
+    *v == T::default()
+}
+
+fn is_white(c: &[u8; 3]) -> bool {
+    *c == WHITE
+}
+
+const WHITE: [u8; 3] = [255, 255, 255];
 
 impl Default for Transition {
     fn default() -> Self {
-        Self { kind: TransitionKind::Cut, secs: 1.0 }
+        Self { kind: TransitionKind::Cut, secs: 1.0, direction: Direction::default(), color: WHITE }
     }
 }
 
+impl Transition {
+    pub const fn new(kind: TransitionKind, secs: f64) -> Self {
+        Self { kind, secs, direction: Direction::Left, color: WHITE }
+    }
+
+    /// Transition qui mélange deux images (deux lecteurs et l'affichage composé).
+    pub fn is_composite(&self) -> bool {
+        self.kind.is_composite() && self.secs > 0.0
+    }
+
+    /// Remet dans leurs bornes les valeurs aberrantes.
+    pub fn sanitize(&mut self, max_secs: f64) {
+        self.secs = if self.secs.is_finite() { self.secs.clamp(0.0, max_secs) } else { 1.0 };
+    }
+
+    /// Code de la transition pour le compositeur (`fx.x` du shader).
+    pub fn shader_code(&self) -> f32 {
+        match self.kind {
+            TransitionKind::Cut | TransitionKind::Black | TransitionKind::Crossfade => 0.0,
+            TransitionKind::Dip => 1.0,
+            TransitionKind::Push => 2.0,
+            TransitionKind::Cover => 3.0,
+            TransitionKind::Uncover => 4.0,
+            TransitionKind::Wipe => 5.0,
+            TransitionKind::Iris => 6.0,
+            TransitionKind::Zoom => 7.0,
+        }
+    }
+
+    /// Nom court (liste de la conduite).
+    pub fn short_label(&self) -> String {
+        let secs = format!("{:.1} s", self.secs);
+        match self.kind {
+            TransitionKind::Cut => self.kind.label().to_string(),
+            k if k.has_direction() => format!("{} {} {secs}", k.label(), self.direction.arrow()),
+            k => format!("{} {secs}", k.label()),
+        }
+    }
+}
+
+/// Types de transition. Les noms anglais (Cut, Black, Crossfade) sont ceux des projets 0.0.1.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum TransitionKind {
     /// Coupe franche.
@@ -175,6 +232,135 @@ pub enum TransitionKind {
     Black,
     /// Fondu enchaîné (demande le moteur de composition).
     Crossfade,
+    /// Fondu par une couleur : l'image part vers la couleur, puis la nouvelle en sort.
+    Dip,
+    /// La nouvelle image pousse l'ancienne hors de l'écran.
+    Push,
+    /// La nouvelle image glisse par-dessus l'ancienne.
+    Cover,
+    /// L'ancienne image glisse hors de l'écran et découvre la nouvelle.
+    Uncover,
+    /// Volet : un bord adouci balaie l'écran.
+    Wipe,
+    /// Cercle qui s'ouvre depuis le centre.
+    Iris,
+    /// L'ancienne image avance vers le spectateur en s'effaçant, la nouvelle arrive derrière.
+    Zoom,
+}
+
+impl TransitionKind {
+    pub const ALL: [TransitionKind; 10] = [
+        TransitionKind::Cut,
+        TransitionKind::Crossfade,
+        TransitionKind::Black,
+        TransitionKind::Dip,
+        TransitionKind::Push,
+        TransitionKind::Cover,
+        TransitionKind::Uncover,
+        TransitionKind::Wipe,
+        TransitionKind::Iris,
+        TransitionKind::Zoom,
+    ];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            TransitionKind::Cut => "Coupe",
+            TransitionKind::Black => "Fondu au noir",
+            TransitionKind::Crossfade => "Fondu enchaîné",
+            TransitionKind::Dip => "Fondu par une couleur",
+            TransitionKind::Push => "Pousser",
+            TransitionKind::Cover => "Couvrir",
+            TransitionKind::Uncover => "Découvrir",
+            TransitionKind::Wipe => "Volet",
+            TransitionKind::Iris => "Iris",
+            TransitionKind::Zoom => "Zoom",
+        }
+    }
+
+    pub fn hint(self) -> &'static str {
+        match self {
+            TransitionKind::Cut => "Passage direct au média suivant",
+            TransitionKind::Black => "Fondu au noir, puis fondu d'ouverture (le média suivant démarre au noir)",
+            TransitionKind::Crossfade => "Le média suivant apparaît pendant que le précédent disparaît",
+            TransitionKind::Dip => "L'image passe par une couleur (blanc, noir…), puis le média suivant en sort",
+            TransitionKind::Push => "Le média suivant pousse le précédent hors de l'écran",
+            TransitionKind::Cover => "Le média suivant glisse par-dessus le précédent",
+            TransitionKind::Uncover => "Le média précédent glisse hors de l'écran et découvre le suivant",
+            TransitionKind::Wipe => "Un bord adouci balaie l'écran",
+            TransitionKind::Iris => "Un cercle s'ouvre depuis le centre",
+            TransitionKind::Zoom => "Le média précédent avance en s'effaçant, le suivant arrive derrière",
+        }
+    }
+
+    /// Mélange deux images : demande les deux lecteurs de l'affichage composé (sinon, la
+    /// sortie se replie sur un fondu par le noir).
+    pub fn is_composite(self) -> bool {
+        !matches!(self, TransitionKind::Cut | TransitionKind::Black)
+    }
+
+    pub fn has_direction(self) -> bool {
+        matches!(self, TransitionKind::Push | TransitionKind::Cover | TransitionKind::Uncover | TransitionKind::Wipe)
+    }
+
+    /// Nom reçu par OSC (`cuelist/transition push`…), en anglais ou en français.
+    pub fn from_name(s: &str) -> Option<TransitionKind> {
+        Some(match s.to_lowercase().as_str() {
+            "cut" | "coupe" => TransitionKind::Cut,
+            "black" | "noir" => TransitionKind::Black,
+            "fade" | "crossfade" | "fondu" => TransitionKind::Crossfade,
+            "dip" | "couleur" | "color" => TransitionKind::Dip,
+            "push" | "pousser" => TransitionKind::Push,
+            "cover" | "slide" | "couvrir" | "glisser" => TransitionKind::Cover,
+            "uncover" | "decouvrir" | "découvrir" => TransitionKind::Uncover,
+            "wipe" | "volet" | "balayage" => TransitionKind::Wipe,
+            "iris" | "cercle" | "circle" => TransitionKind::Iris,
+            "zoom" => TransitionKind::Zoom,
+            _ => return None,
+        })
+    }
+}
+
+/// Sens du mouvement d'une transition : celui de la nouvelle image (« vers la gauche » : elle
+/// entre par la droite).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum Direction {
+    #[default]
+    Left,
+    Right,
+    Up,
+    Down,
+}
+
+impl Direction {
+    pub const ALL: [Direction; 4] = [Direction::Left, Direction::Right, Direction::Up, Direction::Down];
+
+    pub fn label(self) -> &'static str {
+        match self {
+            Direction::Left => "Vers la gauche",
+            Direction::Right => "Vers la droite",
+            Direction::Up => "Vers le haut",
+            Direction::Down => "Vers le bas",
+        }
+    }
+
+    pub fn arrow(self) -> &'static str {
+        match self {
+            Direction::Left => "←",
+            Direction::Right => "→",
+            Direction::Up => "↑",
+            Direction::Down => "↓",
+        }
+    }
+
+    /// Vecteur du mouvement dans l'image (y vers le bas).
+    pub fn vector(self) -> [f32; 2] {
+        match self {
+            Direction::Left => [-1.0, 0.0],
+            Direction::Right => [1.0, 0.0],
+            Direction::Up => [0.0, -1.0],
+            Direction::Down => [0.0, 1.0],
+        }
+    }
 }
 
 /// Mires de test de la sortie.

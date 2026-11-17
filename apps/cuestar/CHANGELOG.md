@@ -24,17 +24,35 @@
   Les Préférences le disent clairement à la place du choix « FPS de sortie », avec où la régler
   (paramètres d'affichage de KDE ou GNOME, ou session X11).
 
+### Transitions (Cuelist, Diaporama, Présentation)
+
+- **Nouvelles transitions**, dans un menu commun aux trois modules : Coupe, Fondu enchaîné,
+  Fondu au noir, **Fondu par une couleur** (blanc par défaut, couleur au choix), **Pousser**,
+  **Couvrir**, **Découvrir** et **Volet** (vers la gauche, la droite, le haut ou le bas),
+  **Iris** et **Zoom**. Durée en secondes. Avec l'affichage de secours de la sortie, celles qui
+  mélangent deux images passent par le noir.
+- **Diaporama** : le réglage « Fondu entre photos » devient ce menu de transition. Les projets
+  existants gardent leur fondu enchaîné, de la même durée.
+- **Présentation** : même menu entre les pages, et option **Image noire à la fin** (après la
+  dernière page, « suivante » passe au noir avec la transition). Ces réglages sont maintenant
+  enregistrés avec le projet.
+- **OSC** : `cuelist/transition` accepte les nouveaux noms (`dip`, `push`, `cover`, `uncover`,
+  `wipe`, `iris`, `zoom`) ; nouvelle adresse `diaporama/settings/transition`.
+
 ### Cuelist
 
-- **Points d'édition en timecode** : dans les réglages du cue, l'entrée, la sortie, les points
-  de boucle et les fondus s'affichent et se saisissent en HH:MM:SS:II (heures, minutes,
-  secondes, image), images calées sur la cadence du fichier ; le temps sous l'aperçu aussi. On
-  peut toujours taper MM:SS ou des secondes.
+- **Points d'édition en timecode** : dans les réglages du cue, l'entrée, la sortie et les points
+  de boucle s'affichent et se saisissent en HH:MM:SS:II (heures, minutes, secondes, image),
+  images calées sur la cadence du fichier ; le temps sous l'aperçu aussi. On peut toujours taper
+  MM:SS ou des secondes. Les **fondus restent en secondes**.
 - **Volet « Points d'entrée et de sortie » fermé par défaut** : les raccourcis clavier (← →,
   K, I, O) marchent aussi volet replié.
 - **Frise à la bonne place** : chaque vignette commence exactement à l'instant qu'elle montre,
   au zoom comme avec la rotation (plus de vignettes réparties côte à côte sans lien avec le
-  temps). Au zoom avant, la vignette se répète jusqu'à la suivante.
+  temps). Chaque image n'est dessinée qu'**une fois**. Au zoom avant, comme dans un logiciel de
+  montage, la frise se découpe en cases calées sur les images du film, chacune avec son image
+  exacte ; tout près, une case par image. Ces images ne sont lues qu'une fois la vue posée et
+  seulement pour la partie visible, et gardées pour les retours en arrière.
 - **Réglages du cue réorganisés** : la lecture (une fois ou en boucle) suit la transition
   d'entrée ; l'aperçu est centré ; la barre de déplacement (verte entre l'entrée et la sortie)
   passe sous la frise ; l'entrée et son fondu, la boucle, la sortie et son fondu sont rassemblés,

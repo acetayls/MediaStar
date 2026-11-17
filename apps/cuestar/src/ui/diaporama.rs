@@ -3,10 +3,10 @@
 //! v1 : dossier (sous-dossiers), ordre aléatoire remélangé à chaque tour, boucle, durée des
 //! photos, ajustement (image entière, remplir, auto), vidéos lues en entier avec ou sans son.
 //! Le minutage et l'enchaînement tournent dans le moteur de sortie.
-//! À venir : transitions, Ken Burns, fond flou, musique de fond, commandes OSC.
+//! Transitions entre photos : voir `ui::transition`. À venir : Ken Burns, fond flou, musique de fond, commandes OSC.
 
 use crate::link::OutputLink;
-use crate::protocol::{Command, Fit};
+use crate::protocol::{Command, Fit, TransitionKind};
 use egui::{vec2, Color32, Key, Rect, RichText, Sense};
 use star_ui::theme::*;
 use star_ui::widgets::{mode_chip, pressed, transport_button, TransportIcon};
@@ -135,6 +135,17 @@ impl Diaporama {
                     }
                 }
             }
+            "settings/transition" => {
+                if let Some(k) = m.text().and_then(|t| TransitionKind::from_name(&t)) {
+                    self.s.transition.kind = k;
+                }
+                if let Some(rosc::OscType::Float(s)) = m.args.get(1) {
+                    self.s.transition.secs = (*s as f64).clamp(0.1, 5.0);
+                }
+                if running {
+                    out.send(self.settings_cmd());
+                }
+            }
             "settings/folder" => {
                 if let Some(p) = m.text() {
                     self.s.folder = Some(p.into());
@@ -210,7 +221,7 @@ impl Diaporama {
             shuffle: self.s.shuffle,
             fit: self.s.fit,
             video_sound: self.s.video_sound,
-            fade: self.s.fade,
+            transition: self.s.transition,
         });
     }
 
@@ -221,7 +232,7 @@ impl Diaporama {
             looping: self.s.looping,
             shuffle: self.s.shuffle,
             video_sound: self.s.video_sound,
-            fade: self.s.fade,
+            transition: self.s.transition,
         }
     }
 
@@ -386,20 +397,10 @@ impl Diaporama {
                 ui.add(egui::Slider::new(&mut self.s.photo_seconds, 1.0..=60.0).suffix(" s").step_by(0.5));
                 ui.end_row();
 
-                ui.label("Fondu entre photos");
-                ui.horizontal(|ui| {
-                    let mut on = self.s.fade > 0.0;
-                    if ui.checkbox(&mut on, "").on_hover_text("Fondu enchaîné d'une photo au média suivant (sinon : coupe)").changed() {
-                        self.s.fade = if on { 1.0 } else { 0.0 };
-                    }
-                    let max = (self.s.photo_seconds / 2.0).clamp(0.2, 5.0);
-                    if on {
-                        ui.add(egui::Slider::new(&mut self.s.fade, 0.2..=max).suffix(" s").step_by(0.1));
-                    } else {
-                        ui.label(RichText::new("coupe").color(TEXT_DIM));
-                    }
-                    self.s.fade = self.s.fade.min(max.max(0.2)).max(0.0);
-                });
+                ui.label("Transition").on_hover_text("Passage d'une photo au média suivant (après une vidéo : coupe)");
+                let max = (self.s.photo_seconds / 2.0).clamp(0.2, 5.0);
+                super::transition::picker(ui, "diaporama", &mut self.s.transition, max);
+                self.s.transition.secs = self.s.transition.secs.min(max);
                 ui.end_row();
 
                 ui.label("Ajustement");
@@ -421,7 +422,7 @@ impl Diaporama {
             out.send(Command::SetFit { fit: self.s.fit });
         }
         let b = &before.0;
-        let live = (self.s.photo_seconds, self.s.looping, self.s.shuffle, self.s.video_sound, self.s.fade) != (b.photo_seconds, b.looping, b.shuffle, b.video_sound, b.fade);
+        let live = (self.s.photo_seconds, self.s.looping, self.s.shuffle, self.s.video_sound, self.s.transition) != (b.photo_seconds, b.looping, b.shuffle, b.video_sound, b.transition);
         if live && running {
             out.send(self.settings_cmd());
         }
