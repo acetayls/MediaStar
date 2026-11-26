@@ -61,6 +61,7 @@ written to `oldstar.log`, in the settings folder. Log messages are in French.
 | Console | **None**, Yamaha CL/QL or Midas M32 / X32 |
 | IP address and port | Where to reach the console |
 | PC windows | The page may show any open window, or only the shortcuts |
+| Wireless mics | Receivers shown in the Mics tab: brand, IP address, port (0 = default), box to enable it |
 
 The language applies as soon as you **Save**: open tablet pages reload in the new language. The
 port and the console choice take effect at the next launch; a new console address is used right
@@ -71,8 +72,8 @@ the bottom of the tab).
 
 ### Top strip
 
-The **Console** (hidden when the console is **None**), **Apps**, **Windows** and **Help** tabs,
-then the link status:
+The **Console** (hidden when the console is **None**), **Mics** (when receivers are set up),
+**Apps**, **Windows** and **Help** tabs, then the link status:
 
 | Light | Meaning |
 |---|---|
@@ -98,6 +99,25 @@ On a very small screen, the status is reduced to its coloured dot.
   main faders.
 - Changes made on the console or on another tablet show up at once. Meters only run while the
   Console tab is shown, to spare Wi-Fi and battery.
+
+### Mics
+
+One card per wireless mic, updated several times a second:
+
+- channel name, frequency, receiver brand and model;
+- **battery** (five bars, plus remaining time on Shure or percentage on Sennheiser);
+- **RF** of antennas A and B (active antenna in bold; in dBm on Shure);
+- **audio** level (green bar, red near clipping, yellow line for the peak);
+- **MUTE** when the receiver output is muted;
+- alerts in red: low battery, low RF, audio peak, interference, transmitter muted, encryption
+  error. A serious alert (battery, RF, interference, encryption) or an offline receiver turns
+  the card red; a channel with no transmitter on is greyed out.
+
+Supported receivers: **Sennheiser** EM 300/500 G3 and EM 2000/2050 (rear network port,
+firmware 1.7.0 or later; the EM 100 G3 has no network and cannot be monitored), and **Shure**
+Axient Digital AD4D and AD4Q. Add them in **Settings → Wireless mics** with their IP address;
+they must be on the same network as the PC. The Shure receiver sees OldStar as a control
+system (AMX, Crestron): normally nothing to set on it.
 
 ### Apps
 
@@ -136,6 +156,8 @@ This help, readable on the tablet.
 - `oldstar --simulateur` starts a fake Yamaha QL1 on the PC and connects to it (faders moving by
   themselves, fake meters).
 - `oldstar --simulateur-m32` does the same with a fake M32.
+- `oldstar --simulateur-micros` adds a fake Sennheiser receiver and a fake two-channel Shure
+  AD4D to try the Mics tab (they are only saved if you save the Settings during the test).
 - `oldstar --console aucune` starts without a console, `oldstar --lang en` (or `fr`) chooses the
   language for this launch.
 - `oldstar --sans-fenetre` runs without a window; the log is shown in the console.
@@ -147,6 +169,8 @@ This help, readable on the tablet.
 | The tablet cannot open the page | Same network as the PC? Right adapter in **Connection**? OldStar allowed through the firewall? |
 | **Offline** on the tablet | Is OldStar still running? Is the tablet's Wi-Fi asleep? |
 | Console **offline** | IP address and port in **Settings**; is the console on the same network? |
+| No Mics tab | No receiver ticked in **Settings → Wireless mics** |
+| Receiver offline | Right IP address? Same network? On Sennheiser, network enabled in the menu and firmware 1.7.0 or later |
 | No Console tab | The console is set to **None** in **Settings** |
 | A window stays black | It is minimised to the taskbar (or the Dock): restore it on the PC. On a Mac: Screen Recording permission |
 | Touches do nothing | Try **Click: foreground**. On a Mac: Accessibility permission |

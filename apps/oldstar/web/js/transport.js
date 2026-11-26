@@ -4,7 +4,7 @@
  *   OS.transport.connect({ open: fn(mode), message: fn(obj), close: fn(raison) })
  *   OS.transport.send(obj)            commande JSON vers le serveur
  *   OS.transport.mode()               'ws', 'poll' ou ''
- *   OS.transport.wantMeters(oui)      reçoit ou non les relevés des vu-mètres
+ *   OS.transport.wantMeters(oui, qui) reçoit ou non les relevés des vu-mètres (et des micros)
  *
  * Messages reçus (voir docs/protocole.md) : { t: 'snap' | 'ev' | 'mtr', ... }. Le transport
  * retient seulement les numéros (seq des événements, ms des vu-mètres) pour reprendre là où il
@@ -185,8 +185,16 @@
 
     T.mode = function () { return current; };
 
-    T.wantMeters = function (on) {
-        on = !!on;
+    /* Plusieurs onglets peuvent vouloir les relevés (Console, Micros) : on les reçoit tant
+     * qu'au moins un les demande. */
+    var meterWants = {};
+    T.wantMeters = function (on, who) {
+        var k, any = false;
+        meterWants[who || 'console'] = !!on;
+        for (k in meterWants) {
+            if (meterWants.hasOwnProperty(k) && meterWants[k]) { any = true; }
+        }
+        on = any;
         if (on === meters) { return; }
         meters = on;
         if (current === 'ws') {

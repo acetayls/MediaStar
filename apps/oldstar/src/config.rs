@@ -22,6 +22,58 @@ pub struct Config {
     /// La page peut afficher n'importe quelle fenêtre ouverte du PC (en plus de `windows`).
     pub free_windows: bool,
     pub drag: DragConfig,
+    /// Récepteurs de micros HF suivis dans l'onglet Micros.
+    pub wireless: Vec<WirelessRx>,
+}
+
+/// Marque (et protocole) d'un récepteur HF.
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "lowercase")]
+pub enum WirelessKind {
+    /// Sennheiser ew 300/500 G3, 2000/2050 : texte sur UDP 53212, un récepteur par adresse.
+    #[default]
+    Sennheiser,
+    /// Shure Axient Digital (AD4D, AD4Q), ULX-D… : texte sur TCP 2202, plusieurs voies.
+    Shure,
+}
+
+impl WirelessKind {
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Sennheiser => "Sennheiser ew G3 / 2000",
+            Self::Shure => "Shure Axient Digital",
+        }
+    }
+
+    pub fn default_port(self) -> u16 {
+        match self {
+            Self::Sennheiser => 53212,
+            Self::Shure => 2202,
+        }
+    }
+}
+
+/// Un récepteur HF à suivre.
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct WirelessRx {
+    pub kind: WirelessKind,
+    pub host: String,
+    /// 0 : port habituel de la marque.
+    pub port: u16,
+    pub enabled: bool,
+}
+
+impl Default for WirelessRx {
+    fn default() -> Self {
+        Self { kind: WirelessKind::Sennheiser, host: String::new(), port: 0, enabled: true }
+    }
+}
+
+impl WirelessRx {
+    pub fn port(&self) -> u16 {
+        if self.port == 0 { self.kind.default_port() } else { self.port }
+    }
 }
 
 /// Glisser dans une fenêtre capturée (déplacer un module dans Lake…).
@@ -79,6 +131,7 @@ impl Default for Config {
             windows: default_windows(),
             free_windows: true,
             drag: DragConfig::default(),
+            wireless: vec![],
         }
     }
 }

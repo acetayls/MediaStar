@@ -1,16 +1,35 @@
 # Journal des modifications
 
-## 0.0.1 — en cours
+## 0.0.2 — 26 novembre 2026
 
 Première version d'OldStar : une télécommande qui s'ouvre dans le navigateur d'une vieille
 tablette ou d'un vieux téléphone, sans rien installer dessus. Le PC qui fait tourner OldStar sert
 la page sur le réseau local.
+
+### Nouvelle numérotation
+
+- **Toutes les applis de la suite repartent du même numéro de version** : MediaStar, JingleStar,
+  CueStar, OldStar et SweepStar sortent ensemble en 0.0.2, publiées dans la même release
+  MediaStar. Chaque appli garde son exécutable et son propre journal des modifications.
 
 ### Barre du haut
 
 - **Barre du haut commune à la suite** : logo d'OldStar, nom (« Star » en jaune) et onglets
   Connexion, Journal, Paramètres en contrôle segmenté, aux mêmes tailles que dans les autres
   applis.
+
+### Micros HF
+
+- Nouvel onglet **Micros** sur la tablette : une carte par micro HF avec son nom, sa fréquence,
+  la pile (barres, temps restant ou pourcentage), la HF des deux antennes, le niveau audio avec
+  sa crête, le mute et les alertes (pile faible, HF faible, saturation, interférence, émetteur
+  coupé, chiffrement). Une alerte grave ou un récepteur hors ligne passe la carte en rouge.
+- Récepteurs **Sennheiser** EM 300/500 G3 et EM 2000/2050, et **Shure** Axient Digital AD4D et
+  AD4Q, à ajouter dans **Paramètres → Micros HF** (marque, adresse IP). L'EM 100 G3 n'a pas de
+  prise réseau : il ne peut pas être suivi.
+- Sur le PC, l'onglet Connexion indique combien de micros sont en ligne et lesquels sont en
+  alerte.
+- Essai sans matériel : `oldstar --simulateur-micros` (un faux EM 2000 et un faux AD4D).
 
 ### Langue et console facultative
 

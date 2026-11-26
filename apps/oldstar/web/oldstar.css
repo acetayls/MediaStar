@@ -1171,3 +1171,249 @@ body.full .shot-img {
         margin-left: 4px;
     }
 }
+
+
+/* ---------- Onglet Micros ---------- */
+
+.mic-grid {
+    padding: 8px;
+    overflow: hidden;
+}
+
+.mic {
+    float: left;
+    width: 100%;
+    background: #242429;
+    border: 2px solid #3a3a43;
+    border-radius: 8px;
+    padding: 8px 10px;
+    margin-bottom: 8px;
+}
+
+.mic.alert {
+    border-color: #d94848;
+    background: #3a2224;
+}
+
+.mic.notx {
+    opacity: 0.6;
+}
+
+@media (min-width: 600px) {
+    .mic {
+        width: 49%;
+        margin-right: 2%;
+    }
+    .mic:nth-child(2n) {
+        margin-right: 0;
+    }
+}
+
+@media (min-width: 900px) {
+    .mic {
+        width: 32%;
+        margin-right: 2%;
+    }
+    .mic:nth-child(2n) {
+        margin-right: 2%;
+    }
+    .mic:nth-child(3n) {
+        margin-right: 0;
+    }
+}
+
+.mic-head {
+    display: -webkit-flex;
+    display: flex;
+    -webkit-align-items: center;
+    align-items: center;
+}
+
+.mic-name {
+    -webkit-flex: 1;
+    flex: 1;
+    font-size: 20px;
+    font-weight: bold;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.mic-freq {
+    color: #858590;
+    font-size: 13px;
+    white-space: nowrap;
+    padding-left: 6px;
+}
+
+.mic-sub {
+    color: #858590;
+    font-size: 12px;
+    margin: 2px 0 8px 20px;
+}
+
+.dot.idle {
+    background: #f0b030;
+}
+
+.dot.bad {
+    background: #d94848;
+}
+
+.mic-body {
+    display: -webkit-flex;
+    display: flex;
+    -webkit-align-items: flex-end;
+    align-items: flex-end;
+    height: 74px;
+}
+
+.mic-bat {
+    width: 66px;
+    margin-right: 10px;
+}
+
+.mic-bat-cells {
+    display: -webkit-flex;
+    display: flex;
+    height: 22px;
+    border: 2px solid #858590;
+    border-radius: 3px;
+    padding: 2px;
+}
+
+.mic-seg {
+    -webkit-flex: 1;
+    flex: 1;
+    margin-right: 2px;
+    background: #2e2e35;
+}
+
+.mic-seg:last-child {
+    margin-right: 0;
+}
+
+.mic-seg.on {
+    background: #46c855;
+}
+
+.mic-seg.low {
+    background: #d94848;
+}
+
+.mic-bat-text {
+    font-size: 14px;
+    text-align: center;
+    margin-top: 4px;
+    white-space: nowrap;
+}
+
+.mic-rf {
+    width: 38px;
+    height: 100%;
+    margin-right: 6px;
+    display: -webkit-flex;
+    display: flex;
+    -webkit-flex-direction: column;
+    flex-direction: column;
+    -webkit-align-items: center;
+    align-items: center;
+}
+
+.mic-rf-track {
+    -webkit-flex: 1;
+    flex: 1;
+    width: 14px;
+    background: #141416;
+    border-radius: 2px;
+    position: relative;
+    overflow: hidden;
+}
+
+.mic-rf-fill {
+    position: absolute;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    height: 0;
+    background: #4a90d9;
+}
+
+.mic-rf-label {
+    font-size: 11px;
+    color: #858590;
+    white-space: nowrap;
+    margin-top: 2px;
+}
+
+.mic-rf-label.act {
+    color: #dddde2;
+    font-weight: bold;
+}
+
+.mic-af {
+    -webkit-flex: 1;
+    flex: 1;
+    padding-bottom: 16px;
+}
+
+.mic-af-track {
+    height: 14px;
+    background: #141416;
+    border-radius: 2px;
+    position: relative;
+    overflow: hidden;
+}
+
+.mic-af-fill {
+    position: absolute;
+    left: 0;
+    top: 0;
+    bottom: 0;
+    width: 0;
+    background: #46c855;
+}
+
+.mic-af-fill.hot {
+    background: #d94848;
+}
+
+.mic-af-peak {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 2px;
+    background: #f0b030;
+}
+
+.mic-af-label {
+    font-size: 11px;
+    color: #858590;
+    margin-top: 2px;
+}
+
+.mic-foot {
+    display: -webkit-flex;
+    display: flex;
+    -webkit-align-items: center;
+    align-items: center;
+    min-height: 26px;
+    margin-top: 6px;
+}
+
+.mic-mute {
+    display: none;
+    background: #d94848;
+    color: #ffffff;
+    font-size: 12px;
+    font-weight: bold;
+    padding: 2px 8px;
+    border-radius: 3px;
+    margin-right: 8px;
+}
+
+.mic-warn {
+    color: #ff8a80;
+    font-size: 14px;
+    font-weight: bold;
+}

@@ -61,6 +61,7 @@ vide. Il est aussi écrit dans `oldstar.log`, dans le dossier de réglages.
 | Console | **Aucune**, Yamaha CL/QL ou Midas M32 / X32 |
 | Adresse IP et port | Où joindre la console |
 | Fenêtres du PC | La page peut afficher n'importe quelle fenêtre ouverte, ou seulement les raccourcis |
+| Micros HF | Récepteurs suivis dans l'onglet Micros : marque, adresse IP, port (0 = habituel), case pour l'activer |
 
 La langue s'applique dès qu'on **Enregistre** : les pages ouvertes sur les tablettes se
 rechargent dans la nouvelle langue. Le port et le choix de la console prennent effet au
@@ -71,8 +72,9 @@ réglages d'OldStar (le chemin est rappelé en bas de l'onglet).
 
 ### Bandeau du haut
 
-Les onglets **Console** (absent quand la console est **Aucune**), **Applis**, **Fenêtres** et
-**Aide**, puis l'état de la liaison :
+Les onglets **Console** (absent quand la console est **Aucune**), **Micros** (s'il y a des
+récepteurs dans les réglages), **Applis**, **Fenêtres** et **Aide**, puis l'état de la
+liaison :
 
 | Voyant | Signification |
 |---|---|
@@ -99,6 +101,25 @@ Sur un très petit écran, l'état se réduit à sa pastille de couleur.
   faders** revient aux faders principaux.
 - Ce qui change sur la console ou sur une autre tablette s'affiche aussitôt. Les vu-mètres ne
   tournent que quand l'onglet Console est affiché, pour ménager le Wi-Fi et la batterie.
+
+### Micros
+
+Une carte par micro HF, mise à jour plusieurs fois par seconde :
+
+- le nom de la voie, sa fréquence, la marque et le modèle du récepteur ;
+- la **pile** (cinq barres, et le temps restant sur Shure ou le pourcentage sur Sennheiser) ;
+- la **HF** des antennes A et B (l'antenne active en gras ; en dBm sur Shure) ;
+- le niveau **audio** (barre verte, rouge près de la saturation, trait jaune pour la crête) ;
+- **MUTE** quand la sortie du récepteur est coupée ;
+- les alertes en rouge : pile faible, HF faible, saturation, interférence, émetteur coupé,
+  erreur de chiffrement. Une alerte grave (pile, HF, interférence, chiffrement) ou un récepteur
+  hors ligne passe la carte en rouge ; une voie sans émetteur allumé est grisée.
+
+Récepteurs pris en charge : **Sennheiser** EM 300/500 G3 et EM 2000/2050 (réseau en face
+arrière, micrologiciel 1.7.0 ou plus ; l'EM 100 G3 n'a pas de réseau et ne peut pas être suivi),
+et **Shure** Axient Digital AD4D et AD4Q. Ajoutez-les dans **Paramètres → Micros HF** avec leur
+adresse IP ; ils doivent être sur le même réseau que le PC. Le récepteur Shure reçoit OldStar
+comme un système de contrôle (AMX, Crestron) : normalement rien à régler dessus.
 
 ### Applis
 
@@ -139,6 +160,9 @@ Cette aide, lisible sur la tablette.
 - `oldstar --simulateur` lance une fausse Yamaha QL1 sur le PC et s'y connecte (faders qui
   bougent seuls, vu-mètres factices).
 - `oldstar --simulateur-m32` fait de même avec une fausse M32.
+- `oldstar --simulateur-micros` ajoute un faux récepteur Sennheiser et un faux Shure AD4D à deux
+  voies pour essayer l'onglet Micros (ils ne sont enregistrés que si on enregistre les
+  Paramètres pendant l'essai).
 - `oldstar --console aucune` démarre sans console, `oldstar --lang fr` (ou `en`) choisit la
   langue pour ce lancement.
 - `oldstar --sans-fenetre` tourne sans fenêtre ; le journal s'affiche dans la console.
@@ -150,6 +174,8 @@ Cette aide, lisible sur la tablette.
 | La tablette n'ouvre pas la page | Même réseau que le PC ? Bonne carte réseau dans **Connexion** ? OldStar autorisé dans le pare-feu ? |
 | **Hors ligne** sur la tablette | OldStar tourne-t-il encore ? Le Wi-Fi de la tablette est-il en veille ? |
 | Console **hors ligne** | Adresse IP et port dans **Paramètres** ; la console est-elle sur le même réseau ? |
+| Pas d'onglet Micros | Aucun récepteur coché dans **Paramètres → Micros HF** |
+| Récepteur hors ligne | Bonne adresse IP ? Même réseau ? Sur Sennheiser, réseau activé dans le menu et micrologiciel 1.7.0 ou plus |
 | Pas d'onglet Console | La console est sur **Aucune** dans **Paramètres** |
 | Une fenêtre reste noire | Elle est réduite dans la barre des tâches (ou le Dock) : rouvrez-la sur le PC. Sur Mac : autorisation Enregistrement de l'écran |
 | Les touchers ne font rien | Essayez **Clic : premier plan**. Sur Mac : autorisation Accessibilité |

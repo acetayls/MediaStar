@@ -26,7 +26,9 @@ mod osc;
 mod server;
 mod simulator;
 mod simulator_m32;
+mod simulator_wireless;
 mod ui;
+mod wireless;
 mod yamaha;
 
 use std::path::PathBuf;
@@ -44,12 +46,13 @@ struct Args {
     port: Option<u16>,
     no_window: bool,
     lang: Option<star_core::i18n::Lang>,
+    sim_mics: bool,
 }
 
-const USAGE: &str = "oldstar [--console yamaha|m32|aucune] [--lang en|fr] [--simulateur [port]] [--simulateur-m32 [port]] [--config <fichier>] [--port <port http>] [--sans-fenetre]";
+const USAGE: &str = "oldstar [--console yamaha|m32|aucune] [--lang en|fr] [--simulateur [port]] [--simulateur-m32 [port]] [--config <fichier>] [--port <port http>] [--simulateur-micros] [--sans-fenetre]";
 
 fn parse_args(args: &[String]) -> Result<Args, String> {
-    let mut a = Args { simulator: None, console: None, config: None, port: None, no_window: false, lang: None };
+    let mut a = Args { simulator: None, console: None, config: None, port: None, no_window: false, lang: None, sim_mics: false };
     let mut it = args.iter().skip(1).cloned().peekable();
     while let Some(arg) = it.next() {
         match arg.as_str() {
@@ -79,6 +82,7 @@ fn parse_args(args: &[String]) -> Result<Args, String> {
             "--config" => a.config = Some(PathBuf::from(it.next().ok_or("--config attend un fichier")?)),
             "--port" => a.port = Some(it.next().and_then(|p| p.parse().ok()).ok_or("--port attend un numéro")?),
             "--sans-fenetre" | "--headless" => a.no_window = true,
+            "--simulateur-micros" | "--simulator-mics" => a.sim_mics = true,
             "-h" | "--help" | "/?" => {
                 println!("{USAGE}");
                 std::process::exit(0);
@@ -150,6 +154,21 @@ pub fn run(args: &[String]) {
         std::thread::sleep(std::time::Duration::from_millis(200));
     }
 
+    if args.sim_mics {
+        // Faux récepteurs HF sur ce PC (non enregistrés) : un Sennheiser et un Shure AD4D.
+        use config::{WirelessKind, WirelessRx};
+        let (ps, pt) = (53212, 2202);
+        std::thread::Builder::new().name("simulateur-sennheiser".into()).spawn(move || simulator_wireless::run_sennheiser(ps)).expect("thread simulateur");
+        std::thread::Builder::new().name("simulateur-shure".into()).spawn(move || simulator_wireless::run_shure(pt)).expect("thread simulateur");
+        for (kind, port) in [(WirelessKind::Sennheiser, ps), (WirelessKind::Shure, pt)] {
+            let rx = WirelessRx { kind, host: "127.0.0.1".into(), port, enabled: true };
+            if !cfg.wireless.contains(&rx) {
+                cfg.wireless.push(rx);
+            }
+        }
+        std::thread::sleep(std::time::Duration::from_millis(100));
+    }
+
     let port = cfg.http_port;
     let hub = Arc::new(hub::Hub::new(cfg, path));
     match hub.cfg().console {
@@ -158,6 +177,7 @@ pub fn run(args: &[String]) {
         config::ConsoleKind::None => journal::info("Aucune console : onglets Applis et Fenêtres seulement"),
     }
     osc::start(hub.clone());
+    wireless::start(hub.clone());
     let frames = Arc::new(frames::Frames::default());
 
     let server_error = match server::bind(port) {

@@ -25,6 +25,7 @@ const FILES: &[(&str, &str, &str)] = &[
     ("/js/transport.js", "application/javascript; charset=utf-8", include_str!("../web/js/transport.js")),
     ("/js/eq.js", "application/javascript; charset=utf-8", include_str!("../web/js/eq.js")),
     ("/js/console.js", "application/javascript; charset=utf-8", include_str!("../web/js/console.js")),
+    ("/js/micros.js", "application/javascript; charset=utf-8", include_str!("../web/js/micros.js")),
     ("/js/applis.js", "application/javascript; charset=utf-8", include_str!("../web/js/applis.js")),
     ("/js/fenetres.js", "application/javascript; charset=utf-8", include_str!("../web/js/fenetres.js")),
     ("/js/aide.js", "application/javascript; charset=utf-8", include_str!("../web/js/aide.js")),
@@ -232,7 +233,10 @@ fn snap_msg(hub: &Hub) -> (u64, Value) {
 }
 
 fn meter_fps(hub: &Hub) -> u32 {
-    hub.cfg().meters().1
+    let cfg = hub.cfg();
+    let fps = cfg.meters().1;
+    // Micros HF : au moins 5 relevés par seconde.
+    if cfg.wireless.iter().any(|r| r.enabled) { fps.max(5) } else { fps }
 }
 
 /// Commande de la page, quel que soit le transport (hello, snap et meters sont traités à part).

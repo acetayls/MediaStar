@@ -34,6 +34,41 @@ pub struct YamahaStatus {
     pub last_error_line: String,
 }
 
+/// État d'une voie de micro HF, commun aux marques (voir wireless.rs). Envoyé à la page avec
+/// les vu-mètres.
+#[derive(Clone, Debug, Default, serde::Serialize)]
+pub struct Mic {
+    /// Récepteur (index dans `wireless` des réglages) et voie (1 à 4).
+    pub rx: usize,
+    pub ch: u32,
+    pub brand: &'static str,
+    pub model: String,
+    pub name: String,
+    /// Le récepteur répond.
+    pub online: bool,
+    /// Un émetteur est reçu.
+    pub tx: bool,
+    /// Fréquence en kHz (0 : inconnue).
+    pub freq: u32,
+    /// Pile : pourcentage, barres (0 à 5) et minutes restantes, quand le récepteur les donne.
+    pub bat: Option<u8>,
+    pub bars: Option<u8>,
+    pub mins: Option<u32>,
+    /// Niveaux HF des antennes A et B, 0 à 100 ; antenne active (1, 2 ; 0 inconnue).
+    pub rf_a: u8,
+    pub rf_b: u8,
+    pub ant: u8,
+    /// Niveaux en dBm (Shure) quand ils sont connus.
+    pub dbm_a: Option<i32>,
+    pub dbm_b: Option<i32>,
+    /// Audio : niveau et crête, 0 à 100 (0 = −50 dB, 100 = pleine échelle).
+    pub af: u8,
+    pub peak: u8,
+    pub mute: bool,
+    /// Alertes : low_bat, low_rf, af_peak, rx_mute, tx_mute, rf_mute, interference, encryption.
+    pub warn: Vec<&'static str>,
+}
+
 #[derive(Default)]
 struct State {
     seq: u64,
@@ -45,6 +80,7 @@ struct State {
     osc_values: HashMap<(usize, String), Value>,
     osc_alive: Vec<bool>,
     meters: Meters,
+    mics: Vec<Mic>,
 }
 
 pub struct Hub {
@@ -58,7 +94,6 @@ pub struct Hub {
     pub generation: AtomicU64,
     pub ws_clients: AtomicUsize,
     poll_clients: Mutex<HashMap<String, Instant>>,
-    pub started: Instant,
 }
 
 impl Hub {
@@ -72,7 +107,6 @@ impl Hub {
             generation: AtomicU64::new(0),
             ws_clients: AtomicUsize::new(0),
             poll_clients: Mutex::new(HashMap::new()),
-            started: Instant::now(),
         }
     }
 
@@ -109,10 +143,6 @@ impl Hub {
             self.push_locked(&mut s, json!({ "e": "p", "a": addr, "x": x, "y": y, "v": v, "s": text }));
         }
         self.changed.notify_all();
-    }
-
-    pub fn has_param(&self, addr: &str, x: u32, y: u32) -> bool {
-        self.state.lock().map(|s| s.params.contains_key(&(addr.to_string(), x, y))).unwrap_or(false)
     }
 
     pub fn yamaha_status(&self) -> YamahaStatus {
@@ -156,10 +186,6 @@ impl Hub {
         self.changed.notify_all();
     }
 
-    pub fn osc_alive(&self) -> Vec<bool> {
-        self.state.lock().map(|s| s.osc_alive.clone()).unwrap_or_default()
-    }
-
     pub fn set_meters(&self, inch: Option<(usize, Vec<u8>)>, mix: Option<(usize, Vec<u8>)>) {
         if let Ok(mut s) = self.state.lock() {
             let m = &mut s.meters;
@@ -176,14 +202,49 @@ impl Hub {
         self.changed.notify_all();
     }
 
-    /// Relevé des vu-mètres s'il est plus récent que `seen`.
+    /// Relevé des vu-mètres (et des micros HF) s'il est plus récent que `seen`.
     pub fn meters_since(&self, seen: u64) -> Option<(u64, Value)> {
         let s = self.state.lock().ok()?;
-        (s.meters.seq > seen).then(|| (s.meters.seq, json!({ "i": s.meters.inch, "m": s.meters.mix })))
+        (s.meters.seq > seen).then(|| (s.meters.seq, json!({ "i": s.meters.inch, "m": s.meters.mix, "w": s.mics })))
     }
 
-    pub fn seq(&self) -> u64 {
-        self.state.lock().map(|s| s.seq).unwrap_or(0)
+    /// Change l'état d'une voie de micro (créée au besoin) ; la page le reçoit au relevé suivant.
+    pub fn update_mic(&self, rx: usize, ch: u32, f: impl FnOnce(&mut Mic)) {
+        if let Ok(mut s) = self.state.lock() {
+            let i = match s.mics.iter().position(|m| m.rx == rx && m.ch == ch) {
+                Some(i) => i,
+                None => {
+                    s.mics.push(Mic { rx, ch, ..Default::default() });
+                    s.mics.sort_by_key(|m| (m.rx, m.ch));
+                    s.mics.iter().position(|m| m.rx == rx && m.ch == ch).unwrap_or(0)
+                }
+            };
+            f(&mut s.mics[i]);
+            s.meters.seq += 1;
+        }
+        self.changed.notify_all();
+    }
+
+    /// Toutes les voies d'un récepteur (pour le marquer hors ligne).
+    pub fn update_rx(&self, rx: usize, f: impl Fn(&mut Mic)) {
+        if let Ok(mut s) = self.state.lock() {
+            s.mics.iter_mut().filter(|m| m.rx == rx).for_each(f);
+            s.meters.seq += 1;
+        }
+        self.changed.notify_all();
+    }
+
+    /// Oublie les micros (nouvelle liste de récepteurs).
+    pub fn clear_mics(&self) {
+        if let Ok(mut s) = self.state.lock() {
+            s.mics.clear();
+            s.meters.seq += 1;
+        }
+        self.changed.notify_all();
+    }
+
+    pub fn mics(&self) -> Vec<Mic> {
+        self.state.lock().map(|s| s.mics.clone()).unwrap_or_default()
     }
 
     /// Événements après `since` ; `None` si une partie a été oubliée (le client doit tout recharger).
@@ -264,6 +325,7 @@ impl Hub {
             "osc_alive": s.osc_alive,
             "windows": windows,
             "free_windows": cfg.free_windows && crate::capture::AVAILABLE,
+            "wireless": cfg.wireless.iter().filter(|r| r.enabled && !r.host.trim().is_empty()).count(),
         })
     }
 

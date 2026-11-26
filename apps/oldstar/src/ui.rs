@@ -7,7 +7,7 @@ use std::sync::atomic::Ordering;
 use std::sync::Arc;
 use std::time::Duration;
 
-use crate::config::{Config, ConsoleKind};
+use crate::config::{Config, ConsoleKind, WirelessKind, WirelessRx};
 use crate::hub::Hub;
 use crate::journal::{self, Level};
 use star_core::i18n::{set_lang, tr, Lang};
@@ -166,6 +166,25 @@ impl OldStarUi {
                 n => format!("{n} {}", tr("appareils connectés", "devices connected")),
             });
         });
+        // Micros HF : voies reçues et alertes.
+        let mics = self.hub.mics();
+        if !mics.is_empty() {
+            let online = mics.iter().filter(|m| m.online).count();
+            let alerts: Vec<String> = mics
+                .iter()
+                .filter(|m| m.online && m.tx && m.warn.iter().any(|w| matches!(*w, "low_bat" | "low_rf" | "interference" | "encryption")))
+                .map(|m| m.name.clone())
+                .collect();
+            ui.horizontal(|ui| {
+                let color = if online < mics.len() || !alerts.is_empty() { theme::STOP } else { theme::GO };
+                ui.label(RichText::new("●").color(color));
+                let mut t = format!("{} : {online}/{} {}", tr("Micros HF", "Wireless mics"), mics.len(), tr("en ligne", "online"));
+                if !alerts.is_empty() {
+                    t.push_str(&format!(" · {} {}", tr("alerte :", "alert:"), alerts.join(", ")));
+                }
+                ui.label(t);
+            });
+        }
     }
 
     fn journal(&mut self, ui: &mut egui::Ui) {
@@ -239,6 +258,40 @@ impl OldStarUi {
             ui.checkbox(&mut e.free_windows, tr("La page peut afficher n'importe quelle fenêtre ouverte", "The page may show any open window"));
             ui.end_row();
         });
+        ui.add_space(12.0);
+        // Récepteurs de micros HF (onglet Micros de la tablette).
+        ui.label(RichText::new(tr("Micros HF", "Wireless mics")).strong());
+        let mut remove = None;
+        egui::Grid::new("wireless").num_columns(5).spacing([8.0, 6.0]).show(ui, |ui| {
+            for (i, rx) in e.wireless.iter_mut().enumerate() {
+                ui.checkbox(&mut rx.enabled, "");
+                egui::ComboBox::from_id_salt(("wkind", i)).selected_text(rx.kind.label()).show_ui(ui, |ui| {
+                    for k in [WirelessKind::Sennheiser, WirelessKind::Shure] {
+                        ui.selectable_value(&mut rx.kind, k, k.label());
+                    }
+                });
+                ui.add(egui::TextEdit::singleline(&mut rx.host).hint_text(tr("adresse IP", "IP address")).desired_width(130.0));
+                ui.add(egui::DragValue::new(&mut rx.port).range(0..=65535).custom_formatter(|v, _| if v == 0.0 { tr("port habituel", "default port").to_string() } else { format!("{v}") }));
+                if ui.small_button(tr("Retirer", "Remove")).clicked() {
+                    remove = Some(i);
+                }
+                ui.end_row();
+            }
+        });
+        if let Some(i) = remove {
+            e.wireless.remove(i);
+        }
+        if ui.small_button(tr("Ajouter un récepteur", "Add a receiver")).clicked() {
+            e.wireless.push(WirelessRx::default());
+        }
+        ui.label(
+            RichText::new(tr(
+                "Sennheiser : EM 300/500 G3, EM 2000/2050 (pas l'EM 100 G3, sans réseau). Shure : Axient Digital AD4D, AD4Q.",
+                "Sennheiser: EM 300/500 G3, EM 2000/2050 (not the EM 100 G3, which has no network). Shure: Axient Digital AD4D, AD4Q.",
+            ))
+            .color(theme::TEXT_DIM)
+            .small(),
+        );
         ui.add_space(10.0);
         if ui.button(tr("Enregistrer", "Save")).clicked() {
             let cfg = self.edit.clone();
@@ -295,7 +348,9 @@ impl eframe::App for OldStarUi {
         egui::CentralPanel::default().show(ui, |ui| match self.tab {
             Tab::Connexion => self.connexion(ui),
             Tab::Journal => self.journal(ui),
-            Tab::Parametres => self.parametres(ui),
+            Tab::Parametres => {
+                egui::ScrollArea::vertical().auto_shrink([false, false]).show(ui, |ui| self.parametres(ui));
+            }
         });
         let ctx = ui.ctx().clone();
         self.help.show(&ctx);
