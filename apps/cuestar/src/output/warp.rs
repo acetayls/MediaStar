@@ -300,6 +300,7 @@ vec3 tcombine(vec2 t, float p, vec4 q, vec3 a, vec3 b) {
 }
 "#;
 
+#[cfg_attr(windows, allow(dead_code))]
 pub fn glsl_transitions() -> &'static str {
     TRANSITIONS
 }
@@ -309,6 +310,7 @@ pub fn hlsl_transitions() -> String {
     TRANSITIONS.replace("vec2", "float2").replace("vec3", "float3").replace("vec4", "float4").replace("mix(", "lerp(")
 }
 
+#[cfg_attr(windows, allow(dead_code))]
 pub fn glsl_core() -> String {
     CORE.to_string()
 }
