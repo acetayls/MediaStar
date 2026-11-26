@@ -1,22 +1,22 @@
 {
 	"name": "mediastar",
-	"version": "0.0.1",
+	"version": "0.0.4",
 	"description": "Bitfocus Companion module for the MediaStar suite (JingleStar, CueStar)",
 	"type": "module",
 	"main": "src/main.js",
 	"license": "MIT",
 	"private": true,
 	"scripts": {
-		"test": "node --test \"test/*.test.js\"",
+		"test": "node --test --test-force-exit \"test/*.test.js\"",
 		"package": "companion-module-build"
 	},
 	"engines": {
 		"node": "^22.8"
 	},
 	"dependencies": {
-		"@companion-module/base": "~1.15.1"
+		"@companion-module/base": "~1.12.0"
 	},
 	"devDependencies": {
-		"@companion-module/tools": "^2.9.1"
+		"@companion-module/tools": "~2.4.2"
 	}
 }

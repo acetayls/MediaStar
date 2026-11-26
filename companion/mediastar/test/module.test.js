@@ -4,7 +4,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { MediaStarInstance } from '../src/instance.js'
-import { flattenTree, formatTime, normalizePrefix } from '../src/util.js'
+import { flattenTree, formatTime, normalizePrefix, progressBar } from '../src/util.js'
 import { cueTree, jingleTree, serve, writablePaths } from './fake-apps.js'
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
@@ -74,6 +74,13 @@ test('helpers', () => {
 	const flat = flattenTree(jingleTree('/js', jingleModules), '/js')
 	assert.equal(flat.get('/module/1/jingle/1/name'), 'Intro')
 	assert.equal(flat.get('/module/2/playlist/shuffle'), true)
+	assert.deepEqual(progressBar(-1, 0xffffff, 6), {})
+	const bar = progressBar(0.5, 0xff0000, 6, { width: 72, height: 58 })
+	assert.deepEqual(bar.imageBufferPosition, { x: 0, y: 52, width: 72, height: 6 })
+	const px = Buffer.from(bar.imageBuffer, 'base64')
+	assert.equal(px.length, 72 * 6 * 4)
+	assert.deepEqual([...px.subarray(0, 4)], [255, 0, 0, 255])
+	assert.deepEqual([...px.subarray(71 * 4, 72 * 4)], [0, 0, 0, 160])
 })
 
 test('JingleStar: state, variables, feedbacks, actions, presets', async () => {
@@ -202,6 +209,10 @@ test('CueStar: state, variables, feedbacks, actions, presets', async () => {
 		assert.equal(fb('black'), false)
 		assert.equal(fb('cuelist_loop'), true)
 		assert.equal(fb('cue_standby_is', { cue: 3 }), true)
+		const bar = inst.feedbacks.progress.callback({ options: { colour: 0xffffff, height: 6 }, image: { width: 72, height: 72 } })
+		const px = Buffer.from(bar.imageBuffer, 'base64')
+		const filled = [...Array(72).keys()].filter((x) => px[x * 4 + 3] === 255).length
+		assert.equal(filled, Math.round((61.2 / 91.2) * 72))
 
 		const all = writablePaths(cueTree('/show', snap), '/show')
 		for (const [id, def] of Object.entries(inst.actions)) {
@@ -248,6 +259,8 @@ function checkPresets(inst) {
 		for (const f of p.feedbacks) {
 			const def = inst.feedbacks[f.feedbackId]
 			assert.ok(def, `${id}: feedback ${f.feedbackId}`)
+			if (def.type === 'boolean') assert.ok(f.style && Object.keys(f.style).length > 0, `${id}: style of ${f.feedbackId}`)
+			if (def.type === 'boolean') assert.ok(!('text' in f.style), `${id}: style of ${f.feedbackId} must keep the text`)
 			for (const k of Object.keys(f.options)) assert.ok(def.options.some((o) => o.id === k), `${id}: option ${k}`)
 		}
 	}

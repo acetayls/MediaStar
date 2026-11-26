@@ -2,7 +2,7 @@
 // Numbers of modules, jingles, tracks and cues start at 1 in the addresses.
 
 import { combineRgb } from '@companion-module/base'
-import { dim, formatTime, numberChoices, oscBool, parseHex, rgb, textOn, truthy } from './util.js'
+import { barOptions, dim, formatTime, numberChoices, oscBool, parseHex, progressBar, rgb, textOn, truthy } from './util.js'
 
 export const MODULES = 4
 export const SLOTS = 12
@@ -324,6 +324,32 @@ export function feedbacks(self) {
 			callback: ({ options: o }) => Number(g(`/module/${o.module}/cue/playing`) ?? 0) > 0,
 		},
 		cue_paused: bool('Cue list is paused', [moduleOpt], (o) => `/module/${o.module}/cue/paused`, { bgcolor: ORANGE, color: BLACK }),
+		progress: {
+			type: 'advanced',
+			name: 'Progress bar',
+			description: 'Bar at the bottom of the button: progress of a jingle, of the playlist track or of the cue playing.',
+			options: [
+				moduleOpt,
+				{
+					type: 'dropdown',
+					id: 'what',
+					label: 'Progress of',
+					default: 'jingle',
+					choices: [
+						{ id: 'jingle', label: 'Jingle' },
+						{ id: 'playlist', label: 'Playlist track' },
+						{ id: 'cue', label: 'Cue playing (cue list)' },
+					],
+				},
+				{ ...slotOpt, label: 'Jingle (for a jingle)' },
+				...barOptions,
+			],
+			callback: ({ options: o, image }) => {
+				const b = `/module/${o.module}`
+				const path = o.what === 'playlist' ? `${b}/playlist/progress` : o.what === 'cue' ? `${b}/cue/progress` : `${b}/jingle/${o.slot}/progress`
+				return progressBar(g(path), o.colour, o.height, image)
+			},
+		},
 		module_mode: {
 			type: 'boolean',
 			name: 'Module is in mode',
@@ -364,7 +390,10 @@ export function presets(self) {
 				`Jingle ${s}`,
 				`${v(`j${s}_name`)}\\n${v(`j${s}_remaining`)}`,
 				press('jingle', { module: mi, slot: s, action: 'toggle' }),
-				[{ feedbackId: 'jingle_colour', options: { module: mi, slot: s, dim: 35 } }],
+				[
+					{ feedbackId: 'jingle_colour', options: { module: mi, slot: s, dim: 35 } },
+					{ feedbackId: 'progress', options: { module: mi, what: 'jingle', slot: s, colour: 0xffffff, height: 6 } },
+				],
 			)
 		}
 		button(`m${mi}_stop`, cat, 'Stop module', `STOP\\n${v('name')}`, press('module_stop', { module: mi }), [], { bgcolor: RED })
@@ -374,21 +403,24 @@ export function presets(self) {
 			`m${mi}_pl_play`,
 			pcat,
 			'Play',
-			`▶\\n${v('pl_title')}\\n${v('pl_remaining')}`,
+			`PLAY\\n${v('pl_title')}\\n${v('pl_remaining')}`,
 			press('playlist', { module: mi, action: 'play' }),
-			[{ feedbackId: 'playlist_playing', options: { module: mi } }],
+			[
+				{ feedbackId: 'playlist_playing', options: { module: mi } },
+				{ feedbackId: 'progress', options: { module: mi, what: 'playlist', slot: 1, colour: 0xffffff, height: 6 } },
+			],
 		)
 		button(
 			`m${mi}_pl_pause`,
 			pcat,
 			'Pause',
-			'⏸',
+			'PAUSE',
 			press('playlist', { module: mi, action: 'pause' }),
 			[{ feedbackId: 'playlist_paused', options: { module: mi } }],
 		)
-		button(`m${mi}_pl_stop`, pcat, 'Stop', '⏹', press('playlist', { module: mi, action: 'stop' }))
-		button(`m${mi}_pl_prev`, pcat, 'Previous', '⏮', press('playlist', { module: mi, action: 'previous' }))
-		button(`m${mi}_pl_next`, pcat, 'Next', '⏭', press('playlist', { module: mi, action: 'next' }))
+		button(`m${mi}_pl_stop`, pcat, 'Stop', 'STOP', press('playlist', { module: mi, action: 'stop' }))
+		button(`m${mi}_pl_prev`, pcat, 'Previous', 'PREV', press('playlist', { module: mi, action: 'previous' }))
+		button(`m${mi}_pl_next`, pcat, 'Next', 'NEXT', press('playlist', { module: mi, action: 'next' }))
 		button(
 			`m${mi}_pl_shuffle`,
 			pcat,
@@ -416,15 +448,18 @@ export function presets(self) {
 			[{ feedbackId: 'cue_playing', options: { module: mi } }],
 			{ bgcolor: combineRgb(0, 90, 0) },
 		)
-		button(`m${mi}_cue_prev`, ccat, 'Previous cue', '▲ CUE', press('cue', { module: mi, action: 'previous' }))
-		button(`m${mi}_cue_next`, ccat, 'Next cue', '▼ CUE', press('cue', { module: mi, action: 'next' }))
+		button(`m${mi}_cue_prev`, ccat, 'Previous cue', 'PREV\\nCUE', press('cue', { module: mi, action: 'previous' }))
+		button(`m${mi}_cue_next`, ccat, 'Next cue', 'NEXT\\nCUE', press('cue', { module: mi, action: 'next' }))
 		button(
 			`m${mi}_cue_pause`,
 			ccat,
 			'Pause cues',
 			`PAUSE\\n${v('cue_playing_name')}\\n${v('cue_remaining')}`,
 			press('cue', { module: mi, action: 'pause' }),
-			[{ feedbackId: 'cue_paused', options: { module: mi } }],
+			[
+				{ feedbackId: 'cue_paused', options: { module: mi } },
+				{ feedbackId: 'progress', options: { module: mi, what: 'cue', slot: 1, colour: 0xffffff, height: 6 } },
+			],
 		)
 		button(`m${mi}_cue_stop`, ccat, 'Stop module', 'STOP', press('module_stop', { module: mi }), [], { bgcolor: RED })
 	}

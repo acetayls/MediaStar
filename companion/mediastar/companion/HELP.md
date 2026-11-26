@@ -20,7 +20,7 @@ One connection drives one application. Add a second connection for the other one
 
 - Actions: stop all, GO; per module: stop, volume (set or adjust), mode; jingle play / stop / toggle and volume; playlist transport, track number, pause, shuffle and loop; cue list GO, next / previous cue, cue number in standby, pause.
 - Variables (module `m` 1-4, jingle `j` 1-12): `m1_name`, `m1_j3_name`, `m1_j3_remaining`, `m1_pl_title`, `m1_pl_remaining`, `m1_cue_name`, `m1_cue_playing_name`, `m1_cue_remaining`…
-- Feedbacks: jingle colour (bright when playing), jingle playing, playlist playing / paused / shuffle / loop, cue playing / paused, module mode.
+- Feedbacks: progress bar (jingle, playlist track or cue playing), jingle colour (bright when playing), jingle playing, playlist playing / paused / shuffle / loop, cue playing / paused, module mode.
 - Presets: a grid of 12 jingles per module, playlist transport, GO button with the cue in standby.
 
 The jingle, playlist and cue list values only exist while the module is in that mode in JingleStar.
@@ -29,7 +29,7 @@ The jingle, playlist and cue list values only exist while the module is in that 
 
 - Actions: black, cue list transport (GO, play, pause, stop, next, previous), cue in standby, go to cue, loop, transition; slideshow transport, media number and settings.
 - Variables: `media`, `time`, `remaining`, `cue_standby`, `cue_name`, `cue_running`, `cue_count`, `slide_index`, `slide_count`.
-- Feedbacks: paused, media on screen, black, loop, cue in standby is number.
+- Feedbacks: progress bar (position in the media), paused, media on screen, black, loop, cue in standby is number.
 
 ### Stream Deck
 

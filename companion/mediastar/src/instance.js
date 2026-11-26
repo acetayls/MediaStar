@@ -116,9 +116,10 @@ export class MediaStarInstance extends InstanceBase {
 		this.failures = 0
 		const impl = this.app.impl
 		this.setActionDefinitions(impl.actions(this))
-		this.setFeedbackDefinitions({ ...impl.feedbacks(this), ...this.commonFeedbacks() })
+		const feedbacks = { ...impl.feedbacks(this), ...this.commonFeedbacks() }
+		this.setFeedbackDefinitions(feedbacks)
 		this.setVariableDefinitions([{ variableId: 'connected', name: 'Connected (state readable)' }, ...impl.variableDefinitions()])
-		this.setPresetDefinitions(impl.presets(this))
+		this.setPresetDefinitions(withFeedbackStyles(impl.presets(this), feedbacks))
 		this.applyState(new Map())
 		this.updateStatus(InstanceStatus.Connecting)
 		this.poll()
@@ -197,4 +198,18 @@ function sameMap(a, b) {
 		if (b.get(k) !== v) return false
 	}
 	return true
+}
+
+/**
+ * A boolean feedback in a preset must carry its own style: without one, Companion replaces the
+ * button style (text included) when the feedback becomes true.
+ */
+export function withFeedbackStyles(presets, feedbacks) {
+	for (const p of Object.values(presets)) {
+		for (const f of p.feedbacks ?? []) {
+			const def = feedbacks[f.feedbackId]
+			if (def?.type === 'boolean' && !f.style) f.style = { ...def.defaultStyle }
+		}
+	}
+	return presets
 }

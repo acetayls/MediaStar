@@ -2,7 +2,7 @@
 // CueStar triggers take no argument; cue and media numbers start at 1.
 
 import { combineRgb } from '@companion-module/base'
-import { formatTime, oscBool, truthy } from './util.js'
+import { barOptions, formatTime, oscBool, progressBar, truthy } from './util.js'
 
 const WHITE = combineRgb(255, 255, 255)
 const BLACK = combineRgb(0, 0, 0)
@@ -247,6 +247,18 @@ export function feedbacks(self) {
 			options: [],
 			callback: () => truthy(g('/cuelist/loop')),
 		},
+		progress: {
+			type: 'advanced',
+			name: 'Progress bar',
+			description: 'Bar at the bottom of the button: position in the media on screen.',
+			options: [...barOptions],
+			callback: ({ options: o, image }) => {
+				const time = Number(g('/time'))
+				const left = Number(g('/remaining'))
+				const fraction = String(g('/media') ?? '') !== '' && left >= 0 && time + left > 0 ? time / (time + left) : -1
+				return progressBar(fraction, o.colour, o.height, image)
+			},
+		},
 		cue_standby_is: {
 			type: 'boolean',
 			name: 'Cue in standby is number',
@@ -279,17 +291,17 @@ export function presets(self) {
 	button('go', c, 'GO (cue in standby)', `GO\\n${v('cue_standby')} ${v('cue_name')}`, press('cuelist', { action: 'go' }), [], {
 		bgcolor: combineRgb(0, 90, 0),
 	})
-	button('prev', c, 'Previous cue', '▲ CUE', press('cuelist', { action: 'prev' }))
-	button('next', c, 'Next cue', '▼ CUE', press('cuelist', { action: 'next' }))
+	button('prev', c, 'Previous cue', 'PREV\\nCUE', press('cuelist', { action: 'prev' }))
+	button('next', c, 'Next cue', 'NEXT\\nCUE', press('cuelist', { action: 'next' }))
 	button(
 		'toggle',
 		c,
 		'Play / pause',
-		`⏯\\n${v('remaining')}`,
+		`PLAY\\nPAUSE\\n${v('remaining')}`,
 		press('cuelist', { action: 'toggle' }),
-		[{ feedbackId: 'paused', options: {} }],
+		[{ feedbackId: 'paused', options: {} }, { feedbackId: 'progress', options: { colour: 0xffffff, height: 6 } }],
 	)
-	button('stop', c, 'Stop', '⏹', press('cuelist', { action: 'stop' }))
+	button('stop', c, 'Stop', 'STOP', press('cuelist', { action: 'stop' }))
 	button('black', c, 'Black', 'BLACK', press('black'), [{ feedbackId: 'black', options: {} }])
 	button(
 		'loop',
@@ -301,12 +313,13 @@ export function presets(self) {
 	)
 	button('now', c, 'Now playing', `${v('cue_running')}\\n${v('time')} / -${v('remaining')}`, [{ down: [], up: [] }], [
 		{ feedbackId: 'on_screen', options: {} },
+		{ feedbackId: 'progress', options: { colour: 0xffffff, height: 6 } },
 	])
 
 	const d = 'CueStar: slideshow'
-	button('sl_toggle', d, 'Play / pause', `⏯\\n${v('slide_index')}/${v('slide_count')}`, press('slideshow', { action: 'toggle' }))
-	button('sl_prev', d, 'Previous media', '⏮', press('slideshow', { action: 'prev' }))
-	button('sl_next', d, 'Next media', '⏭', press('slideshow', { action: 'next' }))
-	button('sl_stop', d, 'Stop', '⏹', press('slideshow', { action: 'stop' }))
+	button('sl_toggle', d, 'Play / pause', `PLAY\\nPAUSE\\n${v('slide_index')}/${v('slide_count')}`, press('slideshow', { action: 'toggle' }))
+	button('sl_prev', d, 'Previous media', 'PREV', press('slideshow', { action: 'prev' }))
+	button('sl_next', d, 'Next media', 'NEXT', press('slideshow', { action: 'next' }))
+	button('sl_stop', d, 'Stop', 'STOP', press('slideshow', { action: 'stop' }))
 	return out
 }

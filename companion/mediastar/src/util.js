@@ -77,3 +77,35 @@ export function numberChoices(n, label) {
 export function truthy(v) {
 	return v === true || v === 1 || v === 'true'
 }
+
+/**
+ * Progress bar drawn at the bottom of the button (advanced feedback result), or {} when there is
+ * no progress (fraction negative or missing). `image` is the size Companion gives the feedback.
+ */
+export function progressBar(fraction, colour, barHeight, image) {
+	if (typeof fraction !== 'number' || !Number.isFinite(fraction) || fraction < 0) return {}
+	const width = Math.max(1, Math.round(image?.width ?? 72))
+	const fullHeight = Math.max(1, Math.round(image?.height ?? 72))
+	const height = Math.min(fullHeight, Math.max(1, Math.round(barHeight || 6)))
+	const filled = Math.round(Math.min(1, fraction) * width)
+	const c = Number(colour) >>> 0
+	const fg = [(c >> 16) & 255, (c >> 8) & 255, c & 255, 255]
+	const bg = [0, 0, 0, 160]
+	const buf = Buffer.alloc(width * height * 4)
+	for (let y = 0; y < height; y++) {
+		for (let x = 0; x < width; x++) {
+			buf.set(x < filled ? fg : bg, (y * width + x) * 4)
+		}
+	}
+	return {
+		imageBuffer: buf.toString('base64'),
+		imageBufferEncoding: { pixelFormat: 'RGBA' },
+		imageBufferPosition: { x: 0, y: fullHeight - height, width, height },
+	}
+}
+
+/** Options shared by the progress bar feedbacks. */
+export const barOptions = [
+	{ type: 'colorpicker', id: 'colour', label: 'Bar colour', default: 0xffffff },
+	{ type: 'number', id: 'height', label: 'Bar height (px)', default: 6, min: 1, max: 36 },
+]
