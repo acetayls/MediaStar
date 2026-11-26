@@ -1,8 +1,15 @@
 # Journal des modifications de la suite MediaStar
 
-Chaque application garde aussi son propre journal (apps/jinglestar, apps/cuestar, apps/oldstar).
+Chaque application garde aussi son propre journal (apps/jinglestar, apps/cuestar, apps/oldstar, apps/sweepstar, apps/mediastar).
 
-## En cours
+## 0.0.2 — 26 novembre 2026
+
+### Nouvelle numérotation
+
+- **Toutes les applis repartent du même numéro de version** : MediaStar, JingleStar, CueStar,
+  OldStar et SweepStar sortent ensemble en 0.0.2 dans la même release. JingleStar passe de la
+  0.1.4 à la 0.0.2 (tout le contenu de la 0.1.4 y est). Chaque appli garde son exécutable et
+  son journal.
 
 ### Suite
 
@@ -14,6 +21,6 @@ Chaque application garde aussi son propre journal (apps/jinglestar, apps/cuestar
 
 ### SweepStar
 
-- SweepStar : nouvelle appli de mesure acoustique (0.0.1, en cours) : sweep et réponse
+- SweepStar : nouvelle appli de mesure acoustique (0.0.2) : sweep et réponse
   impulsionnelle, délai en ms et en mètres, RTA, générateur de bruits et playlist de
   soundcheck. Voir apps/sweepstar/CHANGELOG.md.

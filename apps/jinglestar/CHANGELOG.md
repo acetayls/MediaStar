@@ -1,6 +1,14 @@
 # Journal des modifications
 
-## 0.1.4 — en cours
+## 0.0.2 — 26 novembre 2026
+
+### Nouvelle numérotation
+
+- **Toutes les applis de la suite repartent du même numéro de version** : MediaStar, JingleStar,
+  CueStar, OldStar et SweepStar sortent ensemble en 0.0.2, publiées dans la même release
+  MediaStar. Chaque appli garde son exécutable et son propre journal des modifications.
+- **JingleStar passe de la 0.1.4 à la 0.0.2** : ce n'est pas un retour en arrière. Cette
+  version contient tout ce qui était dans la 0.1.4 publiée, plus les nouveautés ci-dessous.
 
 ### Pilotage OSC
 

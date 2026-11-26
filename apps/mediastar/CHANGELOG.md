@@ -1,6 +1,24 @@
 # Journal des modifications
 
-## 0.0.2 — en cours
+## 0.0.2 — 26 novembre 2026
+
+### Nouvelle numérotation
+
+- **Toutes les applis de la suite repartent du même numéro de version** : MediaStar, JingleStar,
+  CueStar, OldStar et SweepStar sortent ensemble en 0.0.2, publiées dans la même release
+  MediaStar. Chaque appli garde son exécutable et son propre journal des modifications.
+- **JingleStar passe de la 0.1.4 à la 0.0.2** : ce n'est pas un retour en arrière. Cette
+  version contient tout ce qui était dans la 0.1.4 publiée, plus les nouveautés de son journal.
+
+### Modules
+
+- Les nouveautés de chaque module sont détaillées dans son journal : CueStar 0.0.2 (transitions
+  Pousser, Volet, Iris, Zoom… dans la Cuelist, le Diaporama et la Présentation, points
+  d'entrée et de sortie à l'image près), JingleStar 0.0.2 (boucle d'un morceau ou d'un cue,
+  pilotage OSC depuis OldStar et Companion), OldStar 0.0.2 (micros HF), SweepStar 0.0.2
+  (transfert en direct, sonomètre).
+
+### Nouveautés
 
 - **OldStar : suivi des micros HF** : nouvel onglet **Micros** sur la tablette, une carte par
   micro avec son nom, sa fréquence, la pile, la HF des deux antennes, le niveau audio et les

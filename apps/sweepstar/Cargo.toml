@@ -1,6 +1,6 @@
 [package]
 name = "sweepstar"
-version = "0.0.1"
+version = "0.0.2"
 description = "Mesure acoustique : sweep, réponse impulsionnelle, délai, RTA (Windows, macOS, Linux)"
 authors = ["Pierrick"]
 edition.workspace = true

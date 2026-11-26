@@ -2405,7 +2405,7 @@ dependencies = [
 
 [[package]]
 name = "jinglestar"
-version = "0.1.4"
+version = "0.0.2"
 dependencies = [
  "anyhow",
  "cpal",
@@ -3435,7 +3435,7 @@ dependencies = [
 
 [[package]]
 name = "oldstar"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "block2 0.6.2",
  "eframe",
@@ -4711,7 +4711,7 @@ dependencies = [
 
 [[package]]
 name = "sweepstar"
-version = "0.0.1"
+version = "0.0.2"
 dependencies = [
  "anyhow",
  "cpal",

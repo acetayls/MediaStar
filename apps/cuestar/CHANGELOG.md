@@ -1,6 +1,12 @@
 # Journal des modifications
 
-## 0.0.2 — en cours
+## 0.0.2 — 26 novembre 2026
+
+### Nouvelle numérotation
+
+- **Toutes les applis de la suite repartent du même numéro de version** : MediaStar, JingleStar,
+  CueStar, OldStar et SweepStar sortent ensemble en 0.0.2, publiées dans la même release
+  MediaStar. Chaque appli garde son exécutable et son propre journal des modifications.
 
 ### Retours des essais sous Linux (KDE, Wayland)
 

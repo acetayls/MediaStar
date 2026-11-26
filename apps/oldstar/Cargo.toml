@@ -1,6 +1,6 @@
 [package]
 name = "oldstar"
-version = "0.0.1"
+version = "0.0.2"
 description = "Télécommande web pour iPad : console Yamaha CL/QL, CueStar et JingleStar en OSC, fenêtres du PC capturées (Windows, macOS)"
 authors = ["Pierrick"]
 edition.workspace = true
