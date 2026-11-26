@@ -1,6 +1,6 @@
 {
 	"name": "mediastar",
-	"version": "0.0.4",
+	"version": "0.0.2",
 	"description": "Bitfocus Companion module for the MediaStar suite (JingleStar, CueStar)",
 	"type": "module",
 	"main": "src/main.js",
