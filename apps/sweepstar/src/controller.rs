@@ -60,6 +60,18 @@ pub enum SignalKind {
     Sine,
 }
 
+/// Valeur affichée en grand dans le sonomètre.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[serde(rename_all = "snake_case")]
+pub enum SplMain {
+    LaFast,
+    LaSlow,
+    #[default]
+    Laeq1m,
+    Laeq15m,
+    Lceq15m,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub enum RtaWeighting {
     A,
@@ -106,6 +118,11 @@ pub struct Prefs {
     pub tf_delay_ms: f64,
     /// Suivi automatique du délai (recherche toutes les secondes).
     pub tf_delay_track: bool,
+    /// Sonomètre : valeur en grand, seuils LAeq et LCeq 15 min (dB SPL), fenêtre détachée.
+    pub spl_main: SplMain,
+    pub spl_limit_a: f64,
+    pub spl_limit_c: f64,
+    pub spl_window: bool,
 }
 
 impl Default for Prefs {
@@ -134,6 +151,10 @@ impl Default for Prefs {
             tf_smoothing: 12,
             tf_delay_ms: 0.0,
             tf_delay_track: false,
+            spl_main: SplMain::Laeq1m,
+            spl_limit_a: 102.0,
+            spl_limit_c: 118.0,
+            spl_window: false,
         }
     }
 }
@@ -155,6 +176,8 @@ impl Prefs {
         fix(&mut self.sine_hz, 1000.0, 10.0, 20_000.0);
         fix(&mut self.rta_speed, 0.25, 0.01, 1.0);
         fix(&mut self.tf_delay_ms, 0.0, 0.0, 1000.0);
+        fix(&mut self.spl_limit_a, 102.0, 60.0, 140.0);
+        fix(&mut self.spl_limit_c, 118.0, 60.0, 150.0);
         if ![4096, 8192, 16_384, 32_768, 65_536].contains(&self.tf_fft) {
             self.tf_fft = 16_384;
         }
@@ -651,6 +674,15 @@ impl Controller {
     pub fn touch_trace(&mut self, i: usize) {
         self.dirty.retain(|(j, _)| *j != i);
         self.dirty.push((i, std::time::Instant::now()));
+    }
+
+    /// Niveaux du sonomètre (dBFS).
+    pub fn spl_state(&self) -> crate::spl::SplState {
+        self.worker.spl.lock().map(|s| s.clone()).unwrap_or_default()
+    }
+
+    pub fn reset_spl(&mut self) {
+        self.worker.reset_spl();
     }
 
     /// Dernier spectre du micro pour le RTA.

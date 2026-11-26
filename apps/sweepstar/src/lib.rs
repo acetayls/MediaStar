@@ -5,6 +5,7 @@ mod audio;
 mod controller;
 mod export;
 mod measure;
+mod spl;
 mod traces;
 mod ui;
 

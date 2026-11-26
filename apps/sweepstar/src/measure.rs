@@ -17,6 +17,7 @@ use star_measure::Complex64;
 
 use crate::audio::ring::Ring;
 use crate::audio::signal::{OutCmd, Source};
+use crate::spl::{SplMeter, SplState};
 
 /// Taille de la FFT de la réponse en fréquence (1,4 s à 48 kHz, 0,73 Hz par case).
 pub const RESPONSE_FFT: usize = 65_536;
@@ -187,6 +188,8 @@ enum Cmd {
     TransferReset,
     /// Cherche le retard du micro sur la référence (GCC-PHAT).
     FindDelay,
+    /// Remet à zéro les Leq, le maximum et la crête du sonomètre.
+    SplReset,
 }
 
 pub enum WorkerEvent {
@@ -221,6 +224,7 @@ pub struct Worker {
     pub events: Receiver<WorkerEvent>,
     pub rta: Arc<Mutex<RtaFrame>>,
     pub transfer: Arc<Mutex<TransferFrame>>,
+    pub spl: Arc<Mutex<SplState>>,
 }
 
 impl Worker {
@@ -229,12 +233,13 @@ impl Worker {
         let (ev_tx, ev_rx) = unbounded::<WorkerEvent>();
         let rta = Arc::new(Mutex::new(RtaFrame::default()));
         let transfer = Arc::new(Mutex::new(TransferFrame::default()));
-        let shared = Shared { rta: rta.clone(), transfer: transfer.clone() };
+        let spl = Arc::new(Mutex::new(SplState::default()));
+        let shared = Shared { rta: rta.clone(), transfer: transfer.clone(), spl: spl.clone() };
         thread::Builder::new()
             .name("mesure".into())
             .spawn(move || run(rx, ev_tx, ring, out_cmd, shared, wake))
             .expect("thread mesure");
-        Self { tx, events: ev_rx, rta, transfer }
+        Self { tx, events: ev_rx, rta, transfer, spl }
     }
 
     pub fn set_transfer(&self, cfg: Option<TransferConfig>) {
@@ -247,6 +252,10 @@ impl Worker {
 
     pub fn reset_transfer(&self) {
         let _ = self.tx.send(Cmd::TransferReset);
+    }
+
+    pub fn reset_spl(&self) {
+        let _ = self.tx.send(Cmd::SplReset);
     }
 
     pub fn find_delay(&self) {
@@ -269,6 +278,7 @@ impl Worker {
 struct Shared {
     rta: Arc<Mutex<RtaFrame>>,
     transfer: Arc<Mutex<TransferFrame>>,
+    spl: Arc<Mutex<SplState>>,
 }
 
 /// Fonction de transfert en cours dans le fil de mesure.
@@ -283,6 +293,9 @@ struct LiveTransfer {
 
 fn run(rx: Receiver<Cmd>, events: Sender<WorkerEvent>, ring: Arc<Ring>, out_cmd: Sender<OutCmd>, shared: Shared, wake: impl Fn()) {
     let rta = shared.rta;
+    let mut meter = SplMeter::default();
+    let mut block_peak = 0.0f32;
+    let mut last_spl = Instant::now();
     let mut live: Option<LiveTransfer> = None;
     let mut ref_blk: Vec<f32> = Vec::new();
     let mut mic_blk: Vec<f32> = Vec::new();
@@ -345,6 +358,7 @@ fn run(rx: Receiver<Cmd>, events: Sender<WorkerEvent>, ring: Arc<Ring>, out_cmd:
                     l.engine.set_delay(d);
                 }
             }
+            Ok(Cmd::SplReset) => meter.reset(),
             Ok(Cmd::TransferReset) => {
                 if let Some(l) = &mut live {
                     l.engine.reset();
@@ -423,11 +437,20 @@ fn run(rx: Receiver<Cmd>, events: Sender<WorkerEvent>, ring: Arc<Ring>, out_cmd:
         }
         // RTA : micro seul, un spectre par demi-bloc.
         rta_buf.extend(pending.as_chunks::<2>().0.iter().map(|p| p[1]));
+        block_peak = pending.as_chunks::<2>().0.iter().fold(block_peak, |m, p| m.max(p[1].abs()));
         if rta_buf.len() >= RTA_FFT {
             let start = rta_buf.len() - RTA_FFT;
             let power = star_measure::rta::welch_power(&rta_buf[start..], RTA_FFT, 0.0, Window::Hann, &mut fft);
             rta_buf.drain(..rta_buf.len() - RTA_FFT / 2);
             serial += 1;
+            // Sonomètre : chaque spectre couvre un demi-bloc.
+            meter.push(&power, fs / RTA_FFT as f64, (RTA_FFT / 2) as f64 / fs, std::mem::take(&mut block_peak));
+            if last_spl.elapsed() >= Duration::from_millis(100) {
+                last_spl = Instant::now();
+                if let Ok(mut s) = shared.spl.lock() {
+                    *s = meter.state();
+                }
+            }
             if let Ok(mut f) = rta.lock() {
                 *f = RtaFrame { power, bin_hz: fs / RTA_FFT as f64, serial };
             }

@@ -60,6 +60,14 @@ to 1/1 octave). **Bars** are solid bars, one per band.
 **Calibrate**; the RTA and the overall level (LZ, LA or LC) switch to dB SPL. The calibration
 holds for this mic, this channel and this preamp gain; it can also be set by hand or removed.
 
+**Sound level meter**: at the top of the RTA, the chosen value in large type (LAeq 1 min by
+default) and LA fast, LAeq 1 and 15 min, LCeq 15 min, LA max. Green, amber within 3 dB of the
+limit, red above. **Detach** opens a separate always-on-top window for a FOH screen: value in
+very large type (menu to choose it), other levels, peak, Leq since **reset**, last 15 minutes
+history and limits (102 dB(A) and 118 dB(C) over 15 min by default, French decree 2017-1244;
+94 and 104 for shows for children). Levels run continuously, even outside the RTA tab (not
+during a sweep).
+
 ## Transfer
 
 Live transfer function between the **reference loop** and the **mic**, with any signal (pink

@@ -84,8 +84,7 @@ pub fn unit(w: RtaWeighting, calibrated: bool) -> &'static str {
 
 /// Niveau global (dB, pondéré) de 20 Hz à 20 kHz.
 fn total_level(power: &[f64], bin_hz: f64, w: Weighting) -> f64 {
-    let sum: f64 = power.iter().enumerate().filter(|(k, _)| (20.0..=20_000.0).contains(&(*k as f64 * bin_hz))).map(|(k, &p)| p * w.gain(k as f64 * bin_hz)).sum();
-    star_measure::db10(sum)
+    star_measure::db10(crate::spl::weighted_power(power, bin_hz, w))
 }
 
 /// Niveau (dBFS) de la bande d'octave de 1 kHz : celui d'un calibreur.
@@ -195,23 +194,9 @@ impl RtaView {
             });
         });
 
-        // Niveau global, en grand.
-        let w = weighting(ctrl.prefs.rta_weighting);
+        // Sonomètre, en grand.
         let cal = ctrl.prefs.mic_cal_db;
-        if !self.avg.is_empty() {
-            let l = total_level(&self.avg, self.bin_hz, w) + cal.unwrap_or(0.0);
-            let letter = match ctrl.prefs.rta_weighting {
-                RtaWeighting::A => "LA",
-                RtaWeighting::C => "LC",
-                RtaWeighting::Z => "LZ",
-            };
-            ui.horizontal(|ui| {
-                ui.label(RichText::new(format!("{letter} {l:.1} {}", unit(ctrl.prefs.rta_weighting, cal.is_some()))).size(20.0).strong().color(ACCENT));
-                if cal.is_none() {
-                    ui.label(RichText::new(tr("micro non calibré : niveaux en dBFS", "mic not calibrated: levels in dBFS")).color(TEXT_DIM));
-                }
-            });
-        }
+        super::spl_view::strip(ui, ctrl);
         if cal.is_some() != self.view_spl {
             self.view_spl = cal.is_some();
             self.view = if self.view_spl { YView::new(20.0, 120.0) } else { YView::new(-100.0, 0.0) };

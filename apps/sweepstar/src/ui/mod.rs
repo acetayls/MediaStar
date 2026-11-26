@@ -7,6 +7,7 @@ mod playlist_view;
 mod plot;
 mod prefs_view;
 mod rta_view;
+mod spl_view;
 mod sweep_view;
 mod transfer_view;
 
@@ -394,9 +395,12 @@ impl SweepStarApp {
                 self.prefs = None;
             }
         }
+        if self.ctrl.prefs.spl_window {
+            spl_view::window(&ctx, &mut self.ctrl);
+        }
         self.help.show(&ctx);
 
-        let busy = self.ctrl.playing() || self.ctrl.is_loading_track() || self.ctrl.measuring.is_some() || self.tab != Tab::Sweep || self.ctrl.in_meters.iter().any(|d| *d > -100.0);
+        let busy = self.ctrl.playing() || self.ctrl.is_loading_track() || self.ctrl.measuring.is_some() || self.tab != Tab::Sweep || self.ctrl.prefs.spl_window || self.ctrl.in_meters.iter().any(|d| *d > -100.0);
         ctx.request_repaint_after(Duration::from_millis(if busy { 33 } else { 250 }));
     }
 }

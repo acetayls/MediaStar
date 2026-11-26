@@ -1,9 +1,15 @@
 # Journal des modifications
 
-## 0.0.1 — en cours
+## 0.0.2 — 26 novembre 2026
 
 Première version de SweepStar, l'appli de mesure acoustique de la suite, à l'allure de
 JingleStar.
+
+### Nouvelle numérotation
+
+- **Toutes les applis de la suite repartent du même numéro de version** : MediaStar, JingleStar,
+  CueStar, OldStar et SweepStar sortent ensemble en 0.0.2, publiées dans la même release
+  MediaStar. Chaque appli garde son exécutable et son propre journal des modifications.
 
 ### Barre du haut
 
@@ -58,7 +64,16 @@ JingleStar.
   **lissage** réglable de 1/24 à 1/1 d'octave. Les RTA capturés se superposent au direct.
 - **Barres pleines**, une par bande.
 - **dB SPL** : calibration du micro avec un calibreur (94 ou 114 dB à 1 kHz), réglable à la
-  main ; niveau global LZ, LA ou LC en grand.
+  main.
+- **Sonomètre** en tête du RTA, en grand : LA rapide et lent, LAeq 1 min et 15 min, LCeq
+  15 min, LA max, couleur verte, orange à 3 dB du seuil, rouge au-delà (seuils réglables,
+  102 dB(A) et 118 dB(C) par défaut, ceux du décret 2017-1244). Calculé en continu, même hors
+  de l'onglet RTA.
+- **Fenêtre de niveau détachable**, toujours devant : valeur choisie en très grand, LC et LZ
+  rapides, crête, Leq depuis la remise à zéro, historique des 15 dernières minutes avec le
+  seuil.
+- **Correction** : le niveau global pondéré A ou C était faux (gain de pondération appliqué
+  en amplitude au lieu de la puissance).
 
 ### Playlist
 

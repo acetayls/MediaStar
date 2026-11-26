@@ -64,6 +64,14 @@ par bande.
 **Calibrer** ; le RTA et le niveau global (LZ, LA ou LC) passent en dB SPL. La calibration vaut
 pour ce micro, ce canal et ce gain de préampli ; elle se règle aussi à la main ou se retire.
 
+**Sonomètre** : en tête du RTA, la valeur choisie en grand (LAeq 1 min par défaut) et LA
+rapide, LAeq 1 et 15 min, LCeq 15 min, LA max. Vert, orange à 3 dB du seuil, rouge au-delà.
+**Détacher** ouvre une fenêtre à part, toujours devant, à poser sur un écran de la régie :
+valeur en très grand (menu pour la choisir), autres niveaux, crête, Leq depuis la **remise à
+zéro**, historique des 15 dernières minutes et seuils (102 dB(A) et 118 dB(C) sur 15 min par
+défaut, repères du décret 2017-1244 ; 94 et 104 pour les spectacles jeune public). Les
+niveaux tournent en continu, même hors de l'onglet RTA (pas pendant un sweep).
+
 ## Transfert
 
 Fonction de transfert en direct entre la **boucle de référence** et le **micro**, avec
